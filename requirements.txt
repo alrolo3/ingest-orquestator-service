@@ -1,10 +1,6 @@
 docling>=2.30,<3
 fastapi>=0.115,<1
-flash-attn>=2.8.3,<3; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"
 docling-surya==0.1.0; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"
-ninja>=1.13,<2; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"
-packaging>=24,<26; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"
-psutil>=7,<8; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"
 pydantic>=2.10,<3
 pydantic-settings>=2.8,<3
 python-multipart>=0.0.20,<1

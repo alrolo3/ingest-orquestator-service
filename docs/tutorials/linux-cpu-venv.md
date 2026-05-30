@@ -35,8 +35,8 @@ python -m pip install -e .
 ```
 
 Do not use `requirements.txt` for CPU-only Linux. The default requirements file
-includes SuryaOCR and FlashAttention on supported Linux hosts. Those are
-intended for GPU deployments.
+includes SuryaOCR on supported Linux hosts. That is intended for GPU
+deployments.
 
 ## 4. Use The CPU Profile
 
@@ -81,8 +81,8 @@ parsed document artifacts.
 
 ## Troubleshooting
 
-If you accidentally installed `requirements.txt` and pip started compiling
-FlashAttention, remove the environment and start again with the base install:
+If you accidentally installed `requirements.txt` and pulled GPU-only packages,
+remove the environment and start again with the base install:
 
 ```bash
 deactivate 2>/dev/null || true

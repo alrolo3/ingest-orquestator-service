@@ -30,6 +30,8 @@ dev = [
 ]
 gpu = [
   "docling-surya==0.1.0; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
+]
+flash-attn = [
   "flash-attn>=2.8.3,<3; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
   "ninja>=1.13,<2; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
   "packaging>=24,<26; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",

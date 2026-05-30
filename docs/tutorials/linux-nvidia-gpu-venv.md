@@ -68,26 +68,67 @@ Do not continue until PyTorch can see the GPU.
 ## 5. Install The GPU Requirements
 
 Install the default deployment requirements. On supported Linux hosts this
-includes SuryaOCR, FlashAttention-2, and the build helpers required by
-FlashAttention-2.
+includes SuryaOCR. FlashAttention-2 is optional and is not installed by default
+because it often builds from source and requires the CUDA toolkit compiler to
+match the installed PyTorch CUDA runtime.
 
 ```bash
-MAX_JOBS=8 python -m pip install --no-build-isolation -r requirements.txt
+python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 ```
 
-If `flash-attn` fails to build, confirm that PyTorch is already installed in the
-same venv and that this check prints `True`:
+## 6. Optional: Enable FlashAttention-2
+
+Skip this section unless you explicitly want Docling to load local VLMs with
+FlashAttention-2. The CUDA toolkit reported by `nvcc -V` must match
+`torch.version.cuda`. A driver that reports CUDA 13.2 can still run a CUDA 12.8
+PyTorch build, but building FlashAttention for that PyTorch build requires a
+CUDA 12.8 toolkit.
+
+Verify the CUDA versions:
 
 ```bash
 python - <<'PY'
 import torch
+from torch.utils.cpp_extension import CUDA_HOME
 
-print(torch.cuda.is_available())
+print("torch:", torch.__version__)
+print("torch cuda:", torch.version.cuda)
+print("CUDA_HOME:", CUDA_HOME)
+PY
+nvcc -V
+```
+
+For A100, compile only the `sm_80` kernels to avoid building unnecessary Hopper
+and Blackwell kernels:
+
+```bash
+export CUDA_HOME=/usr/local/cuda-12.8
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+export TORCH_CUDA_ARCH_LIST="8.0"
+export MAX_JOBS=4
+
+python -m pip install --no-build-isolation --no-cache-dir -r requirements-flash-attn.txt
+```
+
+Then enable it in your local `.env`:
+
+```text
+INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true
+```
+
+Verify the package:
+
+```bash
+python - <<'PY'
+import flash_attn
+
+print(flash_attn.__version__)
 PY
 ```
 
-## 6. Use The A100 CUDA Profile
+## 7. Use The A100 CUDA Profile
 
 Create a local `.env` from the checked-in GPU profile:
 
@@ -104,19 +145,17 @@ INGEST_DOCLING_PDF_TABLE_BATCH_SIZE=8
 INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=128
 ```
 
-## 7. Verify GPU Packages
+## 8. Verify GPU Packages
 
 ```bash
 python - <<'PY'
 import docling_surya
-import flash_attn
 
 print("docling_surya", docling_surya.__name__)
-print("flash_attn", flash_attn.__version__)
 PY
 ```
 
-## 8. Run The API
+## 9. Run The API
 
 ```bash
 python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
@@ -128,7 +167,7 @@ Check health:
 curl http://127.0.0.1:8000/health
 ```
 
-## 9. Run A CLI Smoke Test
+## 10. Run A CLI Smoke Test
 
 ```bash
 printf "# GPU smoke test\n\nHello from NVIDIA.\n" > /tmp/ingest-smoke.md
@@ -146,8 +185,8 @@ python -m ingest_orquestator_server.cli parse /path/to/document.pdf --parser doc
 The service exposes Docling's current FlashAttention switch through:
 
 ```text
-INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true
+INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
 ```
 
-If a VLM fails during startup or model loading, set this to `false` in `.env`.
-That keeps CUDA enabled and falls back to PyTorch SDPA for attention.
+The checked-in GPU profile keeps this disabled by default. Set it to `true` only
+after `requirements-flash-attn.txt` installs successfully.

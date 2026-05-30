@@ -33,7 +33,7 @@ def test_cuda_gpu_env_loads() -> None:
 
     assert settings.docling_accelerator_device == "cuda"
     assert settings.docling_num_threads == 32
-    assert settings.docling_cuda_use_flash_attention2 is True
+    assert settings.docling_cuda_use_flash_attention2 is False
     assert settings.docling_pdf_ocr_use_gpu is True
     assert settings.docling_pdf_ocr_batch_size == 32
     assert settings.docling_pdf_layout_batch_size == 32

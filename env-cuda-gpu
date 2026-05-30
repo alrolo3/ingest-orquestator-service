@@ -18,8 +18,8 @@ INGEST_RETENTION_DAYS=30
 
 INGEST_DOCLING_ACCELERATOR_DEVICE=cuda
 INGEST_DOCLING_NUM_THREADS=32
-# Requires flash-attn in the CUDA 13 environment. If startup fails, set false.
-INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true
+# Keep disabled by default because flash-attn often needs a local source build.
+INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
 INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true
 
 INGEST_DOCLING_PDF_DO_OCR=true

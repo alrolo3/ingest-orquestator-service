@@ -13,7 +13,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
 
 # Install a CUDA-enabled torch build first, then install deployment requirements.
-MAX_JOBS=8 python -m pip install --no-build-isolation -r requirements.txt
+python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 
 INGEST_DOCLING_ACCELERATOR_DEVICE=cuda \
@@ -21,10 +21,12 @@ INGEST_DOCLING_NUM_THREADS=8 \
 python -m ingest_orquestator_server.cli parse /path/to/document.pdf --output-dir .data/outputs
 ```
 
-The GPU dependency set includes SuryaOCR and FlashAttention-2 on supported Linux
-hosts. SuryaOCR is GPL-3.0-only, requires Python 3.12+ on Linux, and is loaded
-by Docling as an external plugin. If the plugin is not available, set
+The default GPU dependency set includes SuryaOCR on supported Linux hosts.
+SuryaOCR is GPL-3.0-only, requires Python 3.12+ on Linux, and is loaded by
+Docling as an external plugin. If the plugin is not available, set
 `INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR selection.
+FlashAttention-2 is optional; see the NVIDIA GPU venv tutorial before enabling
+it.
 
 For an A100 80GB CUDA 13 profile, use the checked-in
 [`env-cuda-gpu`](../env-cuda-gpu) file and see
@@ -104,7 +106,9 @@ INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=100
 
 Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let Docling choose.
 
-`INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true` should only be enabled when the image has a compatible `flash-attn` installation and the GPU architecture supports it.
+`INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true` should only be enabled when the
+environment has a compatible `flash-attn` installation and the GPU architecture
+supports it. The checked-in GPU profile keeps it disabled by default.
 
 The default table structure backend remains TableFormer accurate mode with cell
 matching. To test Docling's standard-pipeline Granite Vision table backend:

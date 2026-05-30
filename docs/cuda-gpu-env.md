@@ -33,13 +33,31 @@ PY
 Then install the default deployment requirements:
 
 ```bash
-MAX_JOBS=8 python -m pip install --no-build-isolation -r requirements.txt
+python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 ```
 
-The GPU install path includes SuryaOCR, FlashAttention-2, and the build helpers
-needed by FlashAttention-2 on supported Linux hosts. `MAX_JOBS=8` limits
-FlashAttention-2 compile parallelism on the A100 profile.
+The default GPU install path includes SuryaOCR. FlashAttention-2 is optional and
+is not installed by default because it often requires a long source build.
+
+To enable FlashAttention-2, install it explicitly after confirming that `nvcc`
+matches `torch.version.cuda`:
+
+```bash
+export CUDA_HOME=/usr/local/cuda-12.8
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+export TORCH_CUDA_ARCH_LIST="8.0"
+export MAX_JOBS=4
+
+python -m pip install --no-build-isolation --no-cache-dir -r requirements-flash-attn.txt
+```
+
+Then set this in `.env`:
+
+```text
+INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true
+```
 
 Load the profile and run the API:
 
@@ -100,7 +118,7 @@ The profile chooses:
 
 - `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda`
 - `INGEST_DOCLING_NUM_THREADS=32`
-- `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true`
+- `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false`
 - SuryaOCR on GPU
 - standard pipeline layout model `docling-layout-heron-101`
 - TableFormer accurate mode with cell matching
