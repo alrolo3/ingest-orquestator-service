@@ -41,6 +41,20 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_pdf_queue_max_size == 512
 
 
+def test_cpu_env_loads() -> None:
+    settings = Settings(_env_file="env-cpu")
+
+    assert settings.docling_accelerator_device == "cpu"
+    assert settings.docling_pdf_ocr_engine == "auto"
+    assert settings.docling_pdf_ocr_use_gpu is False
+    assert settings.docling_pdf_do_picture_classification is False
+    assert settings.docling_pdf_do_picture_description is False
+    assert settings.docling_pdf_do_code_enrichment is False
+    assert settings.docling_pdf_do_formula_enrichment is False
+    assert settings.docling_pdf_ocr_batch_size == 1
+    assert settings.docling_pdf_queue_max_size == 32
+
+
 def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     settings = Settings()
 

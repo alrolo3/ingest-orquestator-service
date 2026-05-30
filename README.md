@@ -29,46 +29,17 @@ The default OCR engine is SuryaOCR, which Docling loads through the external
 GPL-3.0-only. For local development on another platform, set
 `INGEST_DOCLING_PDF_OCR_ENGINE=auto`.
 
-## Local Setup With Venv
+## Local Setup Tutorials
 
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install --no-deps -e .
-```
+Use the tutorial that matches the machine:
 
-On Linux GPU hosts, install a CUDA-enabled PyTorch build before
-`requirements.txt`; the default requirements include FlashAttention-2, which
-builds against the active PyTorch/CUDA environment.
+- [macOS CPU venv setup](docs/tutorials/macos-cpu-venv.md)
+- [Linux CPU venv setup](docs/tutorials/linux-cpu-venv.md)
+- [Linux NVIDIA GPU venv setup](docs/tutorials/linux-nvidia-gpu-venv.md)
 
-If you skip `requirements.txt` and install from `pyproject.toml` directly on a
-supported Linux GPU host:
-
-```bash
-MAX_JOBS=8 python -m pip install --no-build-isolation -e ".[gpu]"
-```
-
-For a portable local run without SuryaOCR:
-
-```bash
-INGEST_DOCLING_PDF_OCR_ENGINE=auto uvicorn ingest_orquestator_server.main:app --reload
-```
-
-Run the API:
-
-```bash
-uvicorn ingest_orquestator_server.main:app --reload
-```
-
-Open:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-Stop the API with `Ctrl+C`.
+CPU tutorials install the base package directly and use [env-cpu](env-cpu).
+The NVIDIA tutorial installs the default GPU requirements and uses
+[env-cuda-gpu](env-cuda-gpu).
 
 ## API Usage
 
@@ -96,7 +67,7 @@ curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/markdown"
 ## CLI Usage
 
 ```bash
-ingest-orquestator parse /path/to/document.pdf --parser docling --output-dir .data/outputs
+python -m ingest_orquestator_server.cli parse /path/to/document.pdf --parser docling --output-dir .data/outputs
 ```
 
 Each parse creates a document-specific output directory containing:
@@ -112,8 +83,8 @@ Each parse creates a document-specific output directory containing:
 Clean old local artifacts:
 
 ```bash
-ingest-orquestator cleanup --older-than-days 30 --dry-run
-ingest-orquestator cleanup --older-than-days 30 --delete
+python -m ingest_orquestator_server.cli cleanup --older-than-days 30 --dry-run
+python -m ingest_orquestator_server.cli cleanup --older-than-days 30 --delete
 ```
 
 ## Development Setup
@@ -122,22 +93,9 @@ For tests and linting, install the development extras into the same virtual envi
 
 ```bash
 python -m pip install -e ".[dev]"
-pytest
-ruff check .
-ruff format --check .
-```
-
-If you prefer `uv`, the equivalent setup is:
-
-```bash
-uv sync --extra dev --python 3.12
-uv run pytest
-```
-
-For CUDA/GPU development with `uv`, install both extras:
-
-```bash
-uv sync --extra dev --extra gpu --python 3.12
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
 ```
 
 ## Configuration

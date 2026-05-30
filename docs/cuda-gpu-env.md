@@ -8,19 +8,39 @@ overrides and copy from this profile when needed.
 
 ## Use Locally
 
-Install the GPU/runtime extras first:
+Create a virtual environment and install a CUDA-enabled PyTorch runtime first:
 
 ```bash
-uv sync --extra gpu --python 3.12
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
 ```
 
-The `gpu` extra installs SuryaOCR, FlashInfer, FlashInfer precompiled cubins,
-FlashAttention-2, and the build helpers needed by FlashAttention-2. The
-`requirements.txt` local install path includes the same GPU dependencies by
-default on supported Linux hosts.
+Use the official PyTorch selector for the exact command that matches the host
+driver/runtime. Verify CUDA before continuing:
 
-The project config also tells `uv` to build `flash-attn` with the resolved
-runtime `torch` version and `MAX_JOBS=8`.
+```bash
+python - <<'PY'
+import torch
+
+print(torch.__version__)
+print(torch.version.cuda)
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0))
+PY
+```
+
+Then install the default deployment requirements:
+
+```bash
+MAX_JOBS=8 python -m pip install --no-build-isolation -r requirements.txt
+python -m pip install --no-deps -e .
+```
+
+The GPU install path includes SuryaOCR, FlashInfer, FlashInfer precompiled
+cubins, FlashAttention-2, and the build helpers needed by FlashAttention-2 on
+supported Linux hosts. `MAX_JOBS=8` limits FlashAttention-2 compile parallelism
+on the A100 profile.
 
 Load the profile and run the API:
 
@@ -29,7 +49,7 @@ set -a
 source env-cuda-gpu
 set +a
 
-uv run uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
 ```
 
 Or run the CLI:
@@ -39,7 +59,7 @@ set -a
 source env-cuda-gpu
 set +a
 
-uv run ingest-orquestator parse /path/to/document.pdf --output-dir .data/outputs
+python -m ingest_orquestator_server.cli parse /path/to/document.pdf --output-dir .data/outputs
 ```
 
 ## Verify The Runtime
@@ -47,7 +67,7 @@ uv run ingest-orquestator parse /path/to/document.pdf --output-dir .data/outputs
 Check CUDA and the selected GPU:
 
 ```bash
-uv run python - <<'PY'
+python - <<'PY'
 import torch
 
 print(torch.__version__)
@@ -60,7 +80,7 @@ PY
 Check FlashAttention-2 if enabled:
 
 ```bash
-uv run python - <<'PY'
+python - <<'PY'
 import flash_attn
 
 print(flash_attn.__version__)

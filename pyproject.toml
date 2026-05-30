@@ -57,14 +57,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-
-[tool.uv.extra-build-dependencies]
-flash-attn = [
-  "ninja",
-  "packaging",
-  "psutil",
-  { requirement = "torch", match-runtime = true },
-]
-
-[tool.uv.extra-build-variables]
-flash-attn = { MAX_JOBS = "8" }

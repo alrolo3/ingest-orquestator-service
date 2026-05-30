@@ -16,7 +16,7 @@ class DoclingConverterFactory:
         except ImportError as exc:
             raise RuntimeError(
                 "Docling is not installed. Install project dependencies with "
-                "`uv sync --extra dev --python 3.12` or `pip install .`."
+                "`python -m pip install -e .` inside the project virtual environment."
             ) from exc
 
         return DocumentConverter(

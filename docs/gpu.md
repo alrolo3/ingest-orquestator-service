@@ -4,14 +4,21 @@ Docling can run model inference with explicit accelerator options. The service e
 
 ## Local CUDA Host
 
-Install the project in an environment that has a CUDA-enabled PyTorch build, then choose the CUDA accelerator:
+Install the project in a virtual environment that has a CUDA-enabled PyTorch
+build, then choose the CUDA accelerator:
 
 ```bash
-uv sync --extra gpu --python 3.12
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+
+# Install a CUDA-enabled torch build first, then install deployment requirements.
+MAX_JOBS=8 python -m pip install --no-build-isolation -r requirements.txt
+python -m pip install --no-deps -e .
 
 INGEST_DOCLING_ACCELERATOR_DEVICE=cuda \
 INGEST_DOCLING_NUM_THREADS=8 \
-uv run ingest-orquestator parse /path/to/document.pdf --output-dir .data/outputs
+python -m ingest_orquestator_server.cli parse /path/to/document.pdf --output-dir .data/outputs
 ```
 
 The GPU dependency set includes SuryaOCR, FlashInfer, and FlashAttention-2 on
@@ -23,6 +30,9 @@ selection.
 For an A100 80GB CUDA 13 profile, use the checked-in
 [`env-cuda-gpu`](../env-cuda-gpu) file and see
 [`docs/cuda-gpu-env.md`](cuda-gpu-env.md).
+
+For a full venv walkthrough, use
+[`docs/tutorials/linux-nvidia-gpu-venv.md`](tutorials/linux-nvidia-gpu-venv.md).
 
 To select a specific GPU, use a CUDA device string:
 

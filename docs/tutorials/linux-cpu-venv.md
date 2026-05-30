@@ -1,0 +1,95 @@
+# Linux CPU Venv Setup
+
+Use this path for Linux hosts without NVIDIA GPU acceleration. This tutorial
+installs only the base project dependencies and uses the CPU-safe environment
+profile.
+
+## 1. Install Python Venv Support
+
+Ubuntu/Debian example:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3.12 python3.12-venv python3.12-dev build-essential
+```
+
+If your distribution provides Python 3.11 or 3.13 instead, that is also within
+the supported project range.
+
+## 2. Create The Virtual Environment
+
+From the repository root:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+```
+
+## 3. Install The CPU Development Package
+
+Install from `pyproject.toml` directly:
+
+```bash
+python -m pip install -e .
+```
+
+Do not use `requirements.txt` for CPU-only Linux. The default requirements file
+includes SuryaOCR, FlashInfer, and FlashAttention on supported Linux hosts.
+Those are intended for GPU deployments.
+
+## 4. Use The CPU Profile
+
+Create a local `.env` from the checked-in CPU profile:
+
+```bash
+cp env-cpu .env
+```
+
+The CPU profile disables GPU-heavy enrichment stages and uses Docling's automatic
+OCR selection:
+
+```text
+INGEST_DOCLING_ACCELERATOR_DEVICE=cpu
+INGEST_DOCLING_PDF_OCR_ENGINE=auto
+INGEST_DOCLING_PDF_DO_PICTURE_DESCRIPTION=false
+INGEST_DOCLING_PDF_DO_CODE_ENRICHMENT=false
+INGEST_DOCLING_PDF_DO_FORMULA_ENRICHMENT=false
+```
+
+## 5. Run The API
+
+```bash
+python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
+```
+
+Check health:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+## 6. Run A CLI Smoke Test
+
+```bash
+printf "# CPU smoke test\n\nHello from Linux.\n" > /tmp/ingest-smoke.md
+python -m ingest_orquestator_server.cli parse /tmp/ingest-smoke.md --parser docling --output-dir .data/outputs
+```
+
+Expected result: a new output directory under `.data/outputs` containing the
+parsed document artifacts.
+
+## Troubleshooting
+
+If you accidentally installed `requirements.txt` and pip started compiling
+FlashAttention, remove the environment and start again with the base install:
+
+```bash
+deactivate 2>/dev/null || true
+rm -rf .venv
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e .
+cp env-cpu .env
+```
