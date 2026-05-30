@@ -175,6 +175,8 @@ INGEST_DOCLING_ACCELERATOR_DEVICE=cuda
 ```
 
 See [docs/gpu.md](docs/gpu.md) for Docker Compose GPU usage and batch-size tuning.
+For the A100 80GB CUDA 13 performance profile, use
+[env-cuda-gpu](env-cuda-gpu) with [docs/cuda-gpu-env.md](docs/cuda-gpu-env.md).
 
 ## Docker
 

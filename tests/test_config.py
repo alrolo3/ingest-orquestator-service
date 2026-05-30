@@ -28,6 +28,19 @@ def test_env_example_loads() -> None:
     assert settings.docling_pdf_ocr_languages == ["en"]
 
 
+def test_cuda_gpu_env_loads() -> None:
+    settings = Settings(_env_file="env-cuda-gpu")
+
+    assert settings.docling_accelerator_device == "cuda"
+    assert settings.docling_num_threads == 32
+    assert settings.docling_cuda_use_flash_attention2 is True
+    assert settings.docling_pdf_ocr_use_gpu is True
+    assert settings.docling_pdf_ocr_batch_size == 32
+    assert settings.docling_pdf_layout_batch_size == 32
+    assert settings.docling_pdf_table_batch_size == 32
+    assert settings.docling_pdf_queue_max_size == 512
+
+
 def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     settings = Settings()
 

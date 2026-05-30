@@ -18,6 +18,10 @@ The SuryaOCR plugin is GPL-3.0-only, requires Python 3.12+ on Linux, and is
 loaded by Docling as an external plugin. If the plugin is not available, set
 `INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR selection.
 
+For an A100 80GB CUDA 13 profile, use the checked-in
+[`env-cuda-gpu`](../env-cuda-gpu) file and see
+[`docs/cuda-gpu-env.md`](cuda-gpu-env.md).
+
 To select a specific GPU, use a CUDA device string:
 
 ```bash
