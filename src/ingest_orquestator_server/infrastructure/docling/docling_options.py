@@ -246,6 +246,7 @@ def _vlm_options(settings: Settings) -> dict[str, Any]:
         "torch_dtype": settings.docling_vlm_torch_dtype,
         "load_in_8bit": settings.docling_vlm_load_in_8bit,
         "max_new_tokens": settings.docling_vlm_max_new_tokens,
+        "trust_remote_code": settings.effective_docling_vlm_trust_remote_code,
         "vllm_tensor_parallel_size": settings.docling_vllm_tensor_parallel_size,
         "vllm_gpu_memory_utilization": settings.docling_vllm_gpu_memory_utilization,
         "vllm_trust_remote_code": settings.docling_vllm_trust_remote_code,

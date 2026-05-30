@@ -59,11 +59,26 @@ def test_build_pdf_pipeline_options_can_select_vllm_picture_description() -> Non
     assert options.picture_description_options.engine_options.engine_type.value == "vllm"
 
 
+def test_build_pdf_pipeline_options_passes_remote_code_to_custom_picture_model() -> None:
+    options = build_pdf_pipeline_options(
+        Settings(
+            docling_pdf_ocr_engine="auto",
+            docling_pdf_picture_description_model="vendor/custom-vlm",
+            docling_pdf_picture_description_runtime="transformers",
+            docling_vlm_trust_remote_code=True,
+        )
+    )
+
+    assert options.picture_description_options.model_spec.default_repo_id == ("vendor/custom-vlm")
+    assert options.picture_description_options.model_spec.trust_remote_code is True
+
+
 def test_docling_options_metadata_records_runtime_decisions() -> None:
     metadata = docling_options_metadata(
         Settings(
             docling_vlm_model="granite_vision",
             docling_vlm_runtime="vllm",
+            docling_vlm_trust_remote_code=True,
             docling_pdf_picture_description_model="Qwen/Qwen3-VL-8B-Instruct",
             docling_pdf_picture_description_runtime="vllm",
         ),
@@ -72,6 +87,8 @@ def test_docling_options_metadata_records_runtime_decisions() -> None:
     )
 
     assert metadata["runtime"]["stages"]["vlm_convert"]["resolved_runtime"] == "vllm"
+    assert metadata["active_options"]["pipeline_options"]["trust_remote_code"] is True
+    assert metadata["runtime"]["policy"]["vllm"]["trust_remote_code"] is True
     assert (
         metadata["runtime"]["stages"]["picture_description"]["resolved_runtime"] == "transformers"
     )

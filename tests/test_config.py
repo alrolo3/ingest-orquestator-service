@@ -41,6 +41,7 @@ def test_env_example_loads() -> None:
     assert settings.docling_vlm_runtime == "transformers"
     assert settings.docling_vllm_fallback_on_unsupported is True
     assert settings.docling_vlm_max_new_tokens == 4096
+    assert settings.effective_docling_vlm_trust_remote_code is False
     assert settings.docling_vllm_max_model_len is None
 
 
@@ -65,6 +66,7 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_vllm_tensor_parallel_size == 1
     assert settings.docling_vllm_gpu_memory_utilization > 0
     assert settings.docling_vlm_max_new_tokens == 4096
+    assert settings.effective_docling_vlm_trust_remote_code is False
 
 
 def test_cpu_env_loads() -> None:
@@ -132,6 +134,22 @@ def test_settings_grouped_config_views() -> None:
     assert settings.docling_xbrl_config.enable_local_fetch is False
     assert settings.chunking_config.embedding_output_enabled is True
     assert settings.confidence_config.output_enabled is True
+
+
+def test_settings_vlm_trust_remote_code_overrides_legacy_vllm_alias() -> None:
+    settings = Settings(
+        docling_vlm_trust_remote_code=True,
+        docling_vllm_trust_remote_code=False,
+    )
+
+    assert settings.effective_docling_vlm_trust_remote_code is True
+    assert settings.docling_vlm_config.trust_remote_code is True
+
+
+def test_settings_legacy_vllm_trust_remote_code_still_works() -> None:
+    settings = Settings(docling_vllm_trust_remote_code=True)
+
+    assert settings.effective_docling_vlm_trust_remote_code is True
 
 
 def test_settings_reject_unknown_table_structure_backend() -> None:

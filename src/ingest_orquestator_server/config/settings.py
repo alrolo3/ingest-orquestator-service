@@ -145,6 +145,7 @@ class Settings(BaseSettings):
     docling_vlm_torch_dtype: str | None = "bfloat16"
     docling_vlm_load_in_8bit: bool = False
     docling_vlm_max_new_tokens: int = Field(default=4096, ge=1)
+    docling_vlm_trust_remote_code: bool | None = None
     docling_vllm_tensor_parallel_size: int = Field(default=1, ge=1)
     docling_vllm_gpu_memory_utilization: float = Field(default=0.9, gt=0, le=1)
     docling_vllm_trust_remote_code: bool = False
@@ -430,6 +431,7 @@ class Settings(BaseSettings):
             torch_dtype=self.docling_vlm_torch_dtype,
             load_in_8bit=self.docling_vlm_load_in_8bit,
             max_new_tokens=self.docling_vlm_max_new_tokens,
+            trust_remote_code=self.effective_docling_vlm_trust_remote_code,
             vllm_tensor_parallel_size=self.docling_vllm_tensor_parallel_size,
             vllm_gpu_memory_utilization=self.docling_vllm_gpu_memory_utilization,
             vllm_trust_remote_code=self.docling_vllm_trust_remote_code,
@@ -442,6 +444,12 @@ class Settings(BaseSettings):
             vllm_fallback_on_unsupported=self.docling_vllm_fallback_on_unsupported,
             vllm_allow_unverified_models=self.docling_vllm_allow_unverified_models,
         )
+
+    @property
+    def effective_docling_vlm_trust_remote_code(self) -> bool:
+        if self.docling_vlm_trust_remote_code is not None:
+            return self.docling_vlm_trust_remote_code
+        return self.docling_vllm_trust_remote_code
 
     @property
     def docling_xbrl_config(self) -> DoclingXbrlConfig:

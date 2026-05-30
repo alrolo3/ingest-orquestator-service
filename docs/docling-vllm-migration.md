@@ -116,6 +116,7 @@ To experiment with a custom repo id through Docling's vLLM inline path:
 INGEST_DOCLING_VLLM_ALLOW_UNVERIFIED_MODELS=true
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RUNTIME=vllm
+INGEST_DOCLING_VLM_TRUST_REMOTE_CODE=false
 INGEST_DOCLING_VLLM_GPU_MEMORY_UTILIZATION=0.9
 INGEST_DOCLING_VLLM_CUDAGRAPH_MODE=NONE
 INGEST_DOCLING_VLLM_MAX_MODEL_LEN=32768
@@ -128,6 +129,13 @@ load, output quality, and memory behavior.
 For custom inline models, Docling uses a legacy inline vLLM path. This service
 passes vLLM memory and batching controls through that path using Docling's
 `extra_generation_config` allowlist.
+
+If a custom model fails with a `trust_remote_code=True` error, inspect the model
+repository first. If the repository is trusted, enable:
+
+```bash
+INGEST_DOCLING_VLM_TRUST_REMOTE_CODE=true
+```
 
 ## Smoke Tests
 

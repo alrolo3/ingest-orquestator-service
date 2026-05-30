@@ -149,6 +149,7 @@ def build_vlm_convert_options(settings: Settings) -> Any:
     )
 
     resolution = resolve_vlm_convert_runtime(settings)
+    trust_remote_code = settings.effective_docling_vlm_trust_remote_code
     if resolution.preset is not None:
         return VlmConvertOptions.from_preset(
             resolution.preset,
@@ -166,7 +167,7 @@ def build_vlm_convert_options(settings: Settings) -> Any:
         response_format=ResponseFormat(settings.docling_vlm_response_format),
         torch_dtype=settings.docling_vlm_torch_dtype,
         load_in_8bit=settings.docling_vlm_load_in_8bit,
-        trust_remote_code=settings.docling_vllm_trust_remote_code,
+        trust_remote_code=trust_remote_code,
         scale=settings.docling_vlm_scale,
         max_new_tokens=settings.docling_vlm_max_new_tokens,
         extra_generation_config=_inline_vllm_extra_generation_config(settings, resolution),
@@ -185,7 +186,7 @@ def build_vlm_engine_options(resolution: RuntimeResolution, settings: Settings) 
         return VllmVlmEngineOptions(
             tensor_parallel_size=settings.docling_vllm_tensor_parallel_size,
             gpu_memory_utilization=settings.docling_vllm_gpu_memory_utilization,
-            trust_remote_code=settings.docling_vllm_trust_remote_code,
+            trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
             cudagraph_mode=VllmCudaGraphMode(settings.docling_vllm_cudagraph_mode),
             model_impl=settings.docling_vllm_model_impl,
         )
@@ -194,7 +195,7 @@ def build_vlm_engine_options(resolution: RuntimeResolution, settings: Settings) 
     return TransformersVlmEngineOptions(
         torch_dtype=settings.docling_vlm_torch_dtype,
         load_in_8bit=settings.docling_vlm_load_in_8bit,
-        trust_remote_code=settings.docling_vllm_trust_remote_code,
+        trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
     )
 
 
@@ -242,6 +243,7 @@ def _build_qwen3_picture_description_options(
             default_repo_id=DOCLING_PICTURE_DESCRIPTION_MODEL,
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
+            trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
             supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={
                 VlmEngineType.TRANSFORMERS: EngineModelConfig(
@@ -277,6 +279,7 @@ def _build_custom_picture_description_options(
             default_repo_id=settings.docling_pdf_picture_description_model,
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
+            trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
             supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={
                 VlmEngineType.TRANSFORMERS: EngineModelConfig(

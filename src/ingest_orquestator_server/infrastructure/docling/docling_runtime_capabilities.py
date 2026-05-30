@@ -237,7 +237,8 @@ def docling_runtime_metadata(
             "vllm": {
                 "tensor_parallel_size": settings.docling_vllm_tensor_parallel_size,
                 "gpu_memory_utilization": settings.docling_vllm_gpu_memory_utilization,
-                "trust_remote_code": settings.docling_vllm_trust_remote_code,
+                "trust_remote_code": settings.effective_docling_vlm_trust_remote_code,
+                "legacy_vllm_trust_remote_code": settings.docling_vllm_trust_remote_code,
                 "cudagraph_mode": settings.docling_vllm_cudagraph_mode,
                 "model_impl": settings.docling_vllm_model_impl,
                 "enforce_eager": settings.docling_vllm_enforce_eager,

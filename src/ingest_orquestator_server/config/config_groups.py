@@ -48,6 +48,7 @@ class DoclingVlmConfig(BaseModel):
     torch_dtype: str | None
     load_in_8bit: bool
     max_new_tokens: int
+    trust_remote_code: bool
     vllm_tensor_parallel_size: int
     vllm_gpu_memory_utilization: float
     vllm_trust_remote_code: bool
