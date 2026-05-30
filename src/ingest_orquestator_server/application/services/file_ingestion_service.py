@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from ingest_orquestator_server.application.exceptions import (
     UnsupportedDocumentFormatError,
+    UnsupportedIngestionOptionError,
     UnsupportedPipelineError,
 )
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
@@ -48,13 +49,18 @@ class FileIngestionService:
         upload: UploadFileLike,
         parser_name: str,
         include_document: bool,
-        pipeline: str = "standard",
+        pipeline: str | None = None,
+        profile: str | None = None,
+        chunking_enabled: bool | None = None,
+        chunking_strategy: str | None = None,
     ) -> IngestResponse:
         self._upload_validator.validate_metadata(upload)
         self._validate_parser_request(
             filename=upload.filename or "",
             parser_name=parser_name,
             pipeline=pipeline,
+            profile=profile,
+            chunking_strategy=chunking_strategy,
         )
         job_id = str(uuid4())
         logger.info(
@@ -63,6 +69,7 @@ class FileIngestionService:
                 "job_id": job_id,
                 "parser": parser_name,
                 "pipeline": pipeline,
+                "profile": profile,
                 "filename": upload.filename,
             },
         )
@@ -78,7 +85,12 @@ class FileIngestionService:
             parser=parser_name,
             source_file_name=upload.filename,
             input_path=upload_path,
-            metadata={"requested_pipeline": pipeline},
+            metadata=self._request_metadata(
+                pipeline=pipeline,
+                profile=profile,
+                chunking_enabled=chunking_enabled,
+                chunking_strategy=chunking_strategy,
+            ),
             started_at=datetime.now(UTC),
         )
         self._job_repository.save(job)
@@ -94,6 +106,9 @@ class FileIngestionService:
                 output_root=self._settings.outputs_dir,
                 document_id=job_id,
                 pipeline=pipeline,
+                profile=profile,
+                chunking_enabled=chunking_enabled,
+                chunking_strategy=chunking_strategy,
             )
         except Exception as exc:
             failed_job = job.model_copy(
@@ -151,13 +166,18 @@ class FileIngestionService:
         *,
         upload: UploadFileLike,
         parser_name: str,
-        pipeline: str = "standard",
+        pipeline: str | None = None,
+        profile: str | None = None,
+        chunking_enabled: bool | None = None,
+        chunking_strategy: str | None = None,
     ) -> IngestResponse:
         self._upload_validator.validate_metadata(upload)
         self._validate_parser_request(
             filename=upload.filename or "",
             parser_name=parser_name,
             pipeline=pipeline,
+            profile=profile,
+            chunking_strategy=chunking_strategy,
         )
         job_id = str(uuid4())
         logger.info(
@@ -166,6 +186,7 @@ class FileIngestionService:
                 "job_id": job_id,
                 "parser": parser_name,
                 "pipeline": pipeline,
+                "profile": profile,
                 "filename": upload.filename,
             },
         )
@@ -174,7 +195,12 @@ class FileIngestionService:
             self._settings.uploads_dir,
             job_id=job_id,
         )
-        metadata = {"requested_pipeline": pipeline}
+        metadata = self._request_metadata(
+            pipeline=pipeline,
+            profile=profile,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+        )
         job = IngestionJob(
             job_id=job_id,
             status=IngestionStatus.QUEUED,
@@ -197,7 +223,10 @@ class FileIngestionService:
         if job is None:
             return
 
-        pipeline = str(job.metadata.get("requested_pipeline") or "standard")
+        pipeline = job.metadata.get("requested_pipeline")
+        profile = job.metadata.get("requested_profile")
+        chunking_enabled = job.metadata.get("requested_chunking_enabled")
+        chunking_strategy = job.metadata.get("requested_chunking_strategy")
         running_job = job.model_copy(
             update={
                 "status": IngestionStatus.RUNNING,
@@ -219,7 +248,10 @@ class FileIngestionService:
                 parser_name=running_job.parser,
                 output_root=self._settings.outputs_dir,
                 document_id=job_id,
-                pipeline=pipeline,
+                pipeline=str(pipeline) if pipeline is not None else None,
+                profile=str(profile) if profile is not None else None,
+                chunking_enabled=bool(chunking_enabled) if chunking_enabled is not None else None,
+                chunking_strategy=str(chunking_strategy) if chunking_strategy is not None else None,
             )
         except Exception as exc:
             failed_job = running_job.model_copy(
@@ -263,8 +295,32 @@ class FileIngestionService:
     @staticmethod
     def _error_metadata(exc: Exception) -> dict[str, str]:
         metadata = {"error_type": type(exc).__name__}
-        if isinstance(exc, UnsupportedDocumentFormatError | UnsupportedPipelineError):
+        if isinstance(
+            exc,
+            UnsupportedDocumentFormatError
+            | UnsupportedPipelineError
+            | UnsupportedIngestionOptionError,
+        ):
             metadata["validation_error"] = "true"
+        return metadata
+
+    @staticmethod
+    def _request_metadata(
+        *,
+        pipeline: str | None,
+        profile: str | None,
+        chunking_enabled: bool | None,
+        chunking_strategy: str | None,
+    ) -> dict[str, object]:
+        metadata: dict[str, object] = {}
+        if pipeline is not None:
+            metadata["requested_pipeline"] = pipeline
+        if profile is not None:
+            metadata["requested_profile"] = profile
+        if chunking_enabled is not None:
+            metadata["requested_chunking_enabled"] = chunking_enabled
+        if chunking_strategy is not None:
+            metadata["requested_chunking_strategy"] = chunking_strategy
         return metadata
 
     def _validate_parser_request(
@@ -272,11 +328,18 @@ class FileIngestionService:
         *,
         filename: str,
         parser_name: str,
-        pipeline: str,
+        pipeline: str | None,
+        profile: str | None = None,
+        chunking_strategy: str | None = None,
     ) -> None:
         if parser_name != "docling":
             return
 
+        from ingest_orquestator_server.config.profiles import (
+            resolve_profile_settings,
+            validate_chunking_strategy,
+            validate_profile_name,
+        )
         from ingest_orquestator_server.infrastructure.docling.docling_formats import (
             detect_input_format,
             resolve_pipeline_mode,
@@ -285,4 +348,11 @@ class FileIngestionService:
 
         input_format = detect_input_format(Path(filename))
         validate_allowed_format(input_format, self._settings.docling_allowed_formats)
-        resolve_pipeline_mode(pipeline, input_format)
+        request_settings = self._settings
+        if profile is not None:
+            request_settings = resolve_profile_settings(self._settings, profile=profile)
+        resolve_pipeline_mode(pipeline or request_settings.docling_pipeline, input_format)
+        if profile is not None:
+            validate_profile_name(profile)
+        if chunking_strategy is not None:
+            validate_chunking_strategy(chunking_strategy)

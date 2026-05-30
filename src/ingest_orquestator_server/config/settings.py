@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ingest_orquestator_server.config.config_groups import (
     ChunkingConfig,
+    ConfidenceConfig,
     DoclingCommonConfig,
     DoclingOcrConfig,
     DoclingVlmConfig,
@@ -32,6 +33,7 @@ from ingest_orquestator_server.config.docling_defaults import (
 
 class Settings(BaseSettings):
     service_name: str = "ingest-orquestator-server"
+    profile: str = "rag_ready"
     storage_dir: Path = Path(".data")
     max_upload_size_mb: int = Field(default=100, ge=1)
     allowed_upload_extensions: list[str] = Field(
@@ -67,6 +69,17 @@ class Settings(BaseSettings):
     )
     chunk_size_chars: int = Field(default=1200, ge=100)
     chunk_overlap_chars: int = Field(default=150, ge=0)
+    chunking_enabled: bool = True
+    chunking_strategy: str = "hybrid"
+    chunk_max_tokens: int = Field(default=768, ge=32)
+    chunk_tokenizer_model: str | None = None
+    chunk_merge_peers: bool = True
+    chunk_repeat_table_header: bool = True
+    chunk_omit_header_on_overflow: bool = False
+    chunk_omit_prefix_on_overflow: bool = False
+    confidence_output_enabled: bool = True
+    confidence_min_document_score: float | None = Field(default=None, ge=0, le=1)
+    confidence_warn_only: bool = True
     retention_days: int = Field(default=30, ge=1)
     docling_accelerator_device: str = Field(
         default="auto",
@@ -148,6 +161,22 @@ class Settings(BaseSettings):
             return normalized
         raise ValueError("must be one of auto, cpu, cuda, cuda:N, mps, or xpu")
 
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {
+            "parse_only",
+            "rag_ready",
+            "ocr_only",
+            "standard_enriched",
+            "vlm",
+        }:
+            return normalized
+        raise ValueError(
+            "must be one of parse_only, rag_ready, ocr_only, standard_enriched, or vlm"
+        )
+
     @field_validator("docling_pdf_ocr_engine")
     @classmethod
     def normalize_docling_pdf_ocr_engine(cls, value: str) -> str:
@@ -163,6 +192,14 @@ class Settings(BaseSettings):
         if normalized in {"standard", "vlm", "auto"}:
             return normalized
         raise ValueError("must be one of standard, vlm, or auto")
+
+    @field_validator("chunking_strategy")
+    @classmethod
+    def validate_chunking_strategy(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"hybrid", "line_based", "legacy_char"}:
+            return normalized
+        raise ValueError("must be one of hybrid, line_based, or legacy_char")
 
     @field_validator("docling_allowed_formats", mode="before")
     @classmethod
@@ -317,6 +354,7 @@ class Settings(BaseSettings):
         return DoclingCommonConfig(
             allowed_formats=self.docling_allowed_formats,
             pipeline=self.docling_pipeline,
+            profile=self.profile,
             accelerator_device=self.docling_accelerator_device,
             num_threads=self.docling_num_threads,
             cuda_use_flash_attention2=self.docling_cuda_use_flash_attention2,
@@ -347,9 +385,25 @@ class Settings(BaseSettings):
     @property
     def chunking_config(self) -> ChunkingConfig:
         return ChunkingConfig(
+            enabled=self.chunking_enabled,
+            strategy=self.chunking_strategy,
+            max_tokens=self.chunk_max_tokens,
+            tokenizer_model=self.chunk_tokenizer_model,
+            merge_peers=self.chunk_merge_peers,
+            repeat_table_header=self.chunk_repeat_table_header,
+            omit_header_on_overflow=self.chunk_omit_header_on_overflow,
+            omit_prefix_on_overflow=self.chunk_omit_prefix_on_overflow,
             chunk_size_chars=self.chunk_size_chars,
             chunk_overlap_chars=self.chunk_overlap_chars,
             embedding_output_enabled=self.embedding_output_enabled,
+        )
+
+    @property
+    def confidence_config(self) -> ConfidenceConfig:
+        return ConfidenceConfig(
+            output_enabled=self.confidence_output_enabled,
+            min_document_score=self.confidence_min_document_score,
+            warn_only=self.confidence_warn_only,
         )
 
 

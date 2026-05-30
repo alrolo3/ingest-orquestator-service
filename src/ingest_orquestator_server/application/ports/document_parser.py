@@ -15,5 +15,6 @@ class DocumentParser(Protocol):
         *,
         document_id: str | None = None,
         pipeline: str | None = None,
+        profile: str | None = None,
     ) -> ParseOutput:
         """Parse a source file into raw and normalized output."""

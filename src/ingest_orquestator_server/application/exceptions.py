@@ -14,6 +14,11 @@ class UnsupportedPipelineError(ValueError):
         super().__init__(message)
 
 
+class UnsupportedIngestionOptionError(ValueError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class UploadValidationError(ValueError):
     def __init__(self, message: str, *, status_code: int = 400) -> None:
         super().__init__(message)

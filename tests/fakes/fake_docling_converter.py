@@ -5,6 +5,15 @@ class FakeDoclingConverter:
     def convert(self, source_path: Path) -> object:
         return FakeDoclingConversionResult(source_path)
 
+    def convert_all(
+        self,
+        source_paths: list[Path],
+        *,
+        raises_on_error: bool = True,
+    ) -> object:
+        _ = raises_on_error
+        return (FakeDoclingConversionResult(source_path) for source_path in source_paths)
+
 
 class FakeDoclingConversionResult:
     def __init__(self, source_path: Path) -> None:

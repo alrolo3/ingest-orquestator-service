@@ -12,6 +12,7 @@ from ingest_orquestator_server.application.exceptions import (
     JobNotFoundError,
     OutputArtifactNotFoundError,
     UnsupportedDocumentFormatError,
+    UnsupportedIngestionOptionError,
     UnsupportedParserError,
     UnsupportedPipelineError,
     UploadValidationError,
@@ -37,7 +38,10 @@ async def ingest_file(
     background_tasks: BackgroundTasks,
     service: Annotated[FileIngestionService, Depends(get_file_ingestion_service)],
     parser: Annotated[str, Query()] = "docling",
-    pipeline: Annotated[str, Query()] = "standard",
+    pipeline: Annotated[str | None, Query()] = None,
+    profile: Annotated[str | None, Query()] = None,
+    chunking_enabled: Annotated[bool | None, Query()] = None,
+    chunking_strategy: Annotated[str | None, Query()] = None,
     async_mode: Annotated[bool, Query()] = False,
     include_document: Annotated[bool, Query()] = True,
 ) -> IngestResponse:
@@ -47,6 +51,9 @@ async def ingest_file(
                 upload=file,
                 parser_name=parser,
                 pipeline=pipeline,
+                profile=profile,
+                chunking_enabled=chunking_enabled,
+                chunking_strategy=chunking_strategy,
             )
             background_tasks.add_task(service.process_queued_job, response.job_id)
             return response
@@ -54,6 +61,9 @@ async def ingest_file(
             upload=file,
             parser_name=parser,
             pipeline=pipeline,
+            profile=profile,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
             include_document=include_document,
         )
     except UploadValidationError as exc:
@@ -61,6 +71,7 @@ async def ingest_file(
     except (
         UnsupportedParserError,
         UnsupportedDocumentFormatError,
+        UnsupportedIngestionOptionError,
         UnsupportedPipelineError,
     ) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

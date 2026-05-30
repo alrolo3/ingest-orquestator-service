@@ -57,3 +57,37 @@ def test_chunking_splits_long_text_with_overlap() -> None:
 
     assert len(chunks) == 3
     assert all(len(chunk.text) <= 100 for chunk in chunks)
+
+
+def test_line_based_chunking_uses_docling_chunker() -> None:
+    from docling_core.types.doc.document import DoclingDocument
+    from docling_core.types.doc.labels import DocItemLabel
+
+    docling_document = DoclingDocument(name="example")
+    docling_document.add_heading(text="Intro", level=1)
+    docling_document.add_text(
+        label=DocItemLabel.PARAGRAPH,
+        text="hello world " * 80,
+    )
+    document = ParsedDocument(
+        document_id="doc-1",
+        source_file_name="example.md",
+        source_path="/tmp/example.md",
+        metadata={
+            "docling": {
+                "parser": "docling",
+                "input_format": "md",
+                "pipeline": "standard",
+            }
+        },
+    )
+
+    chunks = DocumentChunkingService(Settings(chunk_max_tokens=32)).chunk(
+        document,
+        docling_document=docling_document,
+        chunking_strategy="line_based",
+    )
+
+    assert len(chunks) > 1
+    assert chunks[0].metadata["chunker_strategy"] == "line_based"
+    assert chunks[0].metadata["max_tokens"] == 32

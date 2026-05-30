@@ -25,6 +25,7 @@ class UploadConfig(BaseModel):
 class DoclingCommonConfig(BaseModel):
     allowed_formats: list[str]
     pipeline: str
+    profile: str
     accelerator_device: str
     num_threads: int
     cuda_use_flash_attention2: bool
@@ -49,6 +50,20 @@ class DoclingVlmConfig(BaseModel):
 
 
 class ChunkingConfig(BaseModel):
+    enabled: bool
+    strategy: str
+    max_tokens: int
+    tokenizer_model: str | None
+    merge_peers: bool
+    repeat_table_header: bool
+    omit_header_on_overflow: bool
+    omit_prefix_on_overflow: bool
     chunk_size_chars: int
     chunk_overlap_chars: int
     embedding_output_enabled: bool
+
+
+class ConfidenceConfig(BaseModel):
+    output_enabled: bool
+    min_document_score: float | None
+    warn_only: bool

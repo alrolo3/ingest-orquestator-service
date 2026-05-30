@@ -26,6 +26,10 @@ def test_env_example_loads() -> None:
 
     assert settings.docling_pdf_ocr_engine == "suryaocr"
     assert settings.docling_pdf_ocr_languages == ["en"]
+    assert settings.profile == "rag_ready"
+    assert settings.chunking_enabled is True
+    assert settings.chunking_strategy == "hybrid"
+    assert settings.confidence_output_enabled is True
 
 
 def test_cuda_gpu_env_loads() -> None:
@@ -39,6 +43,7 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_pdf_layout_batch_size == 32
     assert settings.docling_pdf_table_batch_size == 32
     assert settings.docling_pdf_queue_max_size == 512
+    assert settings.chunk_max_tokens == 1024
 
 
 def test_cpu_env_loads() -> None:
@@ -53,6 +58,7 @@ def test_cpu_env_loads() -> None:
     assert settings.docling_pdf_do_formula_enrichment is False
     assert settings.docling_pdf_ocr_batch_size == 1
     assert settings.docling_pdf_queue_max_size == 32
+    assert settings.chunking_strategy == "hybrid"
 
 
 def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
@@ -96,8 +102,10 @@ def test_settings_grouped_config_views() -> None:
     settings = Settings(docling_pipeline="vlm", docling_vlm_runtime="transformers")
 
     assert settings.docling_common_config.pipeline == "vlm"
+    assert settings.docling_common_config.profile == "rag_ready"
     assert settings.docling_vlm_config.runtime == "transformers"
     assert settings.chunking_config.embedding_output_enabled is True
+    assert settings.confidence_config.output_enabled is True
 
 
 def test_settings_reject_unknown_table_structure_backend() -> None:

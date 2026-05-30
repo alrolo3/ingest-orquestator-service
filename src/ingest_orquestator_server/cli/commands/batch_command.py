@@ -27,8 +27,8 @@ from ingest_orquestator_server.infrastructure.parser.parser_registry_factory imp
 )
 
 
-def parse(
-    file: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
+def batch(
+    inputs: Annotated[list[Path], typer.Argument(exists=True, readable=True)],
     output_dir: Annotated[
         Path | None,
         typer.Option("--output-dir", "-o", help="Directory where parse artifacts are written."),
@@ -43,14 +43,11 @@ def parse(
     ] = None,
     profile: Annotated[
         str | None,
-        typer.Option(
-            "--profile",
-            help="Ingestion profile: rag_ready, parse_only, ocr_only, standard_enriched, or vlm.",
-        ),
+        typer.Option("--profile", help="Ingestion profile to apply to the batch."),
     ] = None,
     chunking_enabled: Annotated[
         bool | None,
-        typer.Option("--chunking/--no-chunking", help="Override chunking for this parse."),
+        typer.Option("--chunking/--no-chunking", help="Override chunking for this batch."),
     ] = None,
     chunking_strategy: Annotated[
         str | None,
@@ -61,6 +58,7 @@ def parse(
     ] = None,
 ) -> None:
     settings = get_settings()
+    file_paths = _collect_file_paths(inputs, allowed_extensions=settings.allowed_upload_extensions)
     parse_service = DocumentParseService(
         parser_registry=build_parser_registry(settings),
         output_writer=LocalParseOutputWriter(),
@@ -68,8 +66,8 @@ def parse(
         embedding_output_enabled=settings.embedding_output_enabled,
     )
     try:
-        result = parse_service.parse_file(
-            file_path=file,
+        results = parse_service.parse_files(
+            file_paths=file_paths,
             parser_name=parser,
             output_root=output_dir or settings.outputs_dir,
             pipeline=pipeline,
@@ -84,20 +82,52 @@ def parse(
     except UnsupportedIngestionOptionError as exc:
         raise typer.BadParameter(str(exc)) from exc
     except UnsupportedDocumentFormatError as exc:
-        raise typer.BadParameter(str(exc), param_hint="file") from exc
+        raise typer.BadParameter(str(exc), param_hint="inputs") from exc
 
     typer.echo(
         json.dumps(
             {
-                "document_id": result.parse_output.document.document_id,
-                "source_file_name": result.parse_output.document.source_file_name,
-                "page_count": result.parse_output.document.page_count,
-                "element_count": len(result.parse_output.document.elements),
-                "chunk_count": len(result.chunks),
-                "embedding_record_count": len(result.embedding_records),
-                "metadata": result.diagnostics.metadata,
-                "outputs": result.outputs.model_dump(mode="json"),
+                "file_count": len(file_paths),
+                "completed_count": len(results),
+                "results": [
+                    {
+                        "document_id": result.parse_output.document.document_id,
+                        "source_file_name": result.parse_output.document.source_file_name,
+                        "page_count": result.parse_output.document.page_count,
+                        "element_count": len(result.parse_output.document.elements),
+                        "chunk_count": len(result.chunks),
+                        "embedding_record_count": len(result.embedding_records),
+                        "metadata": result.diagnostics.metadata,
+                        "outputs": result.outputs.model_dump(mode="json"),
+                    }
+                    for result in results
+                ],
             },
             indent=2,
         )
     )
+
+
+def _collect_file_paths(
+    inputs: list[Path],
+    *,
+    allowed_extensions: list[str],
+) -> list[Path]:
+    allowed = {extension.lower() for extension in allowed_extensions}
+    file_paths: list[Path] = []
+    for input_path in inputs:
+        path = input_path.expanduser().resolve()
+        if path.is_dir():
+            file_paths.extend(
+                sorted(
+                    child
+                    for child in path.rglob("*")
+                    if child.is_file() and child.suffix.lower() in allowed
+                )
+            )
+        elif path.is_file():
+            file_paths.append(path)
+
+    if not file_paths:
+        raise typer.BadParameter("No supported input files were found.", param_hint="inputs")
+    return file_paths

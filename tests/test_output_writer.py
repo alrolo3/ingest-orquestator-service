@@ -26,6 +26,9 @@ def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
         raw_markdown="# Hello",
         raw_text="Hello",
         raw_html="<h1>Hello</h1>",
+        confidence={"mean_score": 0.94},
+        confidence_summary={"mean_score": 0.94},
+        warnings=[],
     )
 
     chunks = [
@@ -74,5 +77,7 @@ def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
     assert '"record_id":"doc-1:embedding:1"' in outputs.embedding_input_jsonl.read_text(
         encoding="utf-8"
     )
+    assert outputs.confidence_json is not None
+    assert '"mean_score": 0.94' in outputs.confidence_json.read_text(encoding="utf-8")
     assert outputs.manifest_json.exists()
     assert "diagnostics" in outputs.manifest_json.read_text(encoding="utf-8")

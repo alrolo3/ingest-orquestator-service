@@ -53,18 +53,114 @@ class DocumentParseService:
         output_root: Path,
         document_id: str | None = None,
         pipeline: str | None = None,
+        profile: str | None = None,
+        chunking_enabled: bool | None = None,
+        chunking_strategy: str | None = None,
     ) -> DocumentParseResult:
         parser = self._parser_registry.get(parser_name)
         started_at = datetime.now(UTC)
         started = perf_counter()
-        parse_output = parser.parse(file_path, document_id=document_id, pipeline=pipeline)
-        chunks = self._chunking_service.chunk(parse_output.document)
+        parse_output = parser.parse(
+            file_path,
+            document_id=document_id,
+            pipeline=pipeline,
+            profile=profile,
+        )
+        return self._persist_parse_output(
+            parse_output,
+            parser_name=parser_name,
+            output_root=output_root,
+            pipeline=pipeline,
+            profile=profile,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+            started_at=started_at,
+            started=started,
+        )
+
+    def parse_files(
+        self,
+        *,
+        file_paths: list[Path],
+        parser_name: str,
+        output_root: Path,
+        pipeline: str | None = None,
+        profile: str | None = None,
+        chunking_enabled: bool | None = None,
+        chunking_strategy: str | None = None,
+    ) -> list[DocumentParseResult]:
+        parser = self._parser_registry.get(parser_name)
+        parse_many = getattr(parser, "parse_many", None)
+        if parse_many is None:
+            return [
+                self.parse_file(
+                    file_path=file_path,
+                    parser_name=parser_name,
+                    output_root=output_root,
+                    pipeline=pipeline,
+                    profile=profile,
+                    chunking_enabled=chunking_enabled,
+                    chunking_strategy=chunking_strategy,
+                )
+                for file_path in file_paths
+            ]
+
+        started_at = datetime.now(UTC)
+        started = perf_counter()
+        parse_outputs = parse_many(
+            file_paths,
+            pipeline=pipeline,
+            profile=profile,
+        )
+        return [
+            self._persist_parse_output(
+                parse_output,
+                parser_name=parser_name,
+                output_root=output_root,
+                pipeline=pipeline,
+                profile=profile,
+                chunking_enabled=chunking_enabled,
+                chunking_strategy=chunking_strategy,
+                started_at=started_at,
+                started=started,
+            )
+            for parse_output in parse_outputs
+        ]
+
+    def _persist_parse_output(
+        self,
+        parse_output: ParseOutput,
+        *,
+        parser_name: str,
+        output_root: Path,
+        pipeline: str | None,
+        profile: str | None,
+        chunking_enabled: bool | None,
+        chunking_strategy: str | None,
+        started_at: datetime,
+        started: float,
+    ) -> DocumentParseResult:
+        chunking_is_enabled = self._chunking_service.is_enabled(
+            profile=profile,
+            chunking_enabled=chunking_enabled,
+        )
+        requested_chunking_strategy = self._chunking_service.strategy(
+            profile=profile,
+            chunking_strategy=chunking_strategy,
+        )
+        chunks = self._chunking_service.chunk(
+            parse_output.document,
+            docling_document=parse_output.docling_document,
+            profile=profile,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+        )
         embedding_records = (
             self._embedding_record_service.build_records(
                 document=parse_output.document,
                 chunks=chunks,
             )
-            if self._embedding_output_enabled
+            if self._embedding_output_enabled and chunks
             else []
         )
         completed_at = datetime.now(UTC)
@@ -80,17 +176,29 @@ class DocumentParseService:
                 "page_count": parse_output.document.page_count,
                 "element_count": len(parse_output.document.elements),
                 "input_format": docling_metadata.get("input_format"),
+                "profile": docling_metadata.get("profile") or profile,
                 "pipeline": docling_metadata.get("pipeline") or pipeline,
                 "ocr_engine": docling_metadata.get("ocr_engine"),
                 "vlm_model": docling_metadata.get("vlm_model"),
                 "vlm_runtime": docling_metadata.get("vlm_runtime"),
+                "chunking_enabled": chunking_is_enabled,
+                "chunking_strategy": chunks[0].metadata.get("chunker_strategy")
+                if chunks
+                else requested_chunking_strategy,
+                "embedding_record_count": len(embedding_records),
+                "conversion_status": parse_output.conversion_status,
+                "conversion_errors": parse_output.conversion_errors,
+                "conversion_timings": parse_output.conversion_timings,
+                "confidence_summary": parse_output.confidence_summary,
+                "warning_count": len(parse_output.warnings),
+                "warnings": parse_output.warnings,
             },
         )
         outputs = self._output_writer.write(
             parse_output,
             output_root,
-            chunks=chunks,
-            embedding_records=embedding_records if self._embedding_output_enabled else None,
+            chunks=chunks if chunking_is_enabled else None,
+            embedding_records=embedding_records if embedding_records else None,
             diagnostics=diagnostics,
         )
         return DocumentParseResult(

@@ -145,6 +145,48 @@ def test_ingest_rejects_vlm_pipeline_for_markdown(tmp_path: Path) -> None:
         app.dependency_overrides.clear()
 
 
+def test_ingest_accepts_profile_and_chunking_controls(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=DocumentChunkingService(settings),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+    app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/file?profile=parse_only&chunking_enabled=false",
+            files={"file": ("example.md", b"# Example", "text/markdown")},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["metadata"]["profile"] == "parse_only"
+        assert body["metadata"]["chunking_enabled"] is False
+        assert body["outputs"]["chunks_json"] is None
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_async_ingest_queues_and_processes_job(tmp_path: Path) -> None:
     settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)

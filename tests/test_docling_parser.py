@@ -20,8 +20,11 @@ def test_parser_adds_docling_accelerator_metadata(tmp_path: Path) -> None:
         input_file
     )
 
-    assert output.document.metadata["docling_options"]["accelerator_device"] == "cuda"
-    assert output.document.metadata["docling_options"]["num_threads"] == 8
-    assert output.document.metadata["docling_options"]["pdf_ocr_batch_size"] == 16
+    options = output.document.metadata["docling_options"]
+    assert options["common"]["accelerator_device"] == "cuda"
+    assert options["common"]["num_threads"] == 8
+    assert options["configured_options"]["pdf"]["ocr_batch_size"] == 16
     assert output.document.metadata["docling"]["input_format"] == "md"
     assert output.document.metadata["docling"]["pipeline"] == "standard"
+    assert output.document.metadata["docling"]["profile"] == "rag_ready"
+    assert output.document.metadata["docling_result"]["status"] is None

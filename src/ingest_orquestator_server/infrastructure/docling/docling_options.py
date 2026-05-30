@@ -108,39 +108,117 @@ def docling_options_metadata(
     input_format: str | None = None,
     pipeline: str | None = None,
 ) -> dict[str, Any]:
+    resolved_pipeline = pipeline or settings.docling_pipeline
+    return {
+        "common": _common_options(settings, input_format=input_format, pipeline=resolved_pipeline),
+        "active_options": _active_options(
+            settings,
+            input_format=input_format,
+            pipeline=resolved_pipeline,
+        ),
+        "configured_options": {
+            "pdf": _pdf_options(settings),
+            "vlm": _vlm_options(settings),
+            "chunking": {
+                "enabled": settings.chunking_enabled,
+                "strategy": settings.chunking_strategy,
+                "max_tokens": settings.chunk_max_tokens,
+                "tokenizer_model": settings.chunk_tokenizer_model,
+                "merge_peers": settings.chunk_merge_peers,
+                "repeat_table_header": settings.chunk_repeat_table_header,
+                "omit_header_on_overflow": settings.chunk_omit_header_on_overflow,
+                "omit_prefix_on_overflow": settings.chunk_omit_prefix_on_overflow,
+                "legacy_chunk_size_chars": settings.chunk_size_chars,
+                "legacy_chunk_overlap_chars": settings.chunk_overlap_chars,
+            },
+            "confidence": {
+                "output_enabled": settings.confidence_output_enabled,
+                "min_document_score": settings.confidence_min_document_score,
+                "warn_only": settings.confidence_warn_only,
+            },
+        },
+    }
+
+
+def _common_options(
+    settings: Settings,
+    *,
+    input_format: str | None,
+    pipeline: str,
+) -> dict[str, Any]:
     return {
         "parser": "docling",
+        "profile": settings.profile,
         "input_format": input_format,
-        "pipeline": pipeline or settings.docling_pipeline,
+        "pipeline": pipeline,
         "allowed_formats": settings.docling_allowed_formats,
         "accelerator_device": settings.docling_accelerator_device,
         "num_threads": settings.docling_num_threads,
         "cuda_use_flash_attention2": settings.docling_cuda_use_flash_attention2,
         "allow_external_plugins": settings.docling_allow_external_plugins,
-        "pdf_do_ocr": settings.docling_pdf_do_ocr,
-        "pdf_ocr_engine": settings.docling_pdf_ocr_engine,
-        "pdf_ocr_languages": settings.docling_pdf_ocr_languages,
-        "pdf_ocr_use_gpu": settings.docling_pdf_ocr_use_gpu,
-        "pdf_do_table_structure": settings.docling_pdf_do_table_structure,
-        "pdf_layout_model": settings.docling_pdf_layout_model,
-        "pdf_table_structure_backend": settings.docling_pdf_table_structure_backend,
-        "pdf_table_structure_mode": settings.docling_pdf_table_structure_mode,
-        "pdf_table_do_cell_matching": settings.docling_pdf_table_do_cell_matching,
-        "pdf_table_structure_vlm_model": settings.docling_pdf_table_structure_vlm_model,
-        "pdf_do_picture_classification": settings.docling_pdf_do_picture_classification,
-        "pdf_picture_classifier_preset": settings.docling_pdf_picture_classifier_preset,
-        "pdf_do_picture_description": settings.docling_pdf_do_picture_description,
-        "pdf_picture_description_model": settings.docling_pdf_picture_description_model,
-        "pdf_picture_description_prompt": settings.docling_pdf_picture_description_prompt,
-        "pdf_do_code_enrichment": settings.docling_pdf_do_code_enrichment,
-        "pdf_do_formula_enrichment": settings.docling_pdf_do_formula_enrichment,
-        "pdf_code_formula_preset": settings.docling_pdf_code_formula_preset,
-        "pdf_ocr_batch_size": settings.docling_pdf_ocr_batch_size,
-        "pdf_layout_batch_size": settings.docling_pdf_layout_batch_size,
-        "pdf_table_batch_size": settings.docling_pdf_table_batch_size,
-        "pdf_queue_max_size": settings.docling_pdf_queue_max_size,
-        "vlm_model": settings.docling_vlm_model,
-        "vlm_runtime": settings.docling_vlm_runtime,
-        "vlm_response_format": settings.docling_vlm_response_format,
-        "vlm_scale": settings.docling_vlm_scale,
+    }
+
+
+def _active_options(
+    settings: Settings,
+    *,
+    input_format: str | None,
+    pipeline: str,
+) -> dict[str, Any]:
+    if pipeline == "vlm" and input_format in {"pdf", "image"}:
+        return {
+            "format": input_format,
+            "pipeline": "vlm",
+            "format_option": "PdfFormatOption" if input_format == "pdf" else "ImageFormatOption",
+            "pipeline_options": _vlm_options(settings),
+        }
+    if input_format == "pdf":
+        return {
+            "format": "pdf",
+            "pipeline": "standard",
+            "format_option": "PdfFormatOption",
+            "pipeline_options": _pdf_options(settings),
+        }
+    return {
+        "format": input_format,
+        "pipeline": pipeline,
+        "uses_docling_defaults": True,
+    }
+
+
+def _pdf_options(settings: Settings) -> dict[str, Any]:
+    return {
+        "do_ocr": settings.docling_pdf_do_ocr,
+        "ocr_engine": settings.docling_pdf_ocr_engine,
+        "ocr_languages": settings.docling_pdf_ocr_languages,
+        "ocr_use_gpu": settings.docling_pdf_ocr_use_gpu,
+        "do_table_structure": settings.docling_pdf_do_table_structure,
+        "layout_model": settings.docling_pdf_layout_model,
+        "table_structure_backend": settings.docling_pdf_table_structure_backend,
+        "table_structure_mode": settings.docling_pdf_table_structure_mode,
+        "table_do_cell_matching": settings.docling_pdf_table_do_cell_matching,
+        "table_structure_vlm_model": settings.docling_pdf_table_structure_vlm_model,
+        "do_picture_classification": settings.docling_pdf_do_picture_classification,
+        "picture_classifier_preset": settings.docling_pdf_picture_classifier_preset,
+        "do_picture_description": settings.docling_pdf_do_picture_description,
+        "picture_description_model": settings.docling_pdf_picture_description_model,
+        "picture_description_prompt": settings.docling_pdf_picture_description_prompt,
+        "do_code_enrichment": settings.docling_pdf_do_code_enrichment,
+        "do_formula_enrichment": settings.docling_pdf_do_formula_enrichment,
+        "code_formula_preset": settings.docling_pdf_code_formula_preset,
+        "ocr_batch_size": settings.docling_pdf_ocr_batch_size,
+        "layout_batch_size": settings.docling_pdf_layout_batch_size,
+        "table_batch_size": settings.docling_pdf_table_batch_size,
+        "queue_max_size": settings.docling_pdf_queue_max_size,
+    }
+
+
+def _vlm_options(settings: Settings) -> dict[str, Any]:
+    return {
+        "model": settings.docling_vlm_model,
+        "runtime": settings.docling_vlm_runtime,
+        "response_format": settings.docling_vlm_response_format,
+        "scale": settings.docling_vlm_scale,
+        "torch_dtype": settings.docling_vlm_torch_dtype,
+        "load_in_8bit": settings.docling_vlm_load_in_8bit,
     }

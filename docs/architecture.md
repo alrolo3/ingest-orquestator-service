@@ -50,9 +50,10 @@ src/ingest_orquestator_server/
 The service can run parsing synchronously or enqueue an in-process background
 job for heavier OCR/VLM parsing.
 
-Both flows persist job state, outputs, diagnostics, chunks, and embedding-ready
-JSONL records. Later iterations can replace the in-process background worker
-with an external queue if multi-process scaling is needed.
+Both flows persist job state, outputs, diagnostics, confidence summaries,
+chunks, and embedding-ready JSONL records. Later iterations can replace the
+in-process background worker with an external queue if multi-process scaling is
+needed.
 
 ## Adding A Parser
 
@@ -69,5 +70,9 @@ To add another parser backend, such as MinerU:
 
 Docling integration is built around `DocumentConverter`. The converter factory
 chooses allowed formats and per-format options. `standard` mode is supported for
-all configured formats; direct `vlm` mode is supported for PDF and image inputs
-in v1.2.
+all configured formats; direct `vlm` mode is supported for PDF and image inputs.
+
+The parser keeps Docling `ConversionResult` metadata, including status, errors,
+timings, and confidence reports, then the application service builds chunks and
+embedding records. Batch CLI ingestion uses the same output path but calls
+Docling `DocumentConverter.convert_all`.

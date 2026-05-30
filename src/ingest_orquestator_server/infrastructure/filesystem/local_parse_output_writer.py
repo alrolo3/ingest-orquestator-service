@@ -36,6 +36,9 @@ class LocalParseOutputWriter:
         embedding_input_jsonl = (
             output_dir / "embedding_input.jsonl" if embedding_records is not None else None
         )
+        confidence_json = (
+            output_dir / "confidence.json" if parse_output.confidence is not None else None
+        )
         manifest_json = output_dir / "manifest.json"
 
         self._json_writer.write(raw_docling_json, parse_output.raw_docling)
@@ -60,6 +63,16 @@ class LocalParseOutputWriter:
                 + ("\n" if embedding_records else ""),
                 encoding="utf-8",
             )
+        if confidence_json is not None:
+            self._json_writer.write(
+                confidence_json,
+                {
+                    "document_id": document_id,
+                    "confidence": parse_output.confidence,
+                    "summary": parse_output.confidence_summary,
+                    "warnings": parse_output.warnings,
+                },
+            )
 
         files = OutputFiles(
             output_dir=output_dir,
@@ -70,6 +83,7 @@ class LocalParseOutputWriter:
             html=html_path,
             chunks_json=chunks_json,
             embedding_input_jsonl=embedding_input_jsonl,
+            confidence_json=confidence_json,
             manifest_json=manifest_json,
         )
         self._json_writer.write(

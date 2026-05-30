@@ -73,6 +73,7 @@ Download outputs:
 ```bash
 curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/chunks"
 curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/embedding"
+curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/confidence"
 curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/normalized"
 curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/markdown"
 ```
@@ -81,6 +82,16 @@ curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/markdown"
 
 ```bash
 python -m ingest_orquestator_server.cli parse /path/to/document.pdf \
+  --parser docling \
+  --pipeline standard \
+  --profile rag_ready \
+  --output-dir .data/outputs
+```
+
+Batch parse files or directories with Docling `convert_all`:
+
+```bash
+python -m ingest_orquestator_server.cli batch sample-inputs \
   --parser docling \
   --pipeline standard \
   --output-dir .data/outputs
@@ -95,6 +106,7 @@ Each parse creates a document-specific output directory containing:
 - `document.html`, when Docling can export HTML
 - `chunks.json`
 - `embedding_input.jsonl`
+- `confidence.json`, when confidence output is enabled and Docling reports scores
 - `manifest.json`
 
 Benchmark configured pipelines:
@@ -136,9 +148,15 @@ INGEST_SERVICE_NAME=ingest-orquestator-server
 INGEST_STORAGE_DIR=.data
 INGEST_MAX_UPLOAD_SIZE_MB=100
 INGEST_ALLOWED_UPLOAD_EXTENSIONS=.pdf,.md,.markdown,.txt,.html,.htm,.docx,.pptx
+INGEST_PROFILE=rag_ready
+INGEST_CHUNKING_ENABLED=true
+INGEST_CHUNKING_STRATEGY=hybrid
+INGEST_CHUNK_MAX_TOKENS=768
 INGEST_CHUNK_SIZE_CHARS=1200
 INGEST_CHUNK_OVERLAP_CHARS=150
 INGEST_EMBEDDING_OUTPUT_ENABLED=true
+INGEST_CONFIDENCE_OUTPUT_ENABLED=true
+INGEST_CONFIDENCE_WARN_ONLY=true
 INGEST_RETENTION_DAYS=30
 INGEST_DOCLING_ACCELERATOR_DEVICE=auto
 INGEST_DOCLING_NUM_THREADS=4
@@ -159,7 +177,7 @@ INGEST_DOCLING_PDF_CODE_FORMULA_PRESET=codeformulav2
 ```
 
 The standard pipeline is supported for every configured Docling format. Direct
-VLM mode is supported for PDF and image inputs in v1.2. The optional Granite
+VLM mode is supported for PDF and image inputs. The optional Granite
 Vision table structure backend can be selected with:
 
 ```bash

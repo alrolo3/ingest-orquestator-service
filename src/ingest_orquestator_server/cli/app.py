@@ -1,5 +1,6 @@
 import typer
 
+from ingest_orquestator_server.cli.commands.batch_command import batch
 from ingest_orquestator_server.cli.commands.benchmark_command import benchmark
 from ingest_orquestator_server.cli.commands.cleanup_command import cleanup
 from ingest_orquestator_server.cli.commands.parse_command import parse
@@ -13,5 +14,6 @@ def main() -> None:
 
 
 app.command()(parse)
+app.command()(batch)
 app.command()(benchmark)
 app.command()(cleanup)

@@ -121,6 +121,9 @@ The profile chooses:
 - `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda`
 - `INGEST_DOCLING_NUM_THREADS=32`
 - `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false`
+- `INGEST_PROFILE=rag_ready`
+- Docling HybridChunker enabled with `INGEST_CHUNK_MAX_TOKENS=1024`
+- confidence output enabled
 - SuryaOCR on GPU
 - standard pipeline layout model `docling-layout-heron-101`
 - TableFormer accurate mode with cell matching
