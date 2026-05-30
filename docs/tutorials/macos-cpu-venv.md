@@ -1,7 +1,7 @@
 # macOS CPU Venv Setup
 
 Use this path for local development on macOS without NVIDIA GPU acceleration.
-This tutorial does not install SuryaOCR, FlashInfer, or FlashAttention.
+This tutorial does not install SuryaOCR or FlashAttention.
 
 ## 1. Create The Virtual Environment
 

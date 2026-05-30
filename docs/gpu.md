@@ -21,11 +21,10 @@ INGEST_DOCLING_NUM_THREADS=8 \
 python -m ingest_orquestator_server.cli parse /path/to/document.pdf --output-dir .data/outputs
 ```
 
-The GPU dependency set includes SuryaOCR, FlashInfer, and FlashAttention-2 on
-supported Linux hosts. SuryaOCR is GPL-3.0-only, requires Python 3.12+ on Linux,
-and is loaded by Docling as an external plugin. If the plugin is not available,
-set `INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR
-selection.
+The GPU dependency set includes SuryaOCR and FlashAttention-2 on supported Linux
+hosts. SuryaOCR is GPL-3.0-only, requires Python 3.12+ on Linux, and is loaded
+by Docling as an external plugin. If the plugin is not available, set
+`INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR selection.
 
 For an A100 80GB CUDA 13 profile, use the checked-in
 [`env-cuda-gpu`](../env-cuda-gpu) file and see

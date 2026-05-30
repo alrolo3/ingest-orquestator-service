@@ -37,10 +37,9 @@ MAX_JOBS=8 python -m pip install --no-build-isolation -r requirements.txt
 python -m pip install --no-deps -e .
 ```
 
-The GPU install path includes SuryaOCR, FlashInfer, FlashInfer precompiled
-cubins, FlashAttention-2, and the build helpers needed by FlashAttention-2 on
-supported Linux hosts. `MAX_JOBS=8` limits FlashAttention-2 compile parallelism
-on the A100 profile.
+The GPU install path includes SuryaOCR, FlashAttention-2, and the build helpers
+needed by FlashAttention-2 on supported Linux hosts. `MAX_JOBS=8` limits
+FlashAttention-2 compile parallelism on the A100 profile.
 
 Load the profile and run the API:
 
@@ -114,7 +113,7 @@ These values are aggressive for an A100 80GB. If GPU memory spikes or the
 process becomes less stable under concurrent requests, reduce the three batch
 sizes from `32` to `16`.
 
-## FlashInfer And FlashAttention 3/4
+## FlashAttention 3/4
 
 For this service on A100, use FlashAttention-2.
 
@@ -126,13 +125,7 @@ that flag maps Transformers model loads to:
 _attn_implementation="flash_attention_2"
 ```
 
-There is no service-level config for FlashInfer, FlashAttention-3, or
-FlashAttention-4 today.
-
-FlashInfer is installed by the default GPU requirements because it is useful for
-CUDA 13 inference work, but it is not a drop-in replacement for Docling's current
-Transformers attention setting. Using it here would require a code change or a
-different VLM serving path that explicitly integrates FlashInfer kernels.
+There is no service-level config for FlashAttention-3 or FlashAttention-4 today.
 
 FlashAttention-3 targets Hopper GPUs such as H100/H800. FlashAttention-4 is
 optimized for Hopper and Blackwell through the new `flash-attn-4` package. They

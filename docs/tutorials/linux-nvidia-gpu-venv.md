@@ -68,8 +68,8 @@ Do not continue until PyTorch can see the GPU.
 ## 5. Install The GPU Requirements
 
 Install the default deployment requirements. On supported Linux hosts this
-includes SuryaOCR, FlashInfer, FlashInfer cubins, FlashAttention-2, and the
-build helpers required by FlashAttention-2.
+includes SuryaOCR, FlashAttention-2, and the build helpers required by
+FlashAttention-2.
 
 ```bash
 MAX_JOBS=8 python -m pip install --no-build-isolation -r requirements.txt
@@ -110,11 +110,9 @@ INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=128
 python - <<'PY'
 import docling_surya
 import flash_attn
-import flashinfer
 
 print("docling_surya", docling_surya.__name__)
 print("flash_attn", flash_attn.__version__)
-print("flashinfer", flashinfer.__version__)
 PY
 ```
 
@@ -153,6 +151,3 @@ INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true
 
 If a VLM fails during startup or model loading, set this to `false` in `.env`.
 That keeps CUDA enabled and falls back to PyTorch SDPA for attention.
-
-FlashInfer is installed for CUDA inference work, but Docling does not use it as
-a drop-in replacement for the current Transformers attention setting.
