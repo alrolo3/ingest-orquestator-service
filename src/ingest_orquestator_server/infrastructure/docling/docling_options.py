@@ -3,6 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from ingest_orquestator_server.config.settings import Settings
+from ingest_orquestator_server.infrastructure.docling.docling_model_options import (
+    build_code_formula_options,
+    build_layout_options,
+    build_ocr_options,
+    build_picture_classification_options,
+    build_picture_description_options,
+    build_table_structure_options,
+)
 
 
 def build_pdf_pipeline_options(settings: Settings) -> Any:
@@ -25,8 +33,21 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
     )
     pdf_pipeline_options = PdfPipelineOptions()
     pdf_pipeline_options.accelerator_options = accelerator_options
+    pdf_pipeline_options.allow_external_plugins = settings.docling_allow_external_plugins
     pdf_pipeline_options.do_ocr = settings.docling_pdf_do_ocr
+    pdf_pipeline_options.ocr_options = build_ocr_options(settings)
     pdf_pipeline_options.do_table_structure = settings.docling_pdf_do_table_structure
+    pdf_pipeline_options.table_structure_options = build_table_structure_options(settings)
+    pdf_pipeline_options.layout_options = build_layout_options(settings)
+    pdf_pipeline_options.do_picture_classification = settings.docling_pdf_do_picture_classification
+    pdf_pipeline_options.picture_classification_options = build_picture_classification_options(
+        settings
+    )
+    pdf_pipeline_options.do_picture_description = settings.docling_pdf_do_picture_description
+    pdf_pipeline_options.picture_description_options = build_picture_description_options(settings)
+    pdf_pipeline_options.do_code_enrichment = settings.docling_pdf_do_code_enrichment
+    pdf_pipeline_options.do_formula_enrichment = settings.docling_pdf_do_formula_enrichment
+    pdf_pipeline_options.code_formula_options = build_code_formula_options(settings)
     pdf_pipeline_options.ocr_batch_size = settings.docling_pdf_ocr_batch_size
     pdf_pipeline_options.layout_batch_size = settings.docling_pdf_layout_batch_size
     pdf_pipeline_options.table_batch_size = settings.docling_pdf_table_batch_size
@@ -50,8 +71,25 @@ def docling_options_metadata(settings: Settings) -> dict[str, Any]:
         "accelerator_device": settings.docling_accelerator_device,
         "num_threads": settings.docling_num_threads,
         "cuda_use_flash_attention2": settings.docling_cuda_use_flash_attention2,
+        "allow_external_plugins": settings.docling_allow_external_plugins,
         "pdf_do_ocr": settings.docling_pdf_do_ocr,
+        "pdf_ocr_engine": settings.docling_pdf_ocr_engine,
+        "pdf_ocr_languages": settings.docling_pdf_ocr_languages,
+        "pdf_ocr_use_gpu": settings.docling_pdf_ocr_use_gpu,
         "pdf_do_table_structure": settings.docling_pdf_do_table_structure,
+        "pdf_layout_model": settings.docling_pdf_layout_model,
+        "pdf_table_structure_backend": settings.docling_pdf_table_structure_backend,
+        "pdf_table_structure_mode": settings.docling_pdf_table_structure_mode,
+        "pdf_table_do_cell_matching": settings.docling_pdf_table_do_cell_matching,
+        "pdf_table_structure_vlm_model": settings.docling_pdf_table_structure_vlm_model,
+        "pdf_do_picture_classification": settings.docling_pdf_do_picture_classification,
+        "pdf_picture_classifier_preset": settings.docling_pdf_picture_classifier_preset,
+        "pdf_do_picture_description": settings.docling_pdf_do_picture_description,
+        "pdf_picture_description_model": settings.docling_pdf_picture_description_model,
+        "pdf_picture_description_prompt": settings.docling_pdf_picture_description_prompt,
+        "pdf_do_code_enrichment": settings.docling_pdf_do_code_enrichment,
+        "pdf_do_formula_enrichment": settings.docling_pdf_do_formula_enrichment,
+        "pdf_code_formula_preset": settings.docling_pdf_code_formula_preset,
         "pdf_ocr_batch_size": settings.docling_pdf_ocr_batch_size,
         "pdf_layout_batch_size": settings.docling_pdf_layout_batch_size,
         "pdf_table_batch_size": settings.docling_pdf_table_batch_size,

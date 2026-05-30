@@ -6,3 +6,5 @@ python-multipart>=0.0.20,<1
 typer>=0.15,<1
 uvicorn[standard]>=0.34,<1
 
+# Optional default OCR plugin for NVIDIA/Linux deployments:
+# python -m pip install -e ".[surya]"

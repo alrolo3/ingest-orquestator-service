@@ -19,3 +19,41 @@ def test_settings_parse_allowed_upload_extensions_from_string() -> None:
     settings = Settings(allowed_upload_extensions=".PDF, md, .txt")
 
     assert settings.allowed_upload_extensions == [".md", ".pdf", ".txt"]
+
+
+def test_env_example_loads() -> None:
+    settings = Settings(_env_file=".env.example")
+
+    assert settings.docling_pdf_ocr_engine == "suryaocr"
+    assert settings.docling_pdf_ocr_languages == ["en"]
+
+
+def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
+    settings = Settings()
+
+    assert settings.docling_allow_external_plugins is True
+    assert settings.docling_pdf_layout_model == "docling-layout-heron-101"
+    assert settings.docling_pdf_ocr_engine == "suryaocr"
+    assert settings.docling_pdf_ocr_languages == ["en"]
+    assert settings.docling_pdf_table_structure_backend == "tableformer"
+    assert settings.docling_pdf_table_structure_mode == "accurate"
+    assert settings.docling_pdf_table_do_cell_matching is True
+    assert settings.docling_pdf_table_structure_vlm_model == "granite-vision-4.1-4b"
+    assert settings.docling_pdf_do_picture_classification is True
+    assert settings.docling_pdf_picture_classifier_preset == "document_figure_classifier_v2"
+    assert settings.docling_pdf_do_picture_description is True
+    assert settings.docling_pdf_picture_description_model == "Qwen/Qwen3-VL-8B-Instruct"
+    assert settings.docling_pdf_do_code_enrichment is True
+    assert settings.docling_pdf_do_formula_enrichment is True
+    assert settings.docling_pdf_code_formula_preset == "codeformulav2"
+
+
+def test_settings_parse_docling_ocr_languages_from_string() -> None:
+    settings = Settings(docling_pdf_ocr_languages="en,es")
+
+    assert settings.docling_pdf_ocr_languages == ["en", "es"]
+
+
+def test_settings_reject_unknown_table_structure_backend() -> None:
+    with pytest.raises(ValidationError):
+        Settings(docling_pdf_table_structure_backend="unknown")

@@ -24,6 +24,10 @@ It does not include chunking, embeddings, vector storage, or RAG query APIs yet.
 - `pip` and `venv` for the standard local setup.
 
 Docling can download or initialize parsing models on first use, so the first parse may take longer than later runs.
+The default OCR engine is SuryaOCR, which Docling loads through the external
+`docling-surya` plugin. That plugin requires Python 3.12+ on Linux and is
+GPL-3.0-only. For local development on another platform, set
+`INGEST_DOCLING_PDF_OCR_ENGINE=auto`.
 
 ## Local Setup With Venv
 
@@ -33,6 +37,18 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
+```
+
+For the default SuryaOCR configuration on a supported Linux host:
+
+```bash
+python -m pip install -e ".[surya]"
+```
+
+For a portable local run without SuryaOCR:
+
+```bash
+INGEST_DOCLING_PDF_OCR_ENGINE=auto uvicorn ingest_orquestator_server.main:app --reload
 ```
 
 Run the API:
@@ -133,6 +149,23 @@ INGEST_CHUNK_OVERLAP_CHARS=150
 INGEST_RETENTION_DAYS=30
 INGEST_DOCLING_ACCELERATOR_DEVICE=auto
 INGEST_DOCLING_NUM_THREADS=4
+INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true
+INGEST_DOCLING_PDF_LAYOUT_MODEL=docling-layout-heron-101
+INGEST_DOCLING_PDF_OCR_ENGINE=suryaocr
+INGEST_DOCLING_PDF_TABLE_STRUCTURE_BACKEND=tableformer
+INGEST_DOCLING_PDF_TABLE_STRUCTURE_MODE=accurate
+INGEST_DOCLING_PDF_TABLE_DO_CELL_MATCHING=true
+INGEST_DOCLING_PDF_PICTURE_CLASSIFIER_PRESET=document_figure_classifier_v2
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_PDF_CODE_FORMULA_PRESET=codeformulav2
+```
+
+The standard PDF pipeline is used. The optional Granite Vision table structure
+backend can be selected with:
+
+```bash
+INGEST_DOCLING_PDF_TABLE_STRUCTURE_BACKEND=granite_vision
+INGEST_DOCLING_PDF_TABLE_STRUCTURE_VLM_MODEL=granite-vision-4.1-4b
 ```
 
 For NVIDIA GPUs, run with a CUDA-enabled PyTorch environment and set:
