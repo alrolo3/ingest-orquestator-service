@@ -14,6 +14,7 @@ authors = [
 ]
 dependencies = [
   "docling[xbrl]>=2.30,<3",
+  "arelle-release>=2.41,<3",
   "fastapi>=0.115,<1",
   "transformers>=4.57,<5",
   "pydantic>=2.10,<3",
