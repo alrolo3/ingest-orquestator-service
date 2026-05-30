@@ -104,8 +104,9 @@ cause.
 
 ## 6. Verify vLLM
 
-The checked-in GPU profile requests vLLM for Docling stages/models that are
-documented as vLLM-capable.
+The checked-in GPU profile defaults to Qwen3 through Transformers. vLLM remains
+available for explicit experiments with supported presets or unverified custom
+models.
 
 ```bash
 python - <<'PY'

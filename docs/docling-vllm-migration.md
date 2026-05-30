@@ -60,7 +60,7 @@ PY
 
 ## GPU Profile
 
-The checked-in `env-cuda-gpu` profile configures vLLM-capable defaults:
+The checked-in `env-cuda-gpu` profile defaults to Qwen3 through Transformers:
 
 ```bash
 set -a
@@ -83,10 +83,10 @@ PY
 Expected defaults from `env-cuda-gpu`:
 
 ```text
-INGEST_DOCLING_VLM_MODEL=granite_vision
-INGEST_DOCLING_VLM_RUNTIME=vllm
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=granite_vision
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=vllm
+INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=transformers
 ```
 
 ## Fallback Policy

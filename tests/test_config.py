@@ -4,6 +4,11 @@ from pydantic import ValidationError
 from ingest_orquestator_server.config import Settings
 
 
+def test_env_example_matches_cuda_gpu_env() -> None:
+    with open(".env.example") as example_file, open("env-cuda-gpu") as cuda_file:
+        assert example_file.read() == cuda_file.read()
+
+
 def test_settings_accept_cuda_device() -> None:
     settings = Settings(docling_accelerator_device="CUDA:1")
 
@@ -30,8 +35,10 @@ def test_env_example_loads() -> None:
     assert settings.chunking_enabled is True
     assert settings.chunking_strategy == "hybrid"
     assert settings.confidence_output_enabled is True
-    assert settings.docling_xbrl_enable_local_fetch is False
+    assert settings.docling_accelerator_device == "cuda"
+    assert settings.docling_xbrl_enable_local_fetch is True
     assert settings.docling_pdf_picture_description_runtime == "transformers"
+    assert settings.docling_vlm_runtime == "transformers"
     assert settings.docling_vllm_fallback_on_unsupported is True
     assert settings.docling_vlm_max_new_tokens == 4096
     assert settings.docling_vllm_max_model_len is None
@@ -51,10 +58,10 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.chunk_max_tokens == 1024
     assert settings.docling_xbrl_enable_local_fetch is True
     assert settings.docling_xbrl_enable_remote_fetch is False
-    assert settings.docling_vlm_model == "granite_vision"
-    assert settings.docling_vlm_runtime == "vllm"
-    assert settings.docling_pdf_picture_description_model == "granite_vision"
-    assert settings.docling_pdf_picture_description_runtime == "vllm"
+    assert settings.docling_vlm_model == "Qwen/Qwen3-VL-8B-Instruct"
+    assert settings.docling_vlm_runtime == "transformers"
+    assert settings.docling_pdf_picture_description_model == "Qwen/Qwen3-VL-8B-Instruct"
+    assert settings.docling_pdf_picture_description_runtime == "transformers"
     assert settings.docling_vllm_tensor_parallel_size == 1
     assert settings.docling_vllm_gpu_memory_utilization > 0
     assert settings.docling_vlm_max_new_tokens == 4096

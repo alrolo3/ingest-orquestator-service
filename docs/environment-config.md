@@ -33,9 +33,9 @@ settings such as upload extensions, Docling formats, and OCR languages.
 
 | File | Purpose |
 | --- | --- |
-| `.env.example` | Baseline local configuration. Copy it to `.env` for normal development. |
+| `.env.example` | Same source-safe configuration as `env-cuda-gpu`. Copy it to `.env` for GPU-oriented local development. |
 | `env-cpu` | Source-safe CPU profile for macOS and Linux. It avoids external Docling OCR plugins and disables GPU-heavy enrichments. |
-| `env-cuda-gpu` | Source-safe NVIDIA GPU profile tuned for an A100 80GB class machine. It enables CUDA, SuryaOCR, vLLM-capable Granite Vision VLM stages, higher batch sizes, and larger uploads. |
+| `env-cuda-gpu` | Source-safe NVIDIA GPU profile tuned for an A100 80GB class machine. It enables CUDA, SuryaOCR, Qwen3 VLM stages through Transformers, higher batch sizes, and larger uploads. |
 
 ## Service And Storage
 

@@ -129,11 +129,11 @@ The profile chooses:
 - confidence output enabled
 - local XBRL taxonomy fetch enabled, remote XBRL fetch disabled
 - SuryaOCR on GPU
-- full-page VLM conversion defaults to the vLLM-capable `granite_vision` preset
+- full-page VLM conversion defaults to `Qwen/Qwen3-VL-8B-Instruct` with Transformers
 - standard pipeline layout model `docling-layout-heron-101`
 - TableFormer accurate mode with cell matching
 - picture classification and picture description enabled
-- picture description defaults to the vLLM-capable `granite_vision` preset
+- picture description defaults to `Qwen/Qwen3-VL-8B-Instruct` with Transformers
 - code and formula enrichment enabled
 - OCR/layout/table batch sizes set to `32`
 - queue size set to `512`
@@ -144,16 +144,17 @@ sizes from `32` to `16`.
 
 ## vLLM
 
-The profile requests vLLM for supported Docling VLM stages:
+The profile keeps Transformers as the default backend:
 
 ```text
-INGEST_DOCLING_VLM_MODEL=granite_vision
-INGEST_DOCLING_VLM_RUNTIME=vllm
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=granite_vision
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=vllm
+INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=transformers
 ```
 
-Unsupported models fall back to Transformers by default:
+vLLM can still be enabled explicitly for supported presets or experimental
+custom models. Unsupported models fall back to Transformers by default:
 
 ```text
 INGEST_DOCLING_VLLM_FALLBACK_ON_UNSUPPORTED=true
