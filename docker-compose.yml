@@ -1,0 +1,13 @@
+services:
+  ingest-orquestator-server:
+    build: .
+    image: ingest-orquestator-server:local
+    environment:
+      INGEST_SERVICE_NAME: ingest-orquestator-server
+      INGEST_STORAGE_DIR: /app/.data
+      INGEST_MAX_UPLOAD_SIZE_MB: 100
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./.data:/app/.data
+
