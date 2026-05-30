@@ -7,6 +7,7 @@ from ingest_orquestator_server.infrastructure.docling.docling_formats import (
     validate_allowed_format,
 )
 from ingest_orquestator_server.infrastructure.docling.docling_options import (
+    build_convert_pipeline_options,
     build_pdf_pipeline_options,
     build_vlm_pipeline_options,
 )
@@ -70,11 +71,12 @@ class DoclingConverterFactory:
                 )
             if input_format in {None, "xml_xbrl"}:
                 format_options[InputFormat.XML_XBRL] = XBRLFormatOption(
+                    pipeline_options=build_convert_pipeline_options(settings),
                     backend_options=XBRLBackendOptions(
                         enable_local_fetch=settings.docling_xbrl_enable_local_fetch,
                         enable_remote_fetch=settings.docling_xbrl_enable_remote_fetch,
                         taxonomy=settings.docling_xbrl_taxonomy_path,
-                    )
+                    ),
                 )
 
         return DocumentConverter(

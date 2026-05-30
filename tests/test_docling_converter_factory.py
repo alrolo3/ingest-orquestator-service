@@ -74,3 +74,4 @@ def test_converter_factory_uses_configured_xbrl_backend_options() -> None:
     xbrl_options = converter.format_to_options[InputFormat.XML_XBRL]
     assert xbrl_options.backend_options.enable_local_fetch is True
     assert xbrl_options.backend_options.enable_remote_fetch is False
+    assert xbrl_options.pipeline_options.allow_external_plugins is True

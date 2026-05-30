@@ -78,6 +78,21 @@ def build_vlm_pipeline_options(settings: Settings) -> Any:
     )
 
 
+def build_convert_pipeline_options(settings: Settings) -> Any:
+    try:
+        from docling.datamodel.pipeline_options import ConvertPipelineOptions
+    except ImportError as exc:
+        raise RuntimeError(
+            "Docling is not installed. Install project dependencies with "
+            "`python -m pip install -e .` inside the project virtual environment."
+        ) from exc
+
+    return ConvertPipelineOptions(
+        accelerator_options=build_accelerator_options(settings),
+        allow_external_plugins=settings.docling_allow_external_plugins,
+    )
+
+
 def build_accelerator_options(settings: Settings) -> Any:
     from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 
