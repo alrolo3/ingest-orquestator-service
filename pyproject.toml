@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-ingest-orquestator = "ingest_orquestator_server.cli:app"
+ingest-orquestator = "ingest_orquestator_server.cli.app:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ingest_orquestator_server"]
@@ -45,4 +45,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-

@@ -1,7 +1,9 @@
 from pathlib import Path
 
+from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writer import (
+    LocalParseOutputWriter,
+)
 from ingest_orquestator_server.models import ParsedDocument, ParseOutput
-from ingest_orquestator_server.output_writer import write_parse_output
 
 
 def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
@@ -19,7 +21,7 @@ def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
         raw_html="<h1>Hello</h1>",
     )
 
-    outputs = write_parse_output(parse_output, tmp_path)
+    outputs = LocalParseOutputWriter().write(parse_output, tmp_path)
 
     assert outputs.output_dir.exists()
     assert outputs.raw_docling_json.read_text(encoding="utf-8")

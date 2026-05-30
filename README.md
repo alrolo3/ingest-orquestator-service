@@ -13,6 +13,7 @@ It does not include chunking, embeddings, vector storage, or RAG query APIs yet.
 - FastAPI service with a synchronous file ingestion endpoint.
 - CLI command for local parser-only runs.
 - Parser interface with a Docling implementation.
+- Java-style module layout with separate model, service, adapter, and route files.
 - Normalized document model for later chunking and indexing work.
 - Local filesystem storage for uploaded files and parser outputs.
 - Docker and Compose resources for running the service.

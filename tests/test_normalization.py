@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from ingest_orquestator_server.normalization import normalize_docling_document
+from ingest_orquestator_server.normalizers.docling.docling_document_normalizer import (
+    DoclingDocumentNormalizer,
+)
 
 
 def test_normalize_docling_document_extracts_pages_and_elements() -> None:
@@ -45,7 +47,7 @@ def test_normalize_docling_document_extracts_pages_and_elements() -> None:
         ],
     }
 
-    parsed = normalize_docling_document(
+    parsed = DoclingDocumentNormalizer().normalize(
         raw_docling=raw_docling,
         source_path=Path("/tmp/example.pdf"),
         document_id="doc-1",

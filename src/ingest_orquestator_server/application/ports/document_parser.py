@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from ingest_orquestator_server.models import ParseOutput
+from ingest_orquestator_server.models.parse_output import ParseOutput
 
 
 class DocumentParser(Protocol):
