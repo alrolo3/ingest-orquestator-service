@@ -21,20 +21,24 @@ It does not include chunking, embeddings, vector storage, or RAG query APIs yet.
 ## Requirements
 
 - Python 3.11, 3.12, or 3.13.
-- `uv` is recommended for local development.
+- `pip` and `venv` for the standard local setup.
 
 Docling can download or initialize parsing models on first use, so the first parse may take longer than later runs.
 
-## Local Setup
+## Local Setup With Venv
 
 ```bash
-uv sync --extra dev --python 3.12
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install --no-deps -e .
 ```
 
 Run the API:
 
 ```bash
-uv run uvicorn ingest_orquestator_server.main:app --reload
+uvicorn ingest_orquestator_server.main:app --reload
 ```
 
 Open:
@@ -42,6 +46,8 @@ Open:
 ```text
 http://127.0.0.1:8000/docs
 ```
+
+Stop the API with `Ctrl+C`.
 
 ## API Usage
 
@@ -55,7 +61,7 @@ The response includes the parser status and the output file paths.
 ## CLI Usage
 
 ```bash
-uv run ingest-orquestator parse /path/to/document.pdf --output-dir .data/outputs
+ingest-orquestator parse /path/to/document.pdf --output-dir .data/outputs
 ```
 
 Each parse creates a document-specific output directory containing:
@@ -66,6 +72,24 @@ Each parse creates a document-specific output directory containing:
 - `document.txt`
 - `document.html`, when Docling can export HTML
 - `manifest.json`
+
+## Development Setup
+
+For tests and linting, install the development extras into the same virtual environment:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+ruff format --check .
+```
+
+If you prefer `uv`, the equivalent setup is:
+
+```bash
+uv sync --extra dev --python 3.12
+uv run pytest
+```
 
 ## Configuration
 
