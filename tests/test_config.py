@@ -81,6 +81,25 @@ def test_settings_parse_docling_ocr_languages_from_string() -> None:
     assert settings.docling_pdf_ocr_languages == ["en", "es"]
 
 
+def test_settings_parse_docling_allowed_formats_from_string() -> None:
+    settings = Settings(docling_allowed_formats="pdf, image, docx")
+
+    assert settings.docling_allowed_formats == ["docx", "image", "pdf"]
+
+
+def test_settings_reject_unknown_docling_format() -> None:
+    with pytest.raises(ValidationError):
+        Settings(docling_allowed_formats=["pdf", "unknown"])
+
+
+def test_settings_grouped_config_views() -> None:
+    settings = Settings(docling_pipeline="vlm", docling_vlm_runtime="transformers")
+
+    assert settings.docling_common_config.pipeline == "vlm"
+    assert settings.docling_vlm_config.runtime == "transformers"
+    assert settings.chunking_config.embedding_output_enabled is True
+
+
 def test_settings_reject_unknown_table_structure_backend() -> None:
     with pytest.raises(ValidationError):
         Settings(docling_pdf_table_structure_backend="unknown")

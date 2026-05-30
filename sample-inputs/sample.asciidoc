@@ -1,0 +1,19 @@
+= AsciiDoc Sample
+:author: Ingest Orquestator
+
+This sample verifies the Docling AsciiDoc input path.
+
+== Pipeline
+
+* Upload
+* Parse
+* Normalize
+* Emit embedding records
+
+[cols="1,1"]
+|===
+|Feature |Status
+
+|Multi-format ingestion |Ready
+|Pipeline routing |Ready
+|===

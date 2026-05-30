@@ -21,6 +21,7 @@ class OutputType(StrEnum):
     RAW = "raw"
     HTML = "html"
     CHUNKS = "chunks"
+    EMBEDDING = "embedding"
 
 
 class OutputRetrievalService:
@@ -32,6 +33,7 @@ class OutputRetrievalService:
         OutputType.RAW: "application/json",
         OutputType.HTML: "text/html; charset=utf-8",
         OutputType.CHUNKS: "application/json",
+        OutputType.EMBEDDING: "application/x-ndjson",
     }
 
     def __init__(self, job_repository: IngestionJobRepository) -> None:
@@ -71,4 +73,6 @@ class OutputRetrievalService:
             return outputs.html
         if output_type == OutputType.CHUNKS:
             return outputs.chunks_json
+        if output_type == OutputType.EMBEDDING:
+            return outputs.embedding_input_jsonl
         return None

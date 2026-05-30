@@ -15,4 +15,5 @@ class OutputFiles(BaseModel):
     text: Path
     html: Path | None = None
     chunks_json: Path | None = None
+    embedding_input_jsonl: Path | None = None
     manifest_json: Path

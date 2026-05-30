@@ -21,12 +21,23 @@ Multipart form fields:
 Query parameters:
 
 - `parser`: parser backend to use. The default is `docling`.
+- `pipeline`: Docling pipeline mode. Supported values are `standard`, `vlm`, and
+  `auto`. The default is `standard`.
+- `async_mode`: defaults to `false`; when `true`, the API returns a queued job
+  immediately and parses the file in an in-process background task.
 - `include_document`: defaults to `true`; when `false`, the response returns file paths only.
 
 Example:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false" \
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@/path/to/document.pdf"
+```
+
+Async example:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?async_mode=true" \
   -F "file=@/path/to/document.pdf"
 ```
 
@@ -39,6 +50,9 @@ Successful responses include:
 - output file paths
 - optionally the normalized parsed document
 - optionally generated chunks
+
+`pipeline=vlm` is supported directly for PDF and image inputs in v1.2. Other
+Docling formats use `pipeline=standard`.
 
 ## Get Job
 
@@ -71,6 +85,7 @@ Supported `output_type` values:
 - `raw`
 - `html`
 - `chunks`
+- `embedding`
 
 Examples:
 

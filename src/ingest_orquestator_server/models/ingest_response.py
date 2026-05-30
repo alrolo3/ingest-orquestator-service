@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -15,10 +16,11 @@ class IngestResponse(BaseModel):
     job_id: str
     status: IngestionStatus
     parser: str
-    document_id: str
+    document_id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    input_path: Path
-    outputs: OutputFiles
+    input_path: Path | None = None
+    outputs: OutputFiles | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     document: ParsedDocument | None = None
     chunks: list[DocumentChunk] | None = None
     error: str | None = None

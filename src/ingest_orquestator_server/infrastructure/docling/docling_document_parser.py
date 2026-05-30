@@ -9,6 +9,11 @@ from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_converter_factory import (
     DoclingConverterFactory,
 )
+from ingest_orquestator_server.infrastructure.docling.docling_formats import (
+    detect_input_format,
+    resolve_pipeline_mode,
+    validate_allowed_format,
+)
 from ingest_orquestator_server.infrastructure.docling.docling_options import (
     docling_options_metadata,
 )
@@ -34,12 +39,29 @@ class DoclingDocumentParser:
         self._normalizer = normalizer or DoclingDocumentNormalizer()
         self._settings = settings or get_settings()
 
-    def parse(self, file_path: Path, *, document_id: str | None = None) -> ParseOutput:
+    def parse(
+        self,
+        file_path: Path,
+        *,
+        document_id: str | None = None,
+        pipeline: str | None = None,
+    ) -> ParseOutput:
         source_path = file_path.expanduser().resolve()
         if not source_path.is_file():
             raise FileNotFoundError(f"Input file does not exist: {source_path}")
 
-        converter = self._converter or self._converter_factory.create(self._settings)
+        input_format = detect_input_format(source_path)
+        validate_allowed_format(input_format, self._settings.docling_allowed_formats)
+        resolved_pipeline = resolve_pipeline_mode(
+            pipeline or self._settings.docling_pipeline,
+            input_format,
+        )
+
+        converter = self._converter or self._converter_factory.create(
+            self._settings,
+            pipeline=resolved_pipeline,
+            input_format=input_format,
+        )
         result = converter.convert(source_path)
         document = result.document
         raw_docling = document.export_to_dict()
@@ -57,7 +79,21 @@ class DoclingDocumentParser:
             text=raw_text,
             mime_type=mime_type,
         )
-        normalized.metadata["docling_options"] = docling_options_metadata(self._settings)
+        normalized.metadata["docling"] = {
+            "parser": self.name,
+            "input_format": input_format,
+            "pipeline": resolved_pipeline,
+            "ocr_engine": self._settings.docling_pdf_ocr_engine,
+            "vlm_model": self._settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
+            "vlm_runtime": self._settings.docling_vlm_runtime
+            if resolved_pipeline == "vlm"
+            else None,
+        }
+        normalized.metadata["docling_options"] = docling_options_metadata(
+            self._settings,
+            input_format=input_format,
+            pipeline=resolved_pipeline,
+        )
 
         return ParseOutput(
             document=normalized,

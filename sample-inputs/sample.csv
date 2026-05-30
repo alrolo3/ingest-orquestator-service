@@ -1,0 +1,5 @@
+stage,status,count
+upload,ready,1
+parse,ready,2
+normalize,ready,3
+embedding_jsonl,ready,4

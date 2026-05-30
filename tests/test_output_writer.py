@@ -6,6 +6,7 @@ from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writ
 )
 from ingest_orquestator_server.models import (
     DocumentChunk,
+    EmbeddingRecord,
     ParsedDocument,
     ParseDiagnostics,
     ParseOutput,
@@ -48,6 +49,15 @@ def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
         parse_output,
         tmp_path,
         chunks=chunks,
+        embedding_records=[
+            EmbeddingRecord(
+                record_id="doc-1:embedding:1",
+                document_id="doc-1",
+                chunk_id="doc-1:1",
+                text="Hello",
+                metadata={"source_file_name": "example.pdf"},
+            )
+        ],
         diagnostics=diagnostics,
     )
 
@@ -60,5 +70,9 @@ def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
     assert outputs.html.read_text(encoding="utf-8") == "<h1>Hello</h1>"
     assert outputs.chunks_json is not None
     assert outputs.chunks_json.exists()
+    assert outputs.embedding_input_jsonl is not None
+    assert '"record_id":"doc-1:embedding:1"' in outputs.embedding_input_jsonl.read_text(
+        encoding="utf-8"
+    )
     assert outputs.manifest_json.exists()
     assert "diagnostics" in outputs.manifest_json.read_text(encoding="utf-8")

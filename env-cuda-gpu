@@ -11,9 +11,10 @@ TOKENIZERS_PARALLELISM=false
 INGEST_SERVICE_NAME=ingest-orquestator-server
 INGEST_STORAGE_DIR=.data
 INGEST_MAX_UPLOAD_SIZE_MB=2048
-INGEST_ALLOWED_UPLOAD_EXTENSIONS=.pdf,.md,.markdown,.txt,.html,.htm,.docx,.pptx
+INGEST_ALLOWED_UPLOAD_EXTENSIONS=.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.md,.markdown,.txt,.html,.htm,.docx,.pptx,.xlsx,.csv,.json,.adoc,.asciidoc,.tex,.latex,.vtt,.jats,.nxml,.uspto,.xbrl
 INGEST_CHUNK_SIZE_CHARS=1200
 INGEST_CHUNK_OVERLAP_CHARS=150
+INGEST_EMBEDDING_OUTPUT_ENABLED=true
 INGEST_RETENTION_DAYS=30
 
 INGEST_DOCLING_ACCELERATOR_DEVICE=cuda
@@ -21,6 +22,15 @@ INGEST_DOCLING_NUM_THREADS=32
 # Keep disabled by default because flash-attn often needs a local source build.
 INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
 INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true
+INGEST_DOCLING_ALLOWED_FORMATS=pdf,image,docx,pptx,html,md,xlsx,csv,json_docling,asciidoc,latex,vtt,xml_jats,xml_uspto,xml_xbrl
+INGEST_DOCLING_PIPELINE=standard
+INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_VLM_PROMPT=Convert this page to markdown.
+INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
+INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_VLM_SCALE=2.0
+INGEST_DOCLING_VLM_TORCH_DTYPE=bfloat16
+INGEST_DOCLING_VLM_LOAD_IN_8BIT=false
 
 INGEST_DOCLING_PDF_DO_OCR=true
 INGEST_DOCLING_PDF_OCR_ENGINE=suryaocr

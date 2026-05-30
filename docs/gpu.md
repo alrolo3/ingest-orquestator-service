@@ -93,6 +93,10 @@ INGEST_DOCLING_ACCELERATOR_DEVICE=auto
 INGEST_DOCLING_NUM_THREADS=4
 INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
 INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true
+INGEST_DOCLING_PIPELINE=standard
+INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
+INGEST_DOCLING_VLM_RUNTIME=transformers
 INGEST_DOCLING_PDF_DO_OCR=true
 INGEST_DOCLING_PDF_OCR_ENGINE=suryaocr
 INGEST_DOCLING_PDF_OCR_LANGUAGES=en
@@ -117,6 +121,9 @@ INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=100
 ```
 
 Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let Docling choose.
+
+Use `--pipeline vlm` or `pipeline=vlm` only for PDF and image inputs in v1.2.
+For details, see [`docs/docling-ingestion.md`](docling-ingestion.md).
 
 `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true` should only be enabled when the
 environment has a compatible `flash-attn` installation and the GPU architecture

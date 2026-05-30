@@ -81,7 +81,7 @@ def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
     try:
         client = TestClient(app)
         response = client.post(
-            "/v1/ingest/file?include_document=false",
+            "/v1/ingest/file?include_document=false&pipeline=standard",
             files={"file": ("example.md", b"# Example", "text/markdown")},
         )
         assert response.status_code == 200
@@ -94,9 +94,97 @@ def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
         outputs_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs")
         assert outputs_response.status_code == 200
         assert outputs_response.json()["chunks_json"].endswith("chunks.json")
+        assert outputs_response.json()["embedding_input_jsonl"].endswith("embedding_input.jsonl")
 
         chunks_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs/chunks")
         assert chunks_response.status_code == 200
         assert chunks_response.json()["document_id"] == job_id
+
+        embedding_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs/embedding")
+        assert embedding_response.status_code == 200
+        assert '"chunk_id"' in embedding_response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_ingest_rejects_vlm_pipeline_for_markdown(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=DocumentChunkingService(settings),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/file?pipeline=vlm",
+            files={"file": ("example.md", b"# Example", "text/markdown")},
+        )
+        assert response.status_code == 400
+        assert "PDF and image" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_async_ingest_queues_and_processes_job(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=DocumentChunkingService(settings),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+    app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/file?async_mode=true&pipeline=standard",
+            files={"file": ("example.md", b"# Example", "text/markdown")},
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "queued"
+        job_id = response.json()["job_id"]
+
+        job_response = client.get(f"/v1/ingest/jobs/{job_id}")
+        assert job_response.status_code == 200
+        assert job_response.json()["status"] == "completed"
+        assert job_response.json()["metadata"]["pipeline"] == "standard"
     finally:
         app.dependency_overrides.clear()

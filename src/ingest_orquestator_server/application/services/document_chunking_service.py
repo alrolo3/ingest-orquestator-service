@@ -18,6 +18,7 @@ class DocumentChunkingService:
 
     def chunk(self, document: ParsedDocument) -> list[DocumentChunk]:
         chunks: list[DocumentChunk] = []
+        docling_metadata = document.metadata.get("docling", {})
         for element in self._iter_embeddable_elements(document.elements):
             text = self._element_text(element)
             if not text:
@@ -38,6 +39,8 @@ class DocumentChunkingService:
                             "parser": document.metadata.get("docling_options", {}).get(
                                 "parser", "docling"
                             ),
+                            "input_format": docling_metadata.get("input_format"),
+                            "pipeline": docling_metadata.get("pipeline"),
                             "chunk_index_for_element": index,
                         },
                     )

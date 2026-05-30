@@ -20,7 +20,14 @@ class FakeDoclingDocument:
             "name": self.source_path.stem,
             "origin": {"filename": self.source_path.name},
             "pages": {},
-            "texts": [],
+            "texts": [
+                {
+                    "self_ref": "#/texts/0",
+                    "label": "paragraph",
+                    "text": "Example",
+                    "prov": [{"page_no": 1}],
+                }
+            ],
         }
 
     def export_to_markdown(self) -> str:

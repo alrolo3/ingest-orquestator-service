@@ -1,0 +1,10 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:03.000
+Ingest Orquestator sample transcript.
+
+00:00:03.000 --> 00:00:07.000
+The document is parsed, normalized, and prepared for embedding.
+
+00:00:07.000 --> 00:00:10.000
+This fixture verifies the Docling VTT input path.

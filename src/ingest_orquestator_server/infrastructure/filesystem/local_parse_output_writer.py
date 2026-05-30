@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ingest_orquestator_server.infrastructure.filesystem.json_file_writer import JsonFileWriter
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
+from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
 from ingest_orquestator_server.models.parse_output import ParseOutput
@@ -19,6 +20,7 @@ class LocalParseOutputWriter:
         output_root: Path,
         *,
         chunks: list[DocumentChunk] | None = None,
+        embedding_records: list[EmbeddingRecord] | None = None,
         diagnostics: ParseDiagnostics | None = None,
     ) -> OutputFiles:
         document_id = parse_output.document.document_id
@@ -31,6 +33,9 @@ class LocalParseOutputWriter:
         text_path = output_dir / "document.txt"
         html_path = output_dir / "document.html" if parse_output.raw_html is not None else None
         chunks_json = output_dir / "chunks.json" if chunks is not None else None
+        embedding_input_jsonl = (
+            output_dir / "embedding_input.jsonl" if embedding_records is not None else None
+        )
         manifest_json = output_dir / "manifest.json"
 
         self._json_writer.write(raw_docling_json, parse_output.raw_docling)
@@ -49,6 +54,12 @@ class LocalParseOutputWriter:
                     "chunks": [chunk.model_dump(mode="json") for chunk in chunks or []],
                 },
             )
+        if embedding_input_jsonl is not None:
+            embedding_input_jsonl.write_text(
+                "\n".join(record.model_dump_json() for record in embedding_records or [])
+                + ("\n" if embedding_records else ""),
+                encoding="utf-8",
+            )
 
         files = OutputFiles(
             output_dir=output_dir,
@@ -58,6 +69,7 @@ class LocalParseOutputWriter:
             text=text_path,
             html=html_path,
             chunks_json=chunks_json,
+            embedding_input_jsonl=embedding_input_jsonl,
             manifest_json=manifest_json,
         )
         self._json_writer.write(

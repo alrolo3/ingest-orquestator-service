@@ -5,6 +5,15 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from ingest_orquestator_server.config.config_groups import (
+    ChunkingConfig,
+    DoclingCommonConfig,
+    DoclingOcrConfig,
+    DoclingVlmConfig,
+    ServiceConfig,
+    StorageConfig,
+    UploadConfig,
+)
 from ingest_orquestator_server.config.docling_defaults import (
     DOCLING_CODE_FORMULA_PRESET,
     DOCLING_LAYOUT_MODEL,
@@ -27,14 +36,33 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = Field(default=100, ge=1)
     allowed_upload_extensions: list[str] = Field(
         default_factory=lambda: [
+            ".adoc",
+            ".asciidoc",
+            ".bmp",
+            ".csv",
+            ".htm",
+            ".html",
+            ".jats",
+            ".jpeg",
+            ".jpg",
+            ".json",
+            ".latex",
             ".pdf",
+            ".png",
             ".md",
             ".markdown",
-            ".txt",
-            ".html",
-            ".htm",
-            ".docx",
+            ".nxml",
             ".pptx",
+            ".tex",
+            ".tif",
+            ".tiff",
+            ".txt",
+            ".uspto",
+            ".vtt",
+            ".webp",
+            ".docx",
+            ".xlsx",
+            ".xbrl",
         ]
     )
     chunk_size_chars: int = Field(default=1200, ge=100)
@@ -50,6 +78,26 @@ class Settings(BaseSettings):
         default=True,
         description="Allow Docling external plugins. Required for the SuryaOCR plugin.",
     )
+    docling_allowed_formats: list[str] = Field(
+        default_factory=lambda: [
+            "pdf",
+            "image",
+            "docx",
+            "pptx",
+            "html",
+            "md",
+            "xlsx",
+            "csv",
+            "json_docling",
+            "asciidoc",
+            "latex",
+            "vtt",
+            "xml_jats",
+            "xml_uspto",
+            "xml_xbrl",
+        ]
+    )
+    docling_pipeline: str = "standard"
     docling_pdf_do_ocr: bool = True
     docling_pdf_ocr_engine: str = DOCLING_OCR_ENGINE
     docling_pdf_ocr_languages: list[str] = Field(
@@ -74,6 +122,14 @@ class Settings(BaseSettings):
     docling_pdf_layout_batch_size: int = Field(default=4, ge=1)
     docling_pdf_table_batch_size: int = Field(default=4, ge=1)
     docling_pdf_queue_max_size: int = Field(default=100, ge=1)
+    docling_vlm_model: str = DOCLING_PICTURE_DESCRIPTION_MODEL
+    docling_vlm_prompt: str = "Convert this page to markdown."
+    docling_vlm_response_format: str = "markdown"
+    docling_vlm_runtime: str = "transformers"
+    docling_vlm_scale: float = Field(default=2.0, gt=0)
+    docling_vlm_torch_dtype: str | None = "bfloat16"
+    docling_vlm_load_in_8bit: bool = False
+    embedding_output_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="INGEST_",
@@ -99,6 +155,49 @@ class Settings(BaseSettings):
         if not cleaned:
             raise ValueError("must not be empty")
         return cleaned
+
+    @field_validator("docling_pipeline")
+    @classmethod
+    def validate_docling_pipeline(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"standard", "vlm", "auto"}:
+            return normalized
+        raise ValueError("must be one of standard, vlm, or auto")
+
+    @field_validator("docling_allowed_formats", mode="before")
+    @classmethod
+    def parse_docling_allowed_formats(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("docling_allowed_formats")
+    @classmethod
+    def normalize_docling_allowed_formats(cls, value: list[str]) -> list[str]:
+        valid_formats = {
+            "docx",
+            "pptx",
+            "html",
+            "image",
+            "pdf",
+            "asciidoc",
+            "md",
+            "csv",
+            "xlsx",
+            "xml_uspto",
+            "xml_jats",
+            "xml_xbrl",
+            "mets_gbs",
+            "json_docling",
+            "audio",
+            "vtt",
+            "latex",
+        }
+        normalized = sorted({item.strip().lower() for item in value if item.strip()})
+        unknown = sorted(set(normalized) - valid_formats)
+        if unknown:
+            raise ValueError(f"unknown Docling input format(s): {', '.join(unknown)}")
+        return normalized
 
     @field_validator("docling_pdf_ocr_languages", mode="before")
     @classmethod
@@ -134,6 +233,30 @@ class Settings(BaseSettings):
             return normalized
         raise ValueError("must be one of fast or accurate")
 
+    @field_validator("docling_vlm_response_format")
+    @classmethod
+    def validate_docling_vlm_response_format(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {
+            "doctags",
+            "doclang",
+            "markdown",
+            "deepseekocr_markdown",
+            "html",
+            "otsl",
+            "plaintext",
+        }:
+            return normalized
+        raise ValueError("must be a valid Docling VLM response format")
+
+    @field_validator("docling_vlm_runtime")
+    @classmethod
+    def validate_docling_vlm_runtime(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"transformers", "vllm"}:
+            return normalized
+        raise ValueError("must be one of transformers or vllm")
+
     @field_validator("allowed_upload_extensions", mode="before")
     @classmethod
     def parse_allowed_upload_extensions(cls, value: object) -> object:
@@ -167,6 +290,67 @@ class Settings(BaseSettings):
     @property
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
+
+    @property
+    def service_config(self) -> ServiceConfig:
+        return ServiceConfig(service_name=self.service_name)
+
+    @property
+    def storage_config(self) -> StorageConfig:
+        return StorageConfig(
+            storage_dir=self.storage_dir,
+            uploads_dir=self.uploads_dir,
+            outputs_dir=self.outputs_dir,
+            jobs_db_path=self.jobs_db_path,
+            retention_days=self.retention_days,
+        )
+
+    @property
+    def upload_config(self) -> UploadConfig:
+        return UploadConfig(
+            max_upload_size_mb=self.max_upload_size_mb,
+            allowed_upload_extensions=self.allowed_upload_extensions,
+        )
+
+    @property
+    def docling_common_config(self) -> DoclingCommonConfig:
+        return DoclingCommonConfig(
+            allowed_formats=self.docling_allowed_formats,
+            pipeline=self.docling_pipeline,
+            accelerator_device=self.docling_accelerator_device,
+            num_threads=self.docling_num_threads,
+            cuda_use_flash_attention2=self.docling_cuda_use_flash_attention2,
+            allow_external_plugins=self.docling_allow_external_plugins,
+        )
+
+    @property
+    def docling_ocr_config(self) -> DoclingOcrConfig:
+        return DoclingOcrConfig(
+            do_ocr=self.docling_pdf_do_ocr,
+            engine=self.docling_pdf_ocr_engine,
+            languages=self.docling_pdf_ocr_languages,
+            use_gpu=self.docling_pdf_ocr_use_gpu,
+        )
+
+    @property
+    def docling_vlm_config(self) -> DoclingVlmConfig:
+        return DoclingVlmConfig(
+            model=self.docling_vlm_model,
+            prompt=self.docling_vlm_prompt,
+            response_format=self.docling_vlm_response_format,
+            runtime=self.docling_vlm_runtime,
+            scale=self.docling_vlm_scale,
+            torch_dtype=self.docling_vlm_torch_dtype,
+            load_in_8bit=self.docling_vlm_load_in_8bit,
+        )
+
+    @property
+    def chunking_config(self) -> ChunkingConfig:
+        return ChunkingConfig(
+            chunk_size_chars=self.chunk_size_chars,
+            chunk_overlap_chars=self.chunk_overlap_chars,
+            embedding_output_enabled=self.embedding_output_enabled,
+        )
 
 
 @lru_cache

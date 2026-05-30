@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +18,7 @@ class IngestionJob(BaseModel):
     input_path: Path | None = None
     document_id: str | None = None
     outputs: OutputFiles | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

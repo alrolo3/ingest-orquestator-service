@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
+from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
 from ingest_orquestator_server.models.parse_output import ParseOutput
@@ -16,6 +17,7 @@ class ParseOutputWriter(Protocol):
         output_root: Path,
         *,
         chunks: list[DocumentChunk] | None = None,
+        embedding_records: list[EmbeddingRecord] | None = None,
         diagnostics: ParseDiagnostics | None = None,
     ) -> OutputFiles:
         """Persist parse artifacts and return their paths."""

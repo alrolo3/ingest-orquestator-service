@@ -17,6 +17,7 @@ def test_sqlite_repository_saves_and_loads_jobs(tmp_path: Path) -> None:
         source_file_name="example.pdf",
         input_path=tmp_path / "uploads" / "example.pdf",
         document_id="job-1",
+        metadata={"pipeline": "standard", "input_format": "pdf"},
         outputs=OutputFiles(
             output_dir=tmp_path / "outputs" / "job-1",
             raw_docling_json=tmp_path / "outputs" / "job-1" / "raw_docling.json",
@@ -33,6 +34,7 @@ def test_sqlite_repository_saves_and_loads_jobs(tmp_path: Path) -> None:
 
     assert loaded is not None
     assert loaded.status == IngestionStatus.COMPLETED
+    assert loaded.metadata["pipeline"] == "standard"
     assert loaded.outputs is not None
     assert loaded.outputs.chunks_json is not None
 
@@ -42,6 +44,7 @@ def test_sqlite_repository_lists_active_jobs(tmp_path: Path) -> None:
     repository.save(
         IngestionJob(job_id="running", status=IngestionStatus.RUNNING, parser="docling")
     )
+    repository.save(IngestionJob(job_id="queued", status=IngestionStatus.QUEUED, parser="docling"))
     repository.save(IngestionJob(job_id="done", status=IngestionStatus.COMPLETED, parser="docling"))
 
-    assert repository.list_active_job_ids() == {"running"}
+    assert repository.list_active_job_ids() == {"queued", "running"}

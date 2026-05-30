@@ -15,7 +15,6 @@ from ingest_orquestator_server.infrastructure.docling.docling_model_options impo
 
 def build_pdf_pipeline_options(settings: Settings) -> Any:
     try:
-        from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
         from docling.datamodel.pipeline_options import PdfPipelineOptions
     except ImportError as exc:
         raise RuntimeError(
@@ -23,16 +22,8 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
             "`python -m pip install -e .` inside the project virtual environment."
         ) from exc
 
-    accelerator_options = AcceleratorOptions(
-        num_threads=settings.docling_num_threads,
-        device=docling_accelerator_device(
-            settings.docling_accelerator_device,
-            AcceleratorDevice,
-        ),
-        cuda_use_flash_attention2=settings.docling_cuda_use_flash_attention2,
-    )
     pdf_pipeline_options = PdfPipelineOptions()
-    pdf_pipeline_options.accelerator_options = accelerator_options
+    pdf_pipeline_options.accelerator_options = build_accelerator_options(settings)
     pdf_pipeline_options.allow_external_plugins = settings.docling_allow_external_plugins
     pdf_pipeline_options.do_ocr = settings.docling_pdf_do_ocr
     pdf_pipeline_options.ocr_options = build_ocr_options(settings)
@@ -55,6 +46,51 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
     return pdf_pipeline_options
 
 
+def build_vlm_pipeline_options(settings: Settings) -> Any:
+    try:
+        from docling.datamodel.pipeline_options import VlmPipelineOptions
+        from docling.datamodel.pipeline_options_vlm_model import (
+            InferenceFramework,
+            InlineVlmOptions,
+            ResponseFormat,
+            TransformersModelType,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "Docling is not installed. Install project dependencies with "
+            "`python -m pip install -e .` inside the project virtual environment."
+        ) from exc
+
+    return VlmPipelineOptions(
+        accelerator_options=build_accelerator_options(settings),
+        allow_external_plugins=settings.docling_allow_external_plugins,
+        images_scale=settings.docling_vlm_scale,
+        generate_page_images=True,
+        vlm_options=InlineVlmOptions(
+            prompt=settings.docling_vlm_prompt,
+            repo_id=settings.docling_vlm_model,
+            inference_framework=InferenceFramework(settings.docling_vlm_runtime),
+            transformers_model_type=TransformersModelType.AUTOMODEL_IMAGETEXTTOTEXT,
+            response_format=ResponseFormat(settings.docling_vlm_response_format),
+            torch_dtype=settings.docling_vlm_torch_dtype,
+            load_in_8bit=settings.docling_vlm_load_in_8bit,
+        ),
+    )
+
+
+def build_accelerator_options(settings: Settings) -> Any:
+    from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+
+    return AcceleratorOptions(
+        num_threads=settings.docling_num_threads,
+        device=docling_accelerator_device(
+            settings.docling_accelerator_device,
+            AcceleratorDevice,
+        ),
+        cuda_use_flash_attention2=settings.docling_cuda_use_flash_attention2,
+    )
+
+
 def docling_accelerator_device(device: str, accelerator_device: Any) -> Any:
     enum_devices = {
         accelerator_device.AUTO.value: accelerator_device.AUTO,
@@ -66,8 +102,17 @@ def docling_accelerator_device(device: str, accelerator_device: Any) -> Any:
     return enum_devices.get(device, device)
 
 
-def docling_options_metadata(settings: Settings) -> dict[str, Any]:
+def docling_options_metadata(
+    settings: Settings,
+    *,
+    input_format: str | None = None,
+    pipeline: str | None = None,
+) -> dict[str, Any]:
     return {
+        "parser": "docling",
+        "input_format": input_format,
+        "pipeline": pipeline or settings.docling_pipeline,
+        "allowed_formats": settings.docling_allowed_formats,
         "accelerator_device": settings.docling_accelerator_device,
         "num_threads": settings.docling_num_threads,
         "cuda_use_flash_attention2": settings.docling_cuda_use_flash_attention2,
@@ -94,4 +139,8 @@ def docling_options_metadata(settings: Settings) -> dict[str, Any]:
         "pdf_layout_batch_size": settings.docling_pdf_layout_batch_size,
         "pdf_table_batch_size": settings.docling_pdf_table_batch_size,
         "pdf_queue_max_size": settings.docling_pdf_queue_max_size,
+        "vlm_model": settings.docling_vlm_model,
+        "vlm_runtime": settings.docling_vlm_runtime,
+        "vlm_response_format": settings.docling_vlm_response_format,
+        "vlm_scale": settings.docling_vlm_scale,
     }

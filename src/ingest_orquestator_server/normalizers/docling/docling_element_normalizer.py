@@ -103,9 +103,27 @@ class DoclingElementNormalizer:
             if isinstance(value, str) and value.strip():
                 return value
 
+        if collection_name == "pictures":
+            description = self._picture_description_text(item)
+            if description:
+                return description
+
         if collection_name == "tables":
             return self._table_renderer.render_plain_text(item)
 
+        return None
+
+    @staticmethod
+    def _picture_description_text(item: dict[str, Any]) -> str | None:
+        meta = item.get("meta")
+        if not isinstance(meta, dict):
+            return None
+        description = meta.get("description")
+        if not isinstance(description, dict):
+            return None
+        text = description.get("text")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
         return None
 
     @staticmethod

@@ -61,6 +61,7 @@ def get_document_parse_service(
         parser_registry=parser_registry,
         output_writer=LocalParseOutputWriter(),
         chunking_service=DocumentChunkingService(settings),
+        embedding_output_enabled=settings.embedding_output_enabled,
     )
 
 

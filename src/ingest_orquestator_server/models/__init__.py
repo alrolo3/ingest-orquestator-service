@@ -1,6 +1,7 @@
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
 from ingest_orquestator_server.models.document_element import DocumentElement
 from ingest_orquestator_server.models.document_page import DocumentPage
+from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.ingest_response import IngestResponse
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
@@ -13,6 +14,7 @@ __all__ = [
     "DocumentChunk",
     "DocumentElement",
     "DocumentPage",
+    "EmbeddingRecord",
     "IngestionJob",
     "IngestResponse",
     "IngestionStatus",

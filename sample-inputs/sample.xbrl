@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xbrl xmlns="http://www.xbrl.org/2003/instance"
+      xmlns:xlink="http://www.w3.org/1999/xlink"
+      xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+      xmlns:sample="http://example.com/ingest/sample">
+  <context id="C-2026">
+    <entity>
+      <identifier scheme="http://example.com/entity">INGEST</identifier>
+    </entity>
+    <period>
+      <instant>2026-05-30</instant>
+    </period>
+  </context>
+  <unit id="USD">
+    <measure>iso4217:USD</measure>
+  </unit>
+  <sample:Revenue contextRef="C-2026" unitRef="USD" decimals="0">125000</sample:Revenue>
+  <sample:Description contextRef="C-2026">This sample verifies the Docling XBRL input path.</sample:Description>
+</xbrl>

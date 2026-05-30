@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<us-patent-application lang="EN" dtd-version="v4.5 2014-04-03" file="sample">
+  <us-bibliographic-data-application>
+    <invention-title>USPTO Sample Document</invention-title>
+    <abstract>
+      <p>This sample verifies the Docling USPTO XML input path.</p>
+    </abstract>
+  </us-bibliographic-data-application>
+  <description>
+    <heading>Pipeline</heading>
+    <p>The ingestion service parses patent-like XML and normalizes content.</p>
+  </description>
+  <claims>
+    <claim id="CLM-00001" num="00001">
+      <claim-text>A document ingestion service configured for multi-format parsing.</claim-text>
+    </claim>
+  </claims>
+</us-patent-application>

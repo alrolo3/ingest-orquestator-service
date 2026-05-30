@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from ingest_orquestator_server.api.dependencies import (
@@ -11,7 +11,9 @@ from ingest_orquestator_server.api.dependencies import (
 from ingest_orquestator_server.application.exceptions import (
     JobNotFoundError,
     OutputArtifactNotFoundError,
+    UnsupportedDocumentFormatError,
     UnsupportedParserError,
+    UnsupportedPipelineError,
     UploadValidationError,
 )
 from ingest_orquestator_server.application.services.file_ingestion_service import (
@@ -32,19 +34,35 @@ router = APIRouter(prefix="/v1/ingest")
 @router.post("/file", response_model=IngestResponse)
 async def ingest_file(
     file: Annotated[UploadFile, File()],
+    background_tasks: BackgroundTasks,
     service: Annotated[FileIngestionService, Depends(get_file_ingestion_service)],
     parser: Annotated[str, Query()] = "docling",
+    pipeline: Annotated[str, Query()] = "standard",
+    async_mode: Annotated[bool, Query()] = False,
     include_document: Annotated[bool, Query()] = True,
 ) -> IngestResponse:
     try:
+        if async_mode:
+            response = await service.enqueue_upload(
+                upload=file,
+                parser_name=parser,
+                pipeline=pipeline,
+            )
+            background_tasks.add_task(service.process_queued_job, response.job_id)
+            return response
         return await service.ingest_upload(
             upload=file,
             parser_name=parser,
+            pipeline=pipeline,
             include_document=include_document,
         )
     except UploadValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    except UnsupportedParserError as exc:
+    except (
+        UnsupportedParserError,
+        UnsupportedDocumentFormatError,
+        UnsupportedPipelineError,
+    ) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to parse file: {exc}") from exc

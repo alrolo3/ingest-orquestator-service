@@ -28,13 +28,14 @@ class SqliteIngestionJobRepository:
                     input_path,
                     document_id,
                     outputs_json,
+                    metadata_json,
                     error,
                     created_at,
                     updated_at,
                     started_at,
                     completed_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(job_id) DO UPDATE SET
                     status = excluded.status,
                     parser = excluded.parser,
@@ -42,6 +43,7 @@ class SqliteIngestionJobRepository:
                     input_path = excluded.input_path,
                     document_id = excluded.document_id,
                     outputs_json = excluded.outputs_json,
+                    metadata_json = excluded.metadata_json,
                     error = excluded.error,
                     created_at = excluded.created_at,
                     updated_at = excluded.updated_at,
@@ -64,8 +66,12 @@ class SqliteIngestionJobRepository:
     def list_active_job_ids(self) -> set[str]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT job_id FROM ingestion_jobs WHERE status IN (?, ?)",
-                (IngestionStatus.PENDING.value, IngestionStatus.RUNNING.value),
+                "SELECT job_id FROM ingestion_jobs WHERE status IN (?, ?, ?)",
+                (
+                    IngestionStatus.PENDING.value,
+                    IngestionStatus.QUEUED.value,
+                    IngestionStatus.RUNNING.value,
+                ),
             ).fetchall()
         return {str(row["job_id"]) for row in rows}
 
@@ -81,6 +87,7 @@ class SqliteIngestionJobRepository:
                     input_path TEXT,
                     document_id TEXT,
                     outputs_json TEXT,
+                    metadata_json TEXT,
                     error TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -89,6 +96,12 @@ class SqliteIngestionJobRepository:
                 )
                 """
             )
+            columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(ingestion_jobs)").fetchall()
+            }
+            if "metadata_json" not in columns:
+                connection.execute("ALTER TABLE ingestion_jobs ADD COLUMN metadata_json TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._database_path)
@@ -105,6 +118,7 @@ class SqliteIngestionJobRepository:
             str(job.input_path) if job.input_path is not None else None,
             job.document_id,
             job.outputs.model_dump_json() if job.outputs is not None else None,
+            json.dumps(job.metadata),
             job.error,
             job.created_at.isoformat(),
             job.updated_at.isoformat(),
@@ -115,6 +129,7 @@ class SqliteIngestionJobRepository:
     @staticmethod
     def _from_row(row: sqlite3.Row) -> IngestionJob:
         outputs_json = row["outputs_json"]
+        metadata_json = row["metadata_json"] if "metadata_json" in row.keys() else None
         return IngestionJob(
             job_id=row["job_id"],
             status=IngestionStatus(row["status"]),
@@ -123,6 +138,7 @@ class SqliteIngestionJobRepository:
             input_path=Path(row["input_path"]) if row["input_path"] else None,
             document_id=row["document_id"],
             outputs=OutputFiles.model_validate(json.loads(outputs_json)) if outputs_json else None,
+            metadata=json.loads(metadata_json) if metadata_json else {},
             error=row["error"],
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),

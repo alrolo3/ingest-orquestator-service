@@ -10,7 +10,11 @@ from ingest_orquestator_server.application.ports.parse_output_writer import Pars
 from ingest_orquestator_server.application.services.document_chunking_service import (
     DocumentChunkingService,
 )
+from ingest_orquestator_server.application.services.embedding_record_service import (
+    EmbeddingRecordService,
+)
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
+from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
 from ingest_orquestator_server.models.parse_output import ParseOutput
@@ -21,6 +25,7 @@ class DocumentParseResult:
     parse_output: ParseOutput
     outputs: OutputFiles
     chunks: list[DocumentChunk]
+    embedding_records: list[EmbeddingRecord]
     diagnostics: ParseDiagnostics
 
 
@@ -31,10 +36,14 @@ class DocumentParseService:
         parser_registry: ParserRegistry,
         output_writer: ParseOutputWriter,
         chunking_service: DocumentChunkingService,
+        embedding_record_service: EmbeddingRecordService | None = None,
+        embedding_output_enabled: bool = True,
     ) -> None:
         self._parser_registry = parser_registry
         self._output_writer = output_writer
         self._chunking_service = chunking_service
+        self._embedding_record_service = embedding_record_service or EmbeddingRecordService()
+        self._embedding_output_enabled = embedding_output_enabled
 
     def parse_file(
         self,
@@ -43,13 +52,23 @@ class DocumentParseService:
         parser_name: str,
         output_root: Path,
         document_id: str | None = None,
+        pipeline: str | None = None,
     ) -> DocumentParseResult:
         parser = self._parser_registry.get(parser_name)
         started_at = datetime.now(UTC)
         started = perf_counter()
-        parse_output = parser.parse(file_path, document_id=document_id)
+        parse_output = parser.parse(file_path, document_id=document_id, pipeline=pipeline)
         chunks = self._chunking_service.chunk(parse_output.document)
+        embedding_records = (
+            self._embedding_record_service.build_records(
+                document=parse_output.document,
+                chunks=chunks,
+            )
+            if self._embedding_output_enabled
+            else []
+        )
         completed_at = datetime.now(UTC)
+        docling_metadata = parse_output.document.metadata.get("docling", {})
         diagnostics = ParseDiagnostics(
             parser=parser_name,
             started_at=started_at,
@@ -60,17 +79,24 @@ class DocumentParseService:
                 "source_file_name": parse_output.document.source_file_name,
                 "page_count": parse_output.document.page_count,
                 "element_count": len(parse_output.document.elements),
+                "input_format": docling_metadata.get("input_format"),
+                "pipeline": docling_metadata.get("pipeline") or pipeline,
+                "ocr_engine": docling_metadata.get("ocr_engine"),
+                "vlm_model": docling_metadata.get("vlm_model"),
+                "vlm_runtime": docling_metadata.get("vlm_runtime"),
             },
         )
         outputs = self._output_writer.write(
             parse_output,
             output_root,
             chunks=chunks,
+            embedding_records=embedding_records if self._embedding_output_enabled else None,
             diagnostics=diagnostics,
         )
         return DocumentParseResult(
             parse_output=parse_output,
             outputs=outputs,
             chunks=chunks,
+            embedding_records=embedding_records,
             diagnostics=diagnostics,
         )

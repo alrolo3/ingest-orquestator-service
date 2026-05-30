@@ -8,7 +8,7 @@ FastAPI or CLI
 -> parser/output/storage ports
 -> Docling and filesystem adapters
 -> normalized document models
--> chunks and local output files
+-> chunks, embedding records, and local output files
 ```
 
 ## Boundaries
@@ -47,9 +47,12 @@ src/ingest_orquestator_server/
 
 ## Current MVP Behavior
 
-The service runs parsing synchronously. This keeps the first iteration simple and makes parser output easy to inspect.
+The service can run parsing synchronously or enqueue an in-process background
+job for heavier OCR/VLM parsing.
 
-The synchronous flow still persists job state, outputs, diagnostics, and chunks. Later iterations should move long-running parses behind a background worker.
+Both flows persist job state, outputs, diagnostics, chunks, and embedding-ready
+JSONL records. Later iterations can replace the in-process background worker
+with an external queue if multi-process scaling is needed.
 
 ## Adding A Parser
 
@@ -61,3 +64,10 @@ To add another parser backend, such as MinerU:
 4. Add parser-specific settings in `config/settings.py`.
 5. Add parser contract tests under `tests/contracts/`.
 6. Document runtime dependencies and Docker overrides if the parser needs a special GPU image.
+
+## Docling Pipeline Extension
+
+Docling integration is built around `DocumentConverter`. The converter factory
+chooses allowed formats and per-format options. `standard` mode is supported for
+all configured formats; direct `vlm` mode is supported for PDF and image inputs
+in v1.2.

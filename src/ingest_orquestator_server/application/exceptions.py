@@ -4,6 +4,16 @@ class UnsupportedParserError(ValueError):
         self.parser_name = parser_name
 
 
+class UnsupportedDocumentFormatError(ValueError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class UnsupportedPipelineError(ValueError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class UploadValidationError(ValueError):
     def __init__(self, message: str, *, status_code: int = 400) -> None:
         super().__init__(message)

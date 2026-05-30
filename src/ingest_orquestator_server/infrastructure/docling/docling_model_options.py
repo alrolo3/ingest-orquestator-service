@@ -9,6 +9,9 @@ from ingest_orquestator_server.config.docling_defaults import (
     DOCLING_TABLE_STRUCTURE_BACKEND_GRANITE_VISION,
 )
 from ingest_orquestator_server.config.settings import Settings
+from ingest_orquestator_server.infrastructure.docling.ocr_engine_registry import (
+    OcrEngineRegistry,
+)
 
 
 def build_layout_options(settings: Settings) -> Any:
@@ -52,11 +55,9 @@ def build_ocr_options(settings: Settings) -> Any:
 
         return OcrAutoOptions()
 
-    from docling.models.factories import get_ocr_factory
-
-    factory = get_ocr_factory(allow_external_plugins=settings.docling_allow_external_plugins)
+    registry = OcrEngineRegistry(allow_external_plugins=settings.docling_allow_external_plugins)
     try:
-        ocr_options = factory.create_options(kind=settings.docling_pdf_ocr_engine)
+        ocr_options = registry.create_options(kind=settings.docling_pdf_ocr_engine)
     except Exception as exc:
         raise RuntimeError(
             "Docling OCR engine "
@@ -64,7 +65,8 @@ def build_ocr_options(settings: Settings) -> Any:
             "For the default SuryaOCR engine, install `docling-surya==0.1.0`, "
             "use Python 3.12+ on Linux x86_64, keep "
             "`INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true`, and pin "
-            "`transformers>=4.57,<5`."
+            "`transformers>=4.57,<5`. "
+            f"Available engines: {', '.join(registry.available_engines()) or '<none>'}."
         ) from exc
 
     _validate_surya_transformers_compatibility(settings)
