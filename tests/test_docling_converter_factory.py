@@ -41,3 +41,20 @@ def test_converter_factory_uses_vlm_pipeline_for_image() -> None:
     )
 
     assert converter.format_to_options[InputFormat.IMAGE].pipeline_cls == VlmPipeline
+
+
+def test_converter_factory_uses_standard_options_for_image() -> None:
+    converter = DoclingConverterFactory().create(
+        Settings(
+            docling_allowed_formats=["image"],
+            docling_allow_external_plugins=True,
+            docling_pdf_ocr_engine="auto",
+        ),
+        input_format="image",
+        pipeline="standard",
+    )
+
+    image_options = converter.format_to_options[InputFormat.IMAGE]
+    assert image_options.pipeline_cls == StandardPdfPipeline
+    assert image_options.pipeline_options.allow_external_plugins is True
+    assert image_options.pipeline_options.ocr_options.kind == "auto"

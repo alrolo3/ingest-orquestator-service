@@ -13,7 +13,7 @@ authors = [
   { name = "Ingest Orquestator Maintainers" }
 ]
 dependencies = [
-  "docling>=2.30,<3",
+  "docling[xbrl]>=2.30,<3",
   "fastapi>=0.115,<1",
   "transformers>=4.57,<5",
   "pydantic>=2.10,<3",

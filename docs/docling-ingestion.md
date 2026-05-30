@@ -17,6 +17,9 @@ pdf,image,docx,pptx,html,md,xlsx,csv,json_docling,asciidoc,latex,vtt,xml_jats,xm
 Audio is not enabled by default because it can require additional ASR runtime
 dependencies.
 
+XBRL is enabled by default and the project installs `docling[xbrl]`, which pulls
+Docling's required `arelle-release` dependency.
+
 ## Pipeline Matrix
 
 | Input format | `standard` | `vlm` |

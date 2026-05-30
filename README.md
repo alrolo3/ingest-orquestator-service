@@ -25,6 +25,8 @@ It does not include vector storage or RAG query APIs yet.
 - `pip` and `venv` for the standard local setup.
 
 Docling can download or initialize parsing models on first use, so the first parse may take longer than later runs.
+The default install uses `docling[xbrl]` so the sample XBRL fixture and XBRL
+documents work without an extra install step.
 The default OCR engine is SuryaOCR, which Docling loads through the external
 `docling-surya` plugin. That plugin requires Python 3.12+ on Linux and is
 GPL-3.0-only. It also requires `transformers>=4.57,<5`: the lower bound keeps

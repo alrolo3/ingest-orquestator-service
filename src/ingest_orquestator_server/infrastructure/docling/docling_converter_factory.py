@@ -53,10 +53,16 @@ class DoclingConverterFactory:
                     pipeline_cls=VlmPipeline,
                     pipeline_options=vlm_pipeline_options,
                 )
-        elif input_format in {None, "pdf"}:
-            format_options[InputFormat.PDF] = PdfFormatOption(
-                pipeline_options=build_pdf_pipeline_options(settings),
-            )
+        else:
+            standard_pipeline_options = build_pdf_pipeline_options(settings)
+            if input_format in {None, "pdf"}:
+                format_options[InputFormat.PDF] = PdfFormatOption(
+                    pipeline_options=standard_pipeline_options,
+                )
+            if input_format in {None, "image"}:
+                format_options[InputFormat.IMAGE] = ImageFormatOption(
+                    pipeline_options=standard_pipeline_options,
+                )
 
         return DocumentConverter(
             allowed_formats=allowed_formats,
