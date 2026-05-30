@@ -2,6 +2,8 @@
 
 The MVP mirrors the ingestion side of a RAG pipeline without taking on retrieval infrastructure.
 
+For a Mermaid diagram view, see [Architecture Diagram](architecture-diagram.md).
+
 ```text
 FastAPI or CLI
 -> application service
