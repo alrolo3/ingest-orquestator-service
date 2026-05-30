@@ -7,16 +7,18 @@ Docling can run model inference with explicit accelerator options. The service e
 Install the project in an environment that has a CUDA-enabled PyTorch build, then choose the CUDA accelerator:
 
 ```bash
-uv sync --extra surya --python 3.12
+uv sync --extra gpu --python 3.12
 
 INGEST_DOCLING_ACCELERATOR_DEVICE=cuda \
 INGEST_DOCLING_NUM_THREADS=8 \
 uv run ingest-orquestator parse /path/to/document.pdf --output-dir .data/outputs
 ```
 
-The SuryaOCR plugin is GPL-3.0-only, requires Python 3.12+ on Linux, and is
-loaded by Docling as an external plugin. If the plugin is not available, set
-`INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR selection.
+The GPU dependency set includes SuryaOCR, FlashInfer, and FlashAttention-2 on
+supported Linux hosts. SuryaOCR is GPL-3.0-only, requires Python 3.12+ on Linux,
+and is loaded by Docling as an external plugin. If the plugin is not available,
+set `INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR
+selection.
 
 For an A100 80GB CUDA 13 profile, use the checked-in
 [`env-cuda-gpu`](../env-cuda-gpu) file and see

@@ -39,10 +39,15 @@ python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 ```
 
-For the default SuryaOCR configuration on a supported Linux host:
+On Linux GPU hosts, install a CUDA-enabled PyTorch build before
+`requirements.txt`; the default requirements include FlashAttention-2, which
+builds against the active PyTorch/CUDA environment.
+
+If you skip `requirements.txt` and install from `pyproject.toml` directly on a
+supported Linux GPU host:
 
 ```bash
-python -m pip install -e ".[surya]"
+MAX_JOBS=8 python -m pip install --no-build-isolation -e ".[gpu]"
 ```
 
 For a portable local run without SuryaOCR:
@@ -127,6 +132,12 @@ If you prefer `uv`, the equivalent setup is:
 ```bash
 uv sync --extra dev --python 3.12
 uv run pytest
+```
+
+For CUDA/GPU development with `uv`, install both extras:
+
+```bash
+uv sync --extra dev --extra gpu --python 3.12
 ```
 
 ## Configuration
