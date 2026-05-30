@@ -33,6 +33,23 @@ def test_converter_factory_uses_vlm_pipeline_for_pdf() -> None:
     )
 
 
+def test_converter_factory_uses_vllm_vlm_preset_for_pdf() -> None:
+    converter = DoclingConverterFactory().create(
+        Settings(
+            docling_allowed_formats=["pdf"],
+            docling_pdf_ocr_engine="auto",
+            docling_vlm_model="granite_vision",
+            docling_vlm_runtime="vllm",
+        ),
+        input_format="pdf",
+        pipeline="vlm",
+    )
+
+    vlm_options = converter.format_to_options[InputFormat.PDF].pipeline_options.vlm_options
+    assert vlm_options.model_spec.default_repo_id == "ibm-granite/granite-vision-3.3-2b"
+    assert vlm_options.engine_options.engine_type.value == "vllm"
+
+
 def test_converter_factory_uses_vlm_pipeline_for_image() -> None:
     converter = DoclingConverterFactory().create(
         Settings(docling_allowed_formats=["image"], docling_pdf_ocr_engine="auto"),

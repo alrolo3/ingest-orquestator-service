@@ -181,6 +181,13 @@ class DocumentParseService:
                 "ocr_engine": docling_metadata.get("ocr_engine"),
                 "vlm_model": docling_metadata.get("vlm_model"),
                 "vlm_runtime": docling_metadata.get("vlm_runtime"),
+                "vlm_runtime_requested": docling_metadata.get("vlm_runtime_requested"),
+                "picture_description_model": docling_metadata.get("picture_description_model"),
+                "picture_description_runtime": docling_metadata.get("picture_description_runtime"),
+                "picture_description_runtime_requested": docling_metadata.get(
+                    "picture_description_runtime_requested"
+                ),
+                "runtime": docling_metadata.get("runtime"),
                 "chunking_enabled": chunking_is_enabled,
                 "chunking_strategy": chunks[0].metadata.get("chunker_strategy")
                 if chunks

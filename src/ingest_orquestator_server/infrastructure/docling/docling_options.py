@@ -10,6 +10,10 @@ from ingest_orquestator_server.infrastructure.docling.docling_model_options impo
     build_picture_classification_options,
     build_picture_description_options,
     build_table_structure_options,
+    build_vlm_convert_options,
+)
+from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabilities import (
+    docling_runtime_metadata,
 )
 
 
@@ -49,12 +53,6 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
 def build_vlm_pipeline_options(settings: Settings) -> Any:
     try:
         from docling.datamodel.pipeline_options import VlmPipelineOptions
-        from docling.datamodel.pipeline_options_vlm_model import (
-            InferenceFramework,
-            InlineVlmOptions,
-            ResponseFormat,
-            TransformersModelType,
-        )
     except ImportError as exc:
         raise RuntimeError(
             "Docling is not installed. Install project dependencies with "
@@ -66,15 +64,7 @@ def build_vlm_pipeline_options(settings: Settings) -> Any:
         allow_external_plugins=settings.docling_allow_external_plugins,
         images_scale=settings.docling_vlm_scale,
         generate_page_images=True,
-        vlm_options=InlineVlmOptions(
-            prompt=settings.docling_vlm_prompt,
-            repo_id=settings.docling_vlm_model,
-            inference_framework=InferenceFramework(settings.docling_vlm_runtime),
-            transformers_model_type=TransformersModelType.AUTOMODEL_IMAGETEXTTOTEXT,
-            response_format=ResponseFormat(settings.docling_vlm_response_format),
-            torch_dtype=settings.docling_vlm_torch_dtype,
-            load_in_8bit=settings.docling_vlm_load_in_8bit,
-        ),
+        vlm_options=build_vlm_convert_options(settings),
     )
 
 
@@ -126,6 +116,7 @@ def docling_options_metadata(
     resolved_pipeline = pipeline or settings.docling_pipeline
     return {
         "common": _common_options(settings, input_format=input_format, pipeline=resolved_pipeline),
+        "runtime": docling_runtime_metadata(settings, pipeline=resolved_pipeline),
         "active_options": _active_options(
             settings,
             input_format=input_format,
@@ -172,6 +163,8 @@ def _common_options(
         "num_threads": settings.docling_num_threads,
         "cuda_use_flash_attention2": settings.docling_cuda_use_flash_attention2,
         "allow_external_plugins": settings.docling_allow_external_plugins,
+        "vllm_fallback_on_unsupported": settings.docling_vllm_fallback_on_unsupported,
+        "vllm_allow_unverified_models": settings.docling_vllm_allow_unverified_models,
     }
 
 
@@ -232,6 +225,7 @@ def _pdf_options(settings: Settings) -> dict[str, Any]:
         "picture_classifier_preset": settings.docling_pdf_picture_classifier_preset,
         "do_picture_description": settings.docling_pdf_do_picture_description,
         "picture_description_model": settings.docling_pdf_picture_description_model,
+        "picture_description_runtime": settings.docling_pdf_picture_description_runtime,
         "picture_description_prompt": settings.docling_pdf_picture_description_prompt,
         "do_code_enrichment": settings.docling_pdf_do_code_enrichment,
         "do_formula_enrichment": settings.docling_pdf_do_formula_enrichment,
@@ -251,6 +245,14 @@ def _vlm_options(settings: Settings) -> dict[str, Any]:
         "scale": settings.docling_vlm_scale,
         "torch_dtype": settings.docling_vlm_torch_dtype,
         "load_in_8bit": settings.docling_vlm_load_in_8bit,
+        "vllm_tensor_parallel_size": settings.docling_vllm_tensor_parallel_size,
+        "vllm_gpu_memory_utilization": settings.docling_vllm_gpu_memory_utilization,
+        "vllm_trust_remote_code": settings.docling_vllm_trust_remote_code,
+        "vllm_cudagraph_mode": settings.docling_vllm_cudagraph_mode,
+        "vllm_model_impl": settings.docling_vllm_model_impl,
+        "vllm_fallback_runtime": settings.docling_vllm_fallback_runtime,
+        "vllm_fallback_on_unsupported": settings.docling_vllm_fallback_on_unsupported,
+        "vllm_allow_unverified_models": settings.docling_vllm_allow_unverified_models,
     }
 
 

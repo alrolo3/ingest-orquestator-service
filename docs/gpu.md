@@ -14,6 +14,7 @@ python -m pip install --upgrade pip setuptools wheel
 
 # Install a CUDA-enabled torch build first, then install deployment requirements.
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 
 INGEST_DOCLING_ACCELERATOR_DEVICE=cuda \
@@ -27,6 +28,8 @@ Docling as an external plugin. If the plugin is not available, set
 `INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR selection.
 FlashAttention-2 is optional; see the NVIDIA GPU venv tutorial before enabling
 it.
+vLLM is installed through `requirements-vllm.txt` and is used only for Docling
+VLM stages/models documented as vLLM-capable.
 
 SuryaOCR currently requires `transformers>=4.57,<5`. If an existing venv has
 Transformers 5.x, reinstall the pinned dependency set:
@@ -94,9 +97,12 @@ INGEST_DOCLING_NUM_THREADS=4
 INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
 INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true
 INGEST_DOCLING_PIPELINE=standard
-INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_VLM_MODEL=granite_vision
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
-INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_VLM_RUNTIME=vllm
+INGEST_DOCLING_VLLM_FALLBACK_RUNTIME=transformers
+INGEST_DOCLING_VLLM_FALLBACK_ON_UNSUPPORTED=true
+INGEST_DOCLING_VLLM_ALLOW_UNVERIFIED_MODELS=false
 INGEST_DOCLING_PDF_DO_OCR=true
 INGEST_DOCLING_PDF_OCR_ENGINE=suryaocr
 INGEST_DOCLING_PDF_OCR_LANGUAGES=en
@@ -110,7 +116,8 @@ INGEST_DOCLING_PDF_TABLE_STRUCTURE_VLM_MODEL=granite-vision-4.1-4b
 INGEST_DOCLING_PDF_DO_PICTURE_CLASSIFICATION=true
 INGEST_DOCLING_PDF_PICTURE_CLASSIFIER_PRESET=document_figure_classifier_v2
 INGEST_DOCLING_PDF_DO_PICTURE_DESCRIPTION=true
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=granite_vision
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=vllm
 INGEST_DOCLING_PDF_DO_CODE_ENRICHMENT=true
 INGEST_DOCLING_PDF_DO_FORMULA_ENRICHMENT=true
 INGEST_DOCLING_PDF_CODE_FORMULA_PRESET=codeformulav2
@@ -124,6 +131,8 @@ Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let 
 
 Use `--pipeline vlm` or `pipeline=vlm` only for PDF and image inputs in v1.2.
 For details, see [`docs/docling-ingestion.md`](docling-ingestion.md).
+For vLLM runtime details, see
+[`docs/docling-vllm-migration.md`](docling-vllm-migration.md).
 
 `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true` should only be enabled when the
 environment has a compatible `flash-attn` installation and the GPU architecture

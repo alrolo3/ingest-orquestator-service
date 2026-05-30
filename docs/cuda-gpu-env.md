@@ -34,6 +34,7 @@ Then install the default deployment requirements:
 
 ```bash
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 ```
 
@@ -41,6 +42,8 @@ The default GPU install path includes SuryaOCR. FlashAttention-2 is optional and
 is not installed by default because it often requires a long source build.
 SuryaOCR requires `transformers>=4.57,<5`; this keeps Qwen3-VL support while
 avoiding a SuryaOCR runtime failure with Transformers 5.x.
+`requirements-vllm.txt` is optional for CPU hosts, but required when the GPU
+profile is set to resolve supported VLM stages through vLLM.
 
 To enable FlashAttention-2, install it explicitly after confirming that `nvcc`
 matches `torch.version.cuda`:
@@ -126,9 +129,11 @@ The profile chooses:
 - confidence output enabled
 - local XBRL taxonomy fetch enabled, remote XBRL fetch disabled
 - SuryaOCR on GPU
+- full-page VLM conversion defaults to the vLLM-capable `granite_vision` preset
 - standard pipeline layout model `docling-layout-heron-101`
 - TableFormer accurate mode with cell matching
 - picture classification and picture description enabled
+- picture description defaults to the vLLM-capable `granite_vision` preset
 - code and formula enrichment enabled
 - OCR/layout/table batch sizes set to `32`
 - queue size set to `512`
@@ -136,6 +141,27 @@ The profile chooses:
 These values are aggressive for an A100 80GB. If GPU memory spikes or the
 process becomes less stable under concurrent requests, reduce the three batch
 sizes from `32` to `16`.
+
+## vLLM
+
+The profile requests vLLM for supported Docling VLM stages:
+
+```text
+INGEST_DOCLING_VLM_MODEL=granite_vision
+INGEST_DOCLING_VLM_RUNTIME=vllm
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=granite_vision
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=vllm
+```
+
+Unsupported models fall back to Transformers by default:
+
+```text
+INGEST_DOCLING_VLLM_FALLBACK_ON_UNSUPPORTED=true
+INGEST_DOCLING_VLLM_FALLBACK_RUNTIME=transformers
+```
+
+See [Docling vLLM migration playbook](docling-vllm-migration.md) and
+[Docling model runtime matrix](docling-model-runtime-matrix.md).
 
 ## FlashAttention 3/4
 

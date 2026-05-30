@@ -24,7 +24,9 @@ def test_parser_adds_docling_accelerator_metadata(tmp_path: Path) -> None:
     assert options["common"]["accelerator_device"] == "cuda"
     assert options["common"]["num_threads"] == 8
     assert options["configured_options"]["pdf"]["ocr_batch_size"] == 16
+    assert options["runtime"]["stages"]["picture_description"]["resolved_runtime"]
     assert output.document.metadata["docling"]["input_format"] == "md"
     assert output.document.metadata["docling"]["pipeline"] == "standard"
     assert output.document.metadata["docling"]["profile"] == "rag_ready"
+    assert "runtime" in output.document.metadata["docling"]
     assert output.document.metadata["docling_result"]["status"] is None

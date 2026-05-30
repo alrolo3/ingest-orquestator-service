@@ -1,0 +1,4 @@
+# Optional Linux NVIDIA GPU runtime for Docling VLM stages backed by vLLM.
+# Install after the base requirements inside the same venv:
+# python -m pip install -r requirements-vllm.txt
+vllm>=0.22,<1; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"

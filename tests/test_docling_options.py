@@ -3,6 +3,7 @@ import pytest
 from ingest_orquestator_server.config import Settings
 from ingest_orquestator_server.infrastructure.docling.docling_options import (
     build_pdf_pipeline_options,
+    docling_options_metadata,
 )
 
 
@@ -24,6 +25,7 @@ def test_build_pdf_pipeline_options_selects_standard_pipeline_models() -> None:
         options.picture_description_options.model_spec.default_repo_id
         == "Qwen/Qwen3-VL-8B-Instruct"
     )
+    assert options.picture_description_options.engine_options.engine_type.value == "transformers"
     assert options.do_code_enrichment is True
     assert options.do_formula_enrichment is True
     assert (
@@ -40,6 +42,40 @@ def test_build_pdf_pipeline_options_can_select_granite_vision_table_structure() 
     )
 
     assert options.table_structure_options.kind == "granite_vision_table"
+
+
+def test_build_pdf_pipeline_options_can_select_vllm_picture_description() -> None:
+    options = build_pdf_pipeline_options(
+        Settings(
+            docling_pdf_ocr_engine="auto",
+            docling_pdf_picture_description_model="granite_vision",
+            docling_pdf_picture_description_runtime="vllm",
+        )
+    )
+
+    assert options.picture_description_options.model_spec.default_repo_id == (
+        "ibm-granite/granite-vision-3.3-2b"
+    )
+    assert options.picture_description_options.engine_options.engine_type.value == "vllm"
+
+
+def test_docling_options_metadata_records_runtime_decisions() -> None:
+    metadata = docling_options_metadata(
+        Settings(
+            docling_vlm_model="granite_vision",
+            docling_vlm_runtime="vllm",
+            docling_pdf_picture_description_model="Qwen/Qwen3-VL-8B-Instruct",
+            docling_pdf_picture_description_runtime="vllm",
+        ),
+        input_format="pdf",
+        pipeline="vlm",
+    )
+
+    assert metadata["runtime"]["stages"]["vlm_convert"]["resolved_runtime"] == "vllm"
+    assert (
+        metadata["runtime"]["stages"]["picture_description"]["resolved_runtime"] == "transformers"
+    )
+    assert metadata["runtime"]["stages"]["picture_description"]["fallback_reason"]
 
 
 def test_default_surya_ocr_engine_requires_external_plugin() -> None:

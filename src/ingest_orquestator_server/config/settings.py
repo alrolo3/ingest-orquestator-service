@@ -128,6 +128,7 @@ class Settings(BaseSettings):
     docling_pdf_picture_classifier_preset: str = DOCLING_PICTURE_CLASSIFIER_PRESET
     docling_pdf_do_picture_description: bool = True
     docling_pdf_picture_description_model: str = DOCLING_PICTURE_DESCRIPTION_MODEL
+    docling_pdf_picture_description_runtime: str = "transformers"
     docling_pdf_picture_description_prompt: str = DOCLING_PICTURE_DESCRIPTION_PROMPT
     docling_pdf_do_code_enrichment: bool = True
     docling_pdf_do_formula_enrichment: bool = True
@@ -143,6 +144,14 @@ class Settings(BaseSettings):
     docling_vlm_scale: float = Field(default=2.0, gt=0)
     docling_vlm_torch_dtype: str | None = "bfloat16"
     docling_vlm_load_in_8bit: bool = False
+    docling_vllm_tensor_parallel_size: int = Field(default=1, ge=1)
+    docling_vllm_gpu_memory_utilization: float = Field(default=0.9, gt=0, le=1)
+    docling_vllm_trust_remote_code: bool = False
+    docling_vllm_cudagraph_mode: str = "PIECEWISE"
+    docling_vllm_model_impl: str = "auto"
+    docling_vllm_fallback_runtime: str = "transformers"
+    docling_vllm_fallback_on_unsupported: bool = True
+    docling_vllm_allow_unverified_models: bool = False
     docling_xbrl_enable_local_fetch: bool = False
     docling_xbrl_enable_remote_fetch: bool = False
     docling_xbrl_taxonomy_path: Path | None = None
@@ -294,9 +303,41 @@ class Settings(BaseSettings):
     @classmethod
     def validate_docling_vlm_runtime(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized in {"transformers", "vllm"}:
+        if normalized in {"auto", "auto_inline", "transformers", "vllm"}:
             return normalized
-        raise ValueError("must be one of transformers or vllm")
+        raise ValueError("must be one of auto, auto_inline, transformers, or vllm")
+
+    @field_validator("docling_pdf_picture_description_runtime")
+    @classmethod
+    def validate_docling_pdf_picture_description_runtime(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"auto", "auto_inline", "transformers", "vllm"}:
+            return normalized
+        raise ValueError("must be one of auto, auto_inline, transformers, or vllm")
+
+    @field_validator("docling_vllm_fallback_runtime")
+    @classmethod
+    def validate_docling_vllm_fallback_runtime(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"auto_inline", "transformers"}:
+            return normalized
+        raise ValueError("must be one of auto_inline or transformers")
+
+    @field_validator("docling_vllm_cudagraph_mode")
+    @classmethod
+    def validate_docling_vllm_cudagraph_mode(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized in {
+            "NONE",
+            "FULL",
+            "PIECEWISE",
+            "FULL_AND_PIECEWISE",
+            "FULL_DECODE_ONLY",
+        }:
+            return normalized
+        raise ValueError(
+            "must be one of NONE, FULL, PIECEWISE, FULL_AND_PIECEWISE, or FULL_DECODE_ONLY"
+        )
 
     @field_validator("allowed_upload_extensions", mode="before")
     @classmethod
@@ -384,6 +425,14 @@ class Settings(BaseSettings):
             scale=self.docling_vlm_scale,
             torch_dtype=self.docling_vlm_torch_dtype,
             load_in_8bit=self.docling_vlm_load_in_8bit,
+            vllm_tensor_parallel_size=self.docling_vllm_tensor_parallel_size,
+            vllm_gpu_memory_utilization=self.docling_vllm_gpu_memory_utilization,
+            vllm_trust_remote_code=self.docling_vllm_trust_remote_code,
+            vllm_cudagraph_mode=self.docling_vllm_cudagraph_mode,
+            vllm_model_impl=self.docling_vllm_model_impl,
+            vllm_fallback_runtime=self.docling_vllm_fallback_runtime,
+            vllm_fallback_on_unsupported=self.docling_vllm_fallback_on_unsupported,
+            vllm_allow_unverified_models=self.docling_vllm_allow_unverified_models,
         )
 
     @property

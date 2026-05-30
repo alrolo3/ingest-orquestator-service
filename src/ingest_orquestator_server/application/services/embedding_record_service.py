@@ -36,6 +36,19 @@ class EmbeddingRecordService:
                         "parser": document_metadata.get("parser", "docling"),
                         "pipeline": document_metadata.get("pipeline"),
                         "profile": document_metadata.get("profile"),
+                        "runtime": document_metadata.get("runtime"),
+                        "vlm_model": document_metadata.get("vlm_model"),
+                        "vlm_runtime": document_metadata.get("vlm_runtime"),
+                        "vlm_runtime_requested": document_metadata.get("vlm_runtime_requested"),
+                        "picture_description_model": document_metadata.get(
+                            "picture_description_model"
+                        ),
+                        "picture_description_runtime": document_metadata.get(
+                            "picture_description_runtime"
+                        ),
+                        "picture_description_runtime_requested": document_metadata.get(
+                            "picture_description_runtime_requested"
+                        ),
                         "chunker_strategy": chunk.metadata.get("chunker_strategy"),
                         "confidence": document.metadata.get("docling_result", {}).get(
                             "confidence_summary", {}

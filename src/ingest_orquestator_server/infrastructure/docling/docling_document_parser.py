@@ -22,6 +22,11 @@ from ingest_orquestator_server.infrastructure.docling.docling_options import (
 from ingest_orquestator_server.infrastructure.docling.docling_result_metadata import (
     conversion_result_metadata,
 )
+from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabilities import (
+    docling_runtime_metadata,
+    resolve_picture_description_runtime,
+    resolve_vlm_convert_runtime,
+)
 from ingest_orquestator_server.models.parse_output import ParseOutput
 from ingest_orquestator_server.normalizers.docling.docling_document_normalizer import (
     DoclingDocumentNormalizer,
@@ -150,6 +155,9 @@ class DoclingDocumentParser:
         raw_html = self._try_export_html(document)
         mime_type = mimetypes.guess_type(source_path.name)[0]
         resolved_document_id = document_id or str(uuid4())
+        runtime_metadata = docling_runtime_metadata(settings, pipeline=resolved_pipeline)
+        vlm_resolution = resolve_vlm_convert_runtime(settings)
+        picture_resolution = resolve_picture_description_runtime(settings)
 
         normalized = self._normalizer.normalize(
             raw_docling=raw_docling,
@@ -166,7 +174,22 @@ class DoclingDocumentParser:
             "pipeline": resolved_pipeline,
             "ocr_engine": settings.docling_pdf_ocr_engine,
             "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
-            "vlm_runtime": settings.docling_vlm_runtime if resolved_pipeline == "vlm" else None,
+            "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,
+            "vlm_runtime_requested": settings.docling_vlm_runtime
+            if resolved_pipeline == "vlm"
+            else None,
+            "picture_description_model": settings.docling_pdf_picture_description_model
+            if settings.docling_pdf_do_picture_description
+            else None,
+            "picture_description_runtime": picture_resolution.resolved_runtime
+            if settings.docling_pdf_do_picture_description
+            else None,
+            "picture_description_runtime_requested": (
+                settings.docling_pdf_picture_description_runtime
+                if settings.docling_pdf_do_picture_description
+                else None
+            ),
+            "runtime": runtime_metadata,
         }
         normalized.metadata["docling_options"] = docling_options_metadata(
             settings,

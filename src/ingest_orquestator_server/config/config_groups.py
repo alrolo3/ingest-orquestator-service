@@ -47,6 +47,14 @@ class DoclingVlmConfig(BaseModel):
     scale: float
     torch_dtype: str | None
     load_in_8bit: bool
+    vllm_tensor_parallel_size: int
+    vllm_gpu_memory_utilization: float
+    vllm_trust_remote_code: bool
+    vllm_cudagraph_mode: str
+    vllm_model_impl: str
+    vllm_fallback_runtime: str
+    vllm_fallback_on_unsupported: bool
+    vllm_allow_unverified_models: bool
 
 
 class DoclingXbrlConfig(BaseModel):

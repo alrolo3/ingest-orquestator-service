@@ -9,6 +9,14 @@ from ingest_orquestator_server.config.docling_defaults import (
     DOCLING_TABLE_STRUCTURE_BACKEND_GRANITE_VISION,
 )
 from ingest_orquestator_server.config.settings import Settings
+from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabilities import (
+    RUNTIME_AUTO_INLINE,
+    RUNTIME_TRANSFORMERS,
+    RUNTIME_VLLM,
+    RuntimeResolution,
+    resolve_picture_description_runtime,
+    resolve_vlm_convert_runtime,
+)
 from ingest_orquestator_server.infrastructure.docling.ocr_engine_registry import (
     OcrEngineRegistry,
 )
@@ -112,11 +120,17 @@ def build_picture_description_options(settings: Settings) -> Any:
     from docling.datamodel.pipeline_options import PictureDescriptionVlmEngineOptions
 
     model_name = settings.docling_pdf_picture_description_model.strip()
-    if model_name.lower() in {"qwen", "qwen2.5-vl-3b", "qwen2.5-vl-3b-instruct"}:
-        return PictureDescriptionVlmEngineOptions.from_preset("qwen")
+    resolution = resolve_picture_description_runtime(settings)
+    engine_options = build_vlm_engine_options(resolution, settings)
+    if resolution.preset is not None:
+        return PictureDescriptionVlmEngineOptions.from_preset(
+            resolution.preset,
+            engine_options=engine_options,
+            prompt=settings.docling_pdf_picture_description_prompt,
+        )
     if model_name == DOCLING_PICTURE_DESCRIPTION_MODEL:
-        return _build_qwen3_picture_description_options(settings)
-    return _build_custom_picture_description_options(settings)
+        return _build_qwen3_picture_description_options(settings, resolution)
+    return _build_custom_picture_description_options(settings, resolution)
 
 
 def build_code_formula_options(settings: Settings) -> Any:
@@ -125,24 +139,83 @@ def build_code_formula_options(settings: Settings) -> Any:
     return CodeFormulaVlmOptions.from_preset(settings.docling_pdf_code_formula_preset)
 
 
-def _build_qwen3_picture_description_options(settings: Settings) -> Any:
+def build_vlm_convert_options(settings: Settings) -> Any:
+    from docling.datamodel.pipeline_options import VlmConvertOptions
+    from docling.datamodel.pipeline_options_vlm_model import (
+        InferenceFramework,
+        InlineVlmOptions,
+        ResponseFormat,
+        TransformersModelType,
+    )
+
+    resolution = resolve_vlm_convert_runtime(settings)
+    if resolution.preset is not None:
+        return VlmConvertOptions.from_preset(
+            resolution.preset,
+            engine_options=build_vlm_engine_options(resolution, settings),
+            scale=settings.docling_vlm_scale,
+        )
+
+    return InlineVlmOptions(
+        prompt=settings.docling_vlm_prompt,
+        repo_id=settings.docling_vlm_model,
+        inference_framework=InferenceFramework(
+            RUNTIME_VLLM if resolution.resolved_runtime == RUNTIME_VLLM else RUNTIME_TRANSFORMERS
+        ),
+        transformers_model_type=TransformersModelType.AUTOMODEL_IMAGETEXTTOTEXT,
+        response_format=ResponseFormat(settings.docling_vlm_response_format),
+        torch_dtype=settings.docling_vlm_torch_dtype,
+        load_in_8bit=settings.docling_vlm_load_in_8bit,
+        trust_remote_code=settings.docling_vllm_trust_remote_code,
+        scale=settings.docling_vlm_scale,
+    )
+
+
+def build_vlm_engine_options(resolution: RuntimeResolution, settings: Settings) -> Any:
+    from docling.datamodel.vlm_engine_options import (
+        AutoInlineVlmEngineOptions,
+        TransformersVlmEngineOptions,
+        VllmCudaGraphMode,
+        VllmVlmEngineOptions,
+    )
+
+    if resolution.resolved_runtime == RUNTIME_VLLM:
+        return VllmVlmEngineOptions(
+            tensor_parallel_size=settings.docling_vllm_tensor_parallel_size,
+            gpu_memory_utilization=settings.docling_vllm_gpu_memory_utilization,
+            trust_remote_code=settings.docling_vllm_trust_remote_code,
+            cudagraph_mode=VllmCudaGraphMode(settings.docling_vllm_cudagraph_mode),
+            model_impl=settings.docling_vllm_model_impl,
+        )
+    if resolution.resolved_runtime == RUNTIME_AUTO_INLINE:
+        return AutoInlineVlmEngineOptions(prefer_vllm=resolution.vllm_supported)
+    return TransformersVlmEngineOptions(
+        torch_dtype=settings.docling_vlm_torch_dtype,
+        load_in_8bit=settings.docling_vlm_load_in_8bit,
+        trust_remote_code=settings.docling_vllm_trust_remote_code,
+    )
+
+
+def _build_qwen3_picture_description_options(
+    settings: Settings,
+    resolution: RuntimeResolution,
+) -> Any:
     from docling.datamodel.pipeline_options import PictureDescriptionVlmEngineOptions
     from docling.datamodel.pipeline_options_vlm_model import (
         ResponseFormat,
         TransformersModelType,
     )
     from docling.datamodel.stage_model_specs import EngineModelConfig, VlmModelSpec
-    from docling.datamodel.vlm_engine_options import AutoInlineVlmEngineOptions
     from docling.models.inference_engines.vlm.base import VlmEngineType
 
     return PictureDescriptionVlmEngineOptions(
-        engine_options=AutoInlineVlmEngineOptions(),
+        engine_options=build_vlm_engine_options(resolution, settings),
         model_spec=VlmModelSpec(
             name="Qwen3-VL-8B-Instruct",
             default_repo_id=DOCLING_PICTURE_DESCRIPTION_MODEL,
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
-            supported_engines={VlmEngineType.TRANSFORMERS},
+            supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={
                 VlmEngineType.TRANSFORMERS: EngineModelConfig(
                     torch_dtype="bfloat16",
@@ -158,24 +231,26 @@ def _build_qwen3_picture_description_options(settings: Settings) -> Any:
     )
 
 
-def _build_custom_picture_description_options(settings: Settings) -> Any:
+def _build_custom_picture_description_options(
+    settings: Settings,
+    resolution: RuntimeResolution,
+) -> Any:
     from docling.datamodel.pipeline_options import PictureDescriptionVlmEngineOptions
     from docling.datamodel.pipeline_options_vlm_model import (
         ResponseFormat,
         TransformersModelType,
     )
     from docling.datamodel.stage_model_specs import EngineModelConfig, VlmModelSpec
-    from docling.datamodel.vlm_engine_options import AutoInlineVlmEngineOptions
     from docling.models.inference_engines.vlm.base import VlmEngineType
 
     return PictureDescriptionVlmEngineOptions(
-        engine_options=AutoInlineVlmEngineOptions(),
+        engine_options=build_vlm_engine_options(resolution, settings),
         model_spec=VlmModelSpec(
             name=settings.docling_pdf_picture_description_model.rsplit("/", maxsplit=1)[-1],
             default_repo_id=settings.docling_pdf_picture_description_model,
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
-            supported_engines={VlmEngineType.TRANSFORMERS},
+            supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={
                 VlmEngineType.TRANSFORMERS: EngineModelConfig(
                     extra_config={
@@ -188,6 +263,15 @@ def _build_custom_picture_description_options(settings: Settings) -> Any:
         ),
         prompt=settings.docling_pdf_picture_description_prompt,
     )
+
+
+def _supported_picture_description_engines(resolution: RuntimeResolution) -> set[Any]:
+    from docling.models.inference_engines.vlm.base import VlmEngineType
+
+    engines = {VlmEngineType.TRANSFORMERS}
+    if resolution.resolved_runtime == RUNTIME_VLLM or resolution.allow_unverified_vllm_model:
+        engines.add(VlmEngineType.VLLM)
+    return engines
 
 
 def _validate_granite_vision_table_model(model: str) -> None:

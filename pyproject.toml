@@ -42,6 +42,9 @@ flash-attn = [
 surya = [
   "docling-surya==0.1.0; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
 ]
+vllm = [
+  "vllm>=0.22,<1; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
+]
 
 [project.scripts]
 ingest-orquestator = "ingest_orquestator_server.cli.app:app"
@@ -52,6 +55,9 @@ packages = ["src/ingest_orquestator_server"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
+markers = [
+  "gpu: tests that require a GPU runtime or large model dependencies",
+]
 
 [tool.ruff]
 line-length = 100

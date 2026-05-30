@@ -76,6 +76,7 @@ with Transformers 5.x, while Qwen3-VL is supported in Transformers 4.57+.
 
 ```bash
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 ```
 
@@ -101,7 +102,27 @@ Expected result: a 4.57+ version lower than 5.0. If SuryaOCR previously failed
 with `SuryaDecoderConfig` missing `pad_token_id`, this version mismatch was the
 cause.
 
-## 6. Optional: Enable FlashAttention-2
+## 6. Verify vLLM
+
+The checked-in GPU profile requests vLLM for Docling stages/models that are
+documented as vLLM-capable.
+
+```bash
+python - <<'PY'
+import vllm
+
+print("vllm", vllm.__version__)
+PY
+```
+
+If vLLM should be disabled for troubleshooting, set:
+
+```text
+INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=transformers
+```
+
+## 7. Optional: Enable FlashAttention-2
 
 Skip this section unless you explicitly want Docling to load local VLMs with
 FlashAttention-2. The CUDA toolkit reported by `nvcc -V` must match
@@ -152,7 +173,7 @@ print(flash_attn.__version__)
 PY
 ```
 
-## 7. Use The A100 CUDA Profile
+## 8. Use The A100 CUDA Profile
 
 Create a local `.env` from the checked-in GPU profile:
 
@@ -169,7 +190,7 @@ INGEST_DOCLING_PDF_TABLE_BATCH_SIZE=8
 INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=128
 ```
 
-## 8. Verify GPU Packages
+## 9. Verify GPU Packages
 
 ```bash
 python - <<'PY'
@@ -179,7 +200,7 @@ print("docling_surya", docling_surya.__name__)
 PY
 ```
 
-## 9. Run The API
+## 10. Run The API
 
 ```bash
 python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
@@ -191,7 +212,7 @@ Check health:
 curl http://127.0.0.1:8000/health
 ```
 
-## 10. Run A CLI Smoke Test
+## 11. Run A CLI Smoke Test
 
 ```bash
 printf "# GPU smoke test\n\nHello from NVIDIA.\n" > /tmp/ingest-smoke.md

@@ -43,6 +43,10 @@ Use the tutorial that matches the machine:
 - [Linux NVIDIA GPU venv setup](docs/tutorials/linux-nvidia-gpu-venv.md)
 - [Docling ingestion format and pipeline guide](docs/docling-ingestion.md)
 - [Extension playbooks](docs/extension-playbooks.md)
+- [Environment configuration reference](docs/environment-config.md)
+- [CLI usage reference](docs/cli-usage.md)
+- [Docling vLLM migration playbook](docs/docling-vllm-migration.md)
+- [Docling model runtime matrix](docs/docling-model-runtime-matrix.md)
 
 CPU tutorials install the base package directly and use [env-cpu](env-cpu).
 The NVIDIA tutorial installs the default GPU requirements and uses
