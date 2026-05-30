@@ -88,11 +88,22 @@ def batch(
         json.dumps(
             {
                 "file_count": len(file_paths),
-                "completed_count": len(results),
+                "processed_count": len(results),
+                "successful_count": sum(
+                    1 for result in results if _is_successful(result.parse_output.conversion_status)
+                ),
+                "failed_count": sum(
+                    1
+                    for result in results
+                    if not _is_successful(result.parse_output.conversion_status)
+                ),
                 "results": [
                     {
                         "document_id": result.parse_output.document.document_id,
                         "source_file_name": result.parse_output.document.source_file_name,
+                        "status": "completed"
+                        if _is_successful(result.parse_output.conversion_status)
+                        else "failed",
                         "page_count": result.parse_output.document.page_count,
                         "element_count": len(result.parse_output.document.elements),
                         "chunk_count": len(result.chunks),
@@ -131,3 +142,7 @@ def _collect_file_paths(
     if not file_paths:
         raise typer.BadParameter("No supported input files were found.", param_hint="inputs")
     return file_paths
+
+
+def _is_successful(conversion_status: str | None) -> bool:
+    return conversion_status in {"success", "partial_success"}

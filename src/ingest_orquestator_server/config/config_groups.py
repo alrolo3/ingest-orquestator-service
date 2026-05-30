@@ -49,6 +49,12 @@ class DoclingVlmConfig(BaseModel):
     load_in_8bit: bool
 
 
+class DoclingXbrlConfig(BaseModel):
+    enable_local_fetch: bool
+    enable_remote_fetch: bool
+    taxonomy_path: Path | None
+
+
 class ChunkingConfig(BaseModel):
     enabled: bool
     strategy: str

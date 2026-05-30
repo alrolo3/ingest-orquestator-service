@@ -21,11 +21,13 @@ class DoclingConverterFactory:
         input_format: str | None = None,
     ) -> Any:
         try:
+            from docling.datamodel.backend_options import XBRLBackendOptions
             from docling.datamodel.base_models import InputFormat
             from docling.document_converter import (
                 DocumentConverter,
                 ImageFormatOption,
                 PdfFormatOption,
+                XBRLFormatOption,
             )
             from docling.pipeline.vlm_pipeline import VlmPipeline
         except ImportError as exc:
@@ -54,14 +56,25 @@ class DoclingConverterFactory:
                     pipeline_options=vlm_pipeline_options,
                 )
         else:
-            standard_pipeline_options = build_pdf_pipeline_options(settings)
+            standard_pipeline_options = None
             if input_format in {None, "pdf"}:
+                standard_pipeline_options = build_pdf_pipeline_options(settings)
                 format_options[InputFormat.PDF] = PdfFormatOption(
                     pipeline_options=standard_pipeline_options,
                 )
             if input_format in {None, "image"}:
+                if standard_pipeline_options is None:
+                    standard_pipeline_options = build_pdf_pipeline_options(settings)
                 format_options[InputFormat.IMAGE] = ImageFormatOption(
                     pipeline_options=standard_pipeline_options,
+                )
+            if input_format in {None, "xml_xbrl"}:
+                format_options[InputFormat.XML_XBRL] = XBRLFormatOption(
+                    backend_options=XBRLBackendOptions(
+                        enable_local_fetch=settings.docling_xbrl_enable_local_fetch,
+                        enable_remote_fetch=settings.docling_xbrl_enable_remote_fetch,
+                        taxonomy=settings.docling_xbrl_taxonomy_path,
+                    )
                 )
 
         return DocumentConverter(

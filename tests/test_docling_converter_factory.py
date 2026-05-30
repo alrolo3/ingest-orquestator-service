@@ -58,3 +58,19 @@ def test_converter_factory_uses_standard_options_for_image() -> None:
     assert image_options.pipeline_cls == StandardPdfPipeline
     assert image_options.pipeline_options.allow_external_plugins is True
     assert image_options.pipeline_options.ocr_options.kind == "auto"
+
+
+def test_converter_factory_uses_configured_xbrl_backend_options() -> None:
+    converter = DoclingConverterFactory().create(
+        Settings(
+            docling_allowed_formats=["xml_xbrl"],
+            docling_xbrl_enable_local_fetch=True,
+            docling_xbrl_enable_remote_fetch=False,
+        ),
+        input_format="xml_xbrl",
+        pipeline="standard",
+    )
+
+    xbrl_options = converter.format_to_options[InputFormat.XML_XBRL]
+    assert xbrl_options.backend_options.enable_local_fetch is True
+    assert xbrl_options.backend_options.enable_remote_fetch is False

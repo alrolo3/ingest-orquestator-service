@@ -18,7 +18,17 @@ Audio is not enabled by default because it can require additional ASR runtime
 dependencies.
 
 XBRL is enabled by default and the project installs `docling[xbrl]`, which pulls
-Docling's required `arelle-release` dependency.
+Docling's required `arelle-release` dependency. Docling's XBRL backend also
+requires taxonomy fetching to be explicitly enabled:
+
+```text
+INGEST_DOCLING_XBRL_ENABLE_LOCAL_FETCH=true
+INGEST_DOCLING_XBRL_ENABLE_REMOTE_FETCH=false
+# INGEST_DOCLING_XBRL_TAXONOMY_PATH=/path/to/xbrl-taxonomy
+```
+
+Keep remote fetch disabled unless you intentionally want XBRL reports to resolve
+taxonomy resources from the network.
 
 ## Pipeline Matrix
 
@@ -48,9 +58,10 @@ documents to force VLM mode is deferred to a later milestone.
 
 The manifest records a compact `docling_options` object with common settings,
 the active format/pipeline options, and configured PDF, VLM, chunking, and
-confidence settings. PDF-only options remain in the PDF section because Docling
-exposes them through `PdfFormatOption` and `PdfPipelineOptions`; other formats
-use Docling defaults unless their format option is explicitly configured.
+confidence settings. PDF/image options remain in the PDF section because Docling
+uses `PdfPipelineOptions` for both standard PDF and image conversion. XBRL
+backend options are exposed separately because Docling requires explicit
+taxonomy-fetch controls.
 
 ## VLM Mode
 

@@ -119,6 +119,7 @@ def docling_options_metadata(
         "configured_options": {
             "pdf": _pdf_options(settings),
             "vlm": _vlm_options(settings),
+            "xbrl": _xbrl_options(settings),
             "chunking": {
                 "enabled": settings.chunking_enabled,
                 "strategy": settings.chunking_strategy,
@@ -179,6 +180,20 @@ def _active_options(
             "format_option": "PdfFormatOption",
             "pipeline_options": _pdf_options(settings),
         }
+    if input_format == "image":
+        return {
+            "format": "image",
+            "pipeline": "standard",
+            "format_option": "ImageFormatOption",
+            "pipeline_options": _pdf_options(settings),
+        }
+    if input_format == "xml_xbrl":
+        return {
+            "format": "xml_xbrl",
+            "pipeline": "standard",
+            "format_option": "XBRLFormatOption",
+            "backend_options": _xbrl_options(settings),
+        }
     return {
         "format": input_format,
         "pipeline": pipeline,
@@ -221,4 +236,14 @@ def _vlm_options(settings: Settings) -> dict[str, Any]:
         "scale": settings.docling_vlm_scale,
         "torch_dtype": settings.docling_vlm_torch_dtype,
         "load_in_8bit": settings.docling_vlm_load_in_8bit,
+    }
+
+
+def _xbrl_options(settings: Settings) -> dict[str, Any]:
+    return {
+        "enable_local_fetch": settings.docling_xbrl_enable_local_fetch,
+        "enable_remote_fetch": settings.docling_xbrl_enable_remote_fetch,
+        "taxonomy_path": str(settings.docling_xbrl_taxonomy_path)
+        if settings.docling_xbrl_taxonomy_path is not None
+        else None,
     }

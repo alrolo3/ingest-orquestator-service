@@ -124,6 +124,7 @@ The profile chooses:
 - `INGEST_PROFILE=rag_ready`
 - Docling HybridChunker enabled with `INGEST_CHUNK_MAX_TOKENS=1024`
 - confidence output enabled
+- local XBRL taxonomy fetch enabled, remote XBRL fetch disabled
 - SuryaOCR on GPU
 - standard pipeline layout model `docling-layout-heron-101`
 - TableFormer accurate mode with cell matching

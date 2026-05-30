@@ -11,6 +11,7 @@ from ingest_orquestator_server.config.config_groups import (
     DoclingCommonConfig,
     DoclingOcrConfig,
     DoclingVlmConfig,
+    DoclingXbrlConfig,
     ServiceConfig,
     StorageConfig,
     UploadConfig,
@@ -142,6 +143,9 @@ class Settings(BaseSettings):
     docling_vlm_scale: float = Field(default=2.0, gt=0)
     docling_vlm_torch_dtype: str | None = "bfloat16"
     docling_vlm_load_in_8bit: bool = False
+    docling_xbrl_enable_local_fetch: bool = False
+    docling_xbrl_enable_remote_fetch: bool = False
+    docling_xbrl_taxonomy_path: Path | None = None
     embedding_output_enabled: bool = True
 
     model_config = SettingsConfigDict(
@@ -380,6 +384,14 @@ class Settings(BaseSettings):
             scale=self.docling_vlm_scale,
             torch_dtype=self.docling_vlm_torch_dtype,
             load_in_8bit=self.docling_vlm_load_in_8bit,
+        )
+
+    @property
+    def docling_xbrl_config(self) -> DoclingXbrlConfig:
+        return DoclingXbrlConfig(
+            enable_local_fetch=self.docling_xbrl_enable_local_fetch,
+            enable_remote_fetch=self.docling_xbrl_enable_remote_fetch,
+            taxonomy_path=self.docling_xbrl_taxonomy_path,
         )
 
     @property

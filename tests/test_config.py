@@ -30,6 +30,7 @@ def test_env_example_loads() -> None:
     assert settings.chunking_enabled is True
     assert settings.chunking_strategy == "hybrid"
     assert settings.confidence_output_enabled is True
+    assert settings.docling_xbrl_enable_local_fetch is False
 
 
 def test_cuda_gpu_env_loads() -> None:
@@ -44,6 +45,8 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_pdf_table_batch_size == 32
     assert settings.docling_pdf_queue_max_size == 512
     assert settings.chunk_max_tokens == 1024
+    assert settings.docling_xbrl_enable_local_fetch is True
+    assert settings.docling_xbrl_enable_remote_fetch is False
 
 
 def test_cpu_env_loads() -> None:
@@ -104,6 +107,7 @@ def test_settings_grouped_config_views() -> None:
     assert settings.docling_common_config.pipeline == "vlm"
     assert settings.docling_common_config.profile == "rag_ready"
     assert settings.docling_vlm_config.runtime == "transformers"
+    assert settings.docling_xbrl_config.enable_local_fetch is False
     assert settings.chunking_config.embedding_output_enabled is True
     assert settings.confidence_config.output_enabled is True
 
