@@ -50,6 +50,32 @@ def test_converter_factory_uses_vllm_vlm_preset_for_pdf() -> None:
     assert vlm_options.engine_options.engine_type.value == "vllm"
 
 
+def test_converter_factory_passes_vllm_tuning_to_custom_inline_model() -> None:
+    converter = DoclingConverterFactory().create(
+        Settings(
+            docling_allowed_formats=["pdf"],
+            docling_pdf_ocr_engine="auto",
+            docling_vlm_model="Qwen/Qwen3-VL-8B-Instruct",
+            docling_vlm_runtime="vllm",
+            docling_vllm_allow_unverified_models=True,
+            docling_vllm_gpu_memory_utilization=0.87,
+            docling_vllm_cudagraph_mode="NONE",
+            docling_vllm_max_model_len=32768,
+            docling_vllm_max_num_batched_tokens=4096,
+        ),
+        input_format="pdf",
+        pipeline="vlm",
+    )
+
+    vlm_options = converter.format_to_options[InputFormat.PDF].pipeline_options.vlm_options
+    assert vlm_options.repo_id == "Qwen/Qwen3-VL-8B-Instruct"
+    assert vlm_options.inference_framework.value == "vllm"
+    assert vlm_options.extra_generation_config["gpu_memory_utilization"] == 0.87
+    assert vlm_options.extra_generation_config["enforce_eager"] is True
+    assert vlm_options.extra_generation_config["max_model_len"] == 32768
+    assert vlm_options.extra_generation_config["max_num_batched_tokens"] == 4096
+
+
 def test_converter_factory_uses_vlm_pipeline_for_image() -> None:
     converter = DoclingConverterFactory().create(
         Settings(docling_allowed_formats=["image"], docling_pdf_ocr_engine="auto"),

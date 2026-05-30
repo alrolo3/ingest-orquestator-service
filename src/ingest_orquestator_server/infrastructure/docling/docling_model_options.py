@@ -168,6 +168,8 @@ def build_vlm_convert_options(settings: Settings) -> Any:
         load_in_8bit=settings.docling_vlm_load_in_8bit,
         trust_remote_code=settings.docling_vllm_trust_remote_code,
         scale=settings.docling_vlm_scale,
+        max_new_tokens=settings.docling_vlm_max_new_tokens,
+        extra_generation_config=_inline_vllm_extra_generation_config(settings, resolution),
     )
 
 
@@ -194,6 +196,31 @@ def build_vlm_engine_options(resolution: RuntimeResolution, settings: Settings) 
         load_in_8bit=settings.docling_vlm_load_in_8bit,
         trust_remote_code=settings.docling_vllm_trust_remote_code,
     )
+
+
+def _inline_vllm_extra_generation_config(
+    settings: Settings,
+    resolution: RuntimeResolution,
+) -> dict[str, Any]:
+    if resolution.resolved_runtime != RUNTIME_VLLM:
+        return {}
+
+    extra_config: dict[str, Any] = {
+        "gpu_memory_utilization": settings.docling_vllm_gpu_memory_utilization,
+        "tensor_parallel_size": settings.docling_vllm_tensor_parallel_size,
+    }
+    if settings.docling_vlm_torch_dtype:
+        extra_config["dtype"] = settings.docling_vlm_torch_dtype
+    if settings.docling_vllm_max_model_len is not None:
+        extra_config["max_model_len"] = settings.docling_vllm_max_model_len
+    if settings.docling_vllm_max_num_batched_tokens is not None:
+        extra_config["max_num_batched_tokens"] = settings.docling_vllm_max_num_batched_tokens
+    if settings.docling_vllm_enforce_eager is not None:
+        extra_config["enforce_eager"] = settings.docling_vllm_enforce_eager
+    elif settings.docling_vllm_cudagraph_mode == "NONE":
+        extra_config["enforce_eager"] = True
+
+    return extra_config
 
 
 def _build_qwen3_picture_description_options(

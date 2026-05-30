@@ -116,10 +116,18 @@ To experiment with a custom repo id through Docling's vLLM inline path:
 INGEST_DOCLING_VLLM_ALLOW_UNVERIFIED_MODELS=true
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RUNTIME=vllm
+INGEST_DOCLING_VLLM_GPU_MEMORY_UTILIZATION=0.9
+INGEST_DOCLING_VLLM_CUDAGRAPH_MODE=NONE
+INGEST_DOCLING_VLLM_MAX_MODEL_LEN=32768
+INGEST_DOCLING_VLLM_MAX_NUM_BATCHED_TOKENS=4096
 ```
 
 This should be treated as experimental until a GPU smoke test confirms model
 load, output quality, and memory behavior.
+
+For custom inline models, Docling uses a legacy inline vLLM path. This service
+passes vLLM memory and batching controls through that path using Docling's
+`extra_generation_config` allowlist.
 
 ## Smoke Tests
 

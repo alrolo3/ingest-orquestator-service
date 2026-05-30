@@ -144,11 +144,15 @@ class Settings(BaseSettings):
     docling_vlm_scale: float = Field(default=2.0, gt=0)
     docling_vlm_torch_dtype: str | None = "bfloat16"
     docling_vlm_load_in_8bit: bool = False
+    docling_vlm_max_new_tokens: int = Field(default=4096, ge=1)
     docling_vllm_tensor_parallel_size: int = Field(default=1, ge=1)
     docling_vllm_gpu_memory_utilization: float = Field(default=0.9, gt=0, le=1)
     docling_vllm_trust_remote_code: bool = False
     docling_vllm_cudagraph_mode: str = "PIECEWISE"
     docling_vllm_model_impl: str = "auto"
+    docling_vllm_enforce_eager: bool | None = None
+    docling_vllm_max_model_len: int | None = Field(default=None, ge=1)
+    docling_vllm_max_num_batched_tokens: int | None = Field(default=None, ge=1)
     docling_vllm_fallback_runtime: str = "transformers"
     docling_vllm_fallback_on_unsupported: bool = True
     docling_vllm_allow_unverified_models: bool = False
@@ -425,11 +429,15 @@ class Settings(BaseSettings):
             scale=self.docling_vlm_scale,
             torch_dtype=self.docling_vlm_torch_dtype,
             load_in_8bit=self.docling_vlm_load_in_8bit,
+            max_new_tokens=self.docling_vlm_max_new_tokens,
             vllm_tensor_parallel_size=self.docling_vllm_tensor_parallel_size,
             vllm_gpu_memory_utilization=self.docling_vllm_gpu_memory_utilization,
             vllm_trust_remote_code=self.docling_vllm_trust_remote_code,
             vllm_cudagraph_mode=self.docling_vllm_cudagraph_mode,
             vllm_model_impl=self.docling_vllm_model_impl,
+            vllm_enforce_eager=self.docling_vllm_enforce_eager,
+            vllm_max_model_len=self.docling_vllm_max_model_len,
+            vllm_max_num_batched_tokens=self.docling_vllm_max_num_batched_tokens,
             vllm_fallback_runtime=self.docling_vllm_fallback_runtime,
             vllm_fallback_on_unsupported=self.docling_vllm_fallback_on_unsupported,
             vllm_allow_unverified_models=self.docling_vllm_allow_unverified_models,
