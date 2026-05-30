@@ -1,0 +1,26 @@
+services:
+  ingest-orquestator-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    environment:
+      INGEST_DOCLING_ACCELERATOR_DEVICE: cuda
+      INGEST_DOCLING_NUM_THREADS: 8
+      INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2: "false"
+      INGEST_DOCLING_PDF_DO_OCR: "true"
+      INGEST_DOCLING_PDF_DO_TABLE_STRUCTURE: "true"
+      INGEST_DOCLING_PDF_OCR_BATCH_SIZE: 8
+      INGEST_DOCLING_PDF_LAYOUT_BATCH_SIZE: 8
+      INGEST_DOCLING_PDF_TABLE_BATCH_SIZE: 8
+      INGEST_DOCLING_PDF_QUEUE_MAX_SIZE: 100
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+

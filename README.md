@@ -80,7 +80,17 @@ Useful defaults:
 INGEST_SERVICE_NAME=ingest-orquestator-server
 INGEST_STORAGE_DIR=.data
 INGEST_MAX_UPLOAD_SIZE_MB=100
+INGEST_DOCLING_ACCELERATOR_DEVICE=auto
+INGEST_DOCLING_NUM_THREADS=4
 ```
+
+For NVIDIA GPUs, run with a CUDA-enabled PyTorch environment and set:
+
+```bash
+INGEST_DOCLING_ACCELERATOR_DEVICE=cuda
+```
+
+See [docs/gpu.md](docs/gpu.md) for Docker Compose GPU usage and batch-size tuning.
 
 ## Docker
 
@@ -94,10 +104,15 @@ The API will listen on:
 http://127.0.0.1:8000
 ```
 
+For NVIDIA GPU hosts:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+```
+
 ## Next Milestones
 
 1. Add asynchronous job state with SQLite or PostgreSQL.
 2. Add chunking from normalized elements.
 3. Add embeddings and a vector database adapter.
 4. Add a second parser backend for advanced PDFs.
-
