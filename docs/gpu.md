@@ -38,17 +38,17 @@ Requirements:
 - NVIDIA Container Toolkit configured for Docker.
 - A driver new enough for the CUDA runtime in the selected PyTorch image.
 
-The GPU image defaults to:
+The GPU image defaults to CUDA 13.2:
 
 ```text
-pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
+pytorch/pytorch:2.12.0-cuda13.2-cudnn9-runtime
 ```
 
 Override it at build time if your host requires another CUDA/PyTorch combination:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml build \
-  --build-arg PYTORCH_CUDA_IMAGE=pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
+  --build-arg PYTORCH_CUDA_IMAGE=pytorch/pytorch:2.12.0-cuda13.2-cudnn9-runtime
 ```
 
 ## Configuration Reference
@@ -68,4 +68,3 @@ INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=100
 Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let Docling choose.
 
 `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true` should only be enabled when the image has a compatible `flash-attn` installation and the GPU architecture supports it.
-

@@ -1,4 +1,4 @@
-ARG PYTORCH_CUDA_IMAGE=pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
+ARG PYTORCH_CUDA_IMAGE=pytorch/pytorch:2.12.0-cuda13.2-cudnn9-runtime
 FROM ${PYTORCH_CUDA_IMAGE}
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -14,4 +14,3 @@ RUN pip install --no-cache-dir .
 EXPOSE 8000
 
 CMD ["uvicorn", "ingest_orquestator_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
