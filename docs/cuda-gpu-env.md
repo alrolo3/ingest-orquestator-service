@@ -39,6 +39,8 @@ python -m pip install --no-deps -e .
 
 The default GPU install path includes SuryaOCR. FlashAttention-2 is optional and
 is not installed by default because it often requires a long source build.
+SuryaOCR requires `transformers>=4.57,<5`; this keeps Qwen3-VL support while
+avoiding a SuryaOCR runtime failure with Transformers 5.x.
 
 To enable FlashAttention-2, install it explicitly after confirming that `nvcc`
 matches `torch.version.cuda`:

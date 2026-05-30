@@ -71,11 +71,35 @@ Install the default deployment requirements. On supported Linux hosts this
 includes SuryaOCR. FlashAttention-2 is optional and is not installed by default
 because it often builds from source and requires the CUDA toolkit compiler to
 match the installed PyTorch CUDA runtime.
+The requirements pin `transformers>=4.57,<5` because SuryaOCR is not compatible
+with Transformers 5.x, while Qwen3-VL is supported in Transformers 4.57+.
 
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 ```
+
+If you previously installed Transformers 5.x in this venv, force the compatible
+range before retrying SuryaOCR:
+
+```bash
+python -m pip install --upgrade --force-reinstall "transformers>=4.57,<5"
+python -m pip install -r requirements.txt
+```
+
+Verify the active version:
+
+```bash
+python - <<'PY'
+import transformers
+
+print(transformers.__version__)
+PY
+```
+
+Expected result: a 4.57+ version lower than 5.0. If SuryaOCR previously failed
+with `SuryaDecoderConfig` missing `pad_token_id`, this version mismatch was the
+cause.
 
 ## 6. Optional: Enable FlashAttention-2
 

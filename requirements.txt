@@ -1,5 +1,7 @@
 docling>=2.30,<3
 fastapi>=0.115,<1
+# SuryaOCR currently fails with transformers 5.x; Qwen3-VL is available in 4.57+.
+transformers>=4.57,<5
 docling-surya==0.1.0; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"
 pydantic>=2.10,<3
 pydantic-settings>=2.8,<3

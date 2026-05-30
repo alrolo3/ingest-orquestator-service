@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from ingest_orquestator_server.config.docling_defaults import (
@@ -60,9 +62,12 @@ def build_ocr_options(settings: Settings) -> Any:
             "Docling OCR engine "
             f"{settings.docling_pdf_ocr_engine!r} is not available. "
             "For the default SuryaOCR engine, install `docling-surya==0.1.0`, "
-            "use Python 3.12+ on Linux x86_64, and keep "
-            "`INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true`."
+            "use Python 3.12+ on Linux x86_64, keep "
+            "`INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true`, and pin "
+            "`transformers>=4.57,<5`."
         ) from exc
+
+    _validate_surya_transformers_compatibility(settings)
 
     if settings.docling_pdf_ocr_languages:
         ocr_options.lang = settings.docling_pdf_ocr_languages
@@ -191,3 +196,35 @@ def _validate_granite_vision_table_model(model: str) -> None:
             "through the hard-coded granite-vision-4.1-4b model. Supported values: "
             f"{', '.join(sorted(valid_values))}."
         )
+
+
+def _validate_surya_transformers_compatibility(settings: Settings) -> None:
+    if settings.docling_pdf_ocr_engine != "suryaocr":
+        return
+
+    transformers_version = _get_installed_distribution_version("transformers")
+    if transformers_version is None:
+        return
+
+    major_version = _parse_major_version(transformers_version)
+    if major_version is not None and major_version >= 5:
+        raise RuntimeError(
+            "SuryaOCR is not compatible with the installed Transformers version "
+            f"{transformers_version}. Install the project pin with "
+            '`python -m pip install --upgrade --force-reinstall "transformers>=4.57,<5"` '
+            "and then rerun `python -m pip install -r requirements.txt`."
+        )
+
+
+def _get_installed_distribution_version(distribution_name: str) -> str | None:
+    try:
+        return version(distribution_name)
+    except PackageNotFoundError:
+        return None
+
+
+def _parse_major_version(version_string: str) -> int | None:
+    match = re.match(r"^(\d+)", version_string)
+    if match is None:
+        return None
+    return int(match.group(1))

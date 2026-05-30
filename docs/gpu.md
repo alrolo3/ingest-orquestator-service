@@ -28,6 +28,18 @@ Docling as an external plugin. If the plugin is not available, set
 FlashAttention-2 is optional; see the NVIDIA GPU venv tutorial before enabling
 it.
 
+SuryaOCR currently requires `transformers>=4.57,<5`. If an existing venv has
+Transformers 5.x, reinstall the pinned dependency set:
+
+```bash
+python -m pip install --upgrade --force-reinstall "transformers>=4.57,<5"
+python -m pip install -r requirements.txt
+python -m pip install --no-deps -e .
+```
+
+This is the fix for SuryaOCR failures like
+`AttributeError: 'SuryaDecoderConfig' object has no attribute 'pad_token_id'`.
+
 For an A100 80GB CUDA 13 profile, use the checked-in
 [`env-cuda-gpu`](../env-cuda-gpu) file and see
 [`docs/cuda-gpu-env.md`](cuda-gpu-env.md).

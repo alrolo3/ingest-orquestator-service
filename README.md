@@ -26,7 +26,9 @@ It does not include chunking, embeddings, vector storage, or RAG query APIs yet.
 Docling can download or initialize parsing models on first use, so the first parse may take longer than later runs.
 The default OCR engine is SuryaOCR, which Docling loads through the external
 `docling-surya` plugin. That plugin requires Python 3.12+ on Linux and is
-GPL-3.0-only. For local development on another platform, set
+GPL-3.0-only. It also requires `transformers>=4.57,<5`: the lower bound keeps
+Qwen3-VL support, and the upper bound avoids a SuryaOCR incompatibility in
+Transformers 5.x. For local development on another platform, set
 `INGEST_DOCLING_PDF_OCR_ENGINE=auto`.
 
 ## Local Setup Tutorials
