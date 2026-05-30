@@ -20,7 +20,7 @@ Multipart form fields:
 
 Query parameters:
 
-- `parser`: currently only `docling`.
+- `parser`: parser backend to use. The default is `docling`.
 - `include_document`: defaults to `true`; when `false`, the response returns file paths only.
 
 Example:
@@ -38,4 +38,43 @@ Successful responses include:
 - `document_id`
 - output file paths
 - optionally the normalized parsed document
+- optionally generated chunks
 
+## Get Job
+
+```http
+GET /v1/ingest/jobs/{job_id}
+```
+
+Returns persisted job metadata, including status, parser, input path, output paths, timestamps, and error details.
+
+## List Outputs
+
+```http
+GET /v1/ingest/jobs/{job_id}/outputs
+```
+
+Returns output artifact paths for a completed job.
+
+## Download Output
+
+```http
+GET /v1/ingest/jobs/{job_id}/outputs/{output_type}
+```
+
+Supported `output_type` values:
+
+- `manifest`
+- `normalized`
+- `markdown`
+- `text`
+- `raw`
+- `html`
+- `chunks`
+
+Examples:
+
+```bash
+curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/chunks"
+curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/normalized"
+```

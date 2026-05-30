@@ -6,8 +6,11 @@ services:
       INGEST_SERVICE_NAME: ingest-orquestator-server
       INGEST_STORAGE_DIR: /app/.data
       INGEST_MAX_UPLOAD_SIZE_MB: 100
+      INGEST_ALLOWED_UPLOAD_EXTENSIONS: .pdf,.md,.markdown,.txt,.html,.htm,.docx,.pptx
+      INGEST_CHUNK_SIZE_CHARS: 1200
+      INGEST_CHUNK_OVERLAP_CHARS: 150
+      INGEST_RETENTION_DAYS: 30
     ports:
       - "8000:8000"
     volumes:
       - ./.data:/app/.data
-

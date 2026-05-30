@@ -14,4 +14,5 @@ class OutputFiles(BaseModel):
     markdown: Path
     text: Path
     html: Path | None = None
+    chunks_json: Path | None = None
     manifest_json: Path

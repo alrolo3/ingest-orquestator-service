@@ -58,10 +58,24 @@ curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false" \
 
 The response includes the parser status and the output file paths.
 
+Check a persisted ingestion job:
+
+```bash
+curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}"
+```
+
+Download outputs:
+
+```bash
+curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/chunks"
+curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/normalized"
+curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/markdown"
+```
+
 ## CLI Usage
 
 ```bash
-ingest-orquestator parse /path/to/document.pdf --output-dir .data/outputs
+ingest-orquestator parse /path/to/document.pdf --parser docling --output-dir .data/outputs
 ```
 
 Each parse creates a document-specific output directory containing:
@@ -71,7 +85,15 @@ Each parse creates a document-specific output directory containing:
 - `document.md`
 - `document.txt`
 - `document.html`, when Docling can export HTML
+- `chunks.json`
 - `manifest.json`
+
+Clean old local artifacts:
+
+```bash
+ingest-orquestator cleanup --older-than-days 30 --dry-run
+ingest-orquestator cleanup --older-than-days 30 --delete
+```
 
 ## Development Setup
 
@@ -105,6 +127,10 @@ Useful defaults:
 INGEST_SERVICE_NAME=ingest-orquestator-server
 INGEST_STORAGE_DIR=.data
 INGEST_MAX_UPLOAD_SIZE_MB=100
+INGEST_ALLOWED_UPLOAD_EXTENSIONS=.pdf,.md,.markdown,.txt,.html,.htm,.docx,.pptx
+INGEST_CHUNK_SIZE_CHARS=1200
+INGEST_CHUNK_OVERLAP_CHARS=150
+INGEST_RETENTION_DAYS=30
 INGEST_DOCLING_ACCELERATOR_DEVICE=auto
 INGEST_DOCLING_NUM_THREADS=4
 ```
@@ -137,7 +163,6 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 
 ## Next Milestones
 
-1. Add asynchronous job state with SQLite or PostgreSQL.
-2. Add chunking from normalized elements.
-3. Add embeddings and a vector database adapter.
-4. Add a second parser backend for advanced PDFs.
+1. Add asynchronous worker execution for long-running PDFs.
+2. Add embeddings and a vector database adapter.
+3. Add a second parser backend for advanced PDFs.

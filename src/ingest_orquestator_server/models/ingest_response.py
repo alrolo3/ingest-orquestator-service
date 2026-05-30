@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from ingest_orquestator_server.models.document_chunk import DocumentChunk
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parsed_document import ParsedDocument
@@ -19,4 +20,5 @@ class IngestResponse(BaseModel):
     input_path: Path
     outputs: OutputFiles
     document: ParsedDocument | None = None
+    chunks: list[DocumentChunk] | None = None
     error: str | None = None

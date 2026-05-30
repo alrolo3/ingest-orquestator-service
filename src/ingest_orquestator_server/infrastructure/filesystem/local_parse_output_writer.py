@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from ingest_orquestator_server.infrastructure.filesystem.json_file_writer import JsonFileWriter
+from ingest_orquestator_server.models.document_chunk import DocumentChunk
 from ingest_orquestator_server.models.output_files import OutputFiles
+from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
 from ingest_orquestator_server.models.parse_output import ParseOutput
 
 
@@ -11,7 +13,14 @@ class LocalParseOutputWriter:
     def __init__(self, json_writer: JsonFileWriter | None = None) -> None:
         self._json_writer = json_writer or JsonFileWriter()
 
-    def write(self, parse_output: ParseOutput, output_root: Path) -> OutputFiles:
+    def write(
+        self,
+        parse_output: ParseOutput,
+        output_root: Path,
+        *,
+        chunks: list[DocumentChunk] | None = None,
+        diagnostics: ParseDiagnostics | None = None,
+    ) -> OutputFiles:
         document_id = parse_output.document.document_id
         output_dir = output_root / document_id
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -21,6 +30,7 @@ class LocalParseOutputWriter:
         markdown_path = output_dir / "document.md"
         text_path = output_dir / "document.txt"
         html_path = output_dir / "document.html" if parse_output.raw_html is not None else None
+        chunks_json = output_dir / "chunks.json" if chunks is not None else None
         manifest_json = output_dir / "manifest.json"
 
         self._json_writer.write(raw_docling_json, parse_output.raw_docling)
@@ -31,6 +41,14 @@ class LocalParseOutputWriter:
         text_path.write_text(parse_output.raw_text, encoding="utf-8")
         if html_path is not None:
             html_path.write_text(parse_output.raw_html or "", encoding="utf-8")
+        if chunks_json is not None:
+            self._json_writer.write(
+                chunks_json,
+                {
+                    "document_id": document_id,
+                    "chunks": [chunk.model_dump(mode="json") for chunk in chunks or []],
+                },
+            )
 
         files = OutputFiles(
             output_dir=output_dir,
@@ -39,6 +57,7 @@ class LocalParseOutputWriter:
             markdown=markdown_path,
             text=text_path,
             html=html_path,
+            chunks_json=chunks_json,
             manifest_json=manifest_json,
         )
         self._json_writer.write(
@@ -48,6 +67,7 @@ class LocalParseOutputWriter:
                 "source_file_name": parse_output.document.source_file_name,
                 "source_path": parse_output.document.source_path,
                 "outputs": files.model_dump(mode="json"),
+                "diagnostics": diagnostics.model_dump(mode="json") if diagnostics else None,
             },
         )
 

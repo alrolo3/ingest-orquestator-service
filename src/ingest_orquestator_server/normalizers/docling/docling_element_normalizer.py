@@ -74,17 +74,7 @@ class DoclingElementNormalizer:
             else None,
             bbox=provenance.get("bbox") if isinstance(provenance.get("bbox"), dict) else None,
             confidence=to_float(item.get("confidence") or provenance.get("confidence")),
-            metadata=metadata_without(
-                item,
-                {
-                    "text",
-                    "orig",
-                    "prov",
-                    "data",
-                    "image",
-                    "annotations",
-                },
-            )
+            metadata=self._element_metadata(item, collection_name)
             | {
                 "collection": collection_name,
                 "label": label,
@@ -97,6 +87,8 @@ class DoclingElementNormalizer:
     def _map_element_type(collection_name: str, label: str, fallback_type: str) -> str:
         normalized_label = label.lower().replace("-", "_")
         if collection_name == "texts":
+            if normalized_label in {"page_header", "page_footer", "page_number"}:
+                return normalized_label
             if "title" in normalized_label:
                 return "title"
             if "header" in normalized_label:
@@ -122,3 +114,16 @@ class DoclingElementNormalizer:
         if isinstance(provenance, list) and provenance and isinstance(provenance[0], dict):
             return provenance[0]
         return {}
+
+    @staticmethod
+    def _element_metadata(item: dict[str, Any], collection_name: str) -> dict[str, Any]:
+        excluded = {
+            "text",
+            "orig",
+            "prov",
+            "image",
+            "annotations",
+        }
+        if collection_name != "tables":
+            excluded.add("data")
+        return metadata_without(item, excluded)

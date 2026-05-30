@@ -1,6 +1,42 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
+from ingest_orquestator_server.api.dependencies import (
+    get_file_ingestion_service,
+    get_job_query_service,
+    get_output_retrieval_service,
+)
+from ingest_orquestator_server.application.parser_registry import ParserRegistry
+from ingest_orquestator_server.application.services.document_chunking_service import (
+    DocumentChunkingService,
+)
+from ingest_orquestator_server.application.services.document_parse_service import (
+    DocumentParseService,
+)
+from ingest_orquestator_server.application.services.file_ingestion_service import (
+    FileIngestionService,
+)
+from ingest_orquestator_server.application.services.job_query_service import JobQueryService
+from ingest_orquestator_server.application.services.output_retrieval_service import (
+    OutputRetrievalService,
+)
+from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
+from ingest_orquestator_server.config.settings import Settings
+from ingest_orquestator_server.infrastructure.docling.docling_document_parser import (
+    DoclingDocumentParser,
+)
+from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writer import (
+    LocalParseOutputWriter,
+)
+from ingest_orquestator_server.infrastructure.filesystem.local_upload_storage import (
+    LocalUploadStorage,
+)
+from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_repository import (
+    SqliteIngestionJobRepository,
+)
 from ingest_orquestator_server.main import app
+from tests.fakes.fake_docling_converter import FakeDoclingConverter
 
 
 def test_health() -> None:
@@ -10,3 +46,57 @@ def test_health() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"service": "ingest-orquestator-server", "status": "ok"}
+
+
+def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=DocumentChunkingService(settings),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+    app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+    app.dependency_overrides[get_output_retrieval_service] = lambda: OutputRetrievalService(
+        repository
+    )
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/file?include_document=false",
+            files={"file": ("example.md", b"# Example", "text/markdown")},
+        )
+        assert response.status_code == 200
+        job_id = response.json()["job_id"]
+
+        job_response = client.get(f"/v1/ingest/jobs/{job_id}")
+        assert job_response.status_code == 200
+        assert job_response.json()["status"] == "completed"
+
+        outputs_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs")
+        assert outputs_response.status_code == 200
+        assert outputs_response.json()["chunks_json"].endswith("chunks.json")
+
+        chunks_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs/chunks")
+        assert chunks_response.status_code == 200
+        assert chunks_response.json()["document_id"] == job_id
+    finally:
+        app.dependency_overrides.clear()

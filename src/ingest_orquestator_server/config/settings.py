@@ -10,6 +10,21 @@ class Settings(BaseSettings):
     service_name: str = "ingest-orquestator-server"
     storage_dir: Path = Path(".data")
     max_upload_size_mb: int = Field(default=100, ge=1)
+    allowed_upload_extensions: list[str] = Field(
+        default_factory=lambda: [
+            ".pdf",
+            ".md",
+            ".markdown",
+            ".txt",
+            ".html",
+            ".htm",
+            ".docx",
+            ".pptx",
+        ]
+    )
+    chunk_size_chars: int = Field(default=1200, ge=100)
+    chunk_overlap_chars: int = Field(default=150, ge=0)
+    retention_days: int = Field(default=30, ge=1)
     docling_accelerator_device: str = Field(
         default="auto",
         description="Docling accelerator device: auto, cpu, cuda, cuda:N, mps, or xpu.",
@@ -35,6 +50,24 @@ class Settings(BaseSettings):
             return normalized
         raise ValueError("must be one of auto, cpu, cuda, cuda:N, mps, or xpu")
 
+    @field_validator("allowed_upload_extensions", mode="before")
+    @classmethod
+    def parse_allowed_upload_extensions(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("allowed_upload_extensions")
+    @classmethod
+    def normalize_allowed_upload_extensions(cls, value: list[str]) -> list[str]:
+        normalized = []
+        for extension in value:
+            cleaned = extension.strip().lower()
+            if not cleaned:
+                continue
+            normalized.append(cleaned if cleaned.startswith(".") else f".{cleaned}")
+        return sorted(set(normalized))
+
     @property
     def uploads_dir(self) -> Path:
         return self.storage_dir / "uploads"
@@ -42,6 +75,14 @@ class Settings(BaseSettings):
     @property
     def outputs_dir(self) -> Path:
         return self.storage_dir / "outputs"
+
+    @property
+    def jobs_db_path(self) -> Path:
+        return self.storage_dir / "jobs.sqlite3"
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self.max_upload_size_mb * 1024 * 1024
 
 
 @lru_cache
