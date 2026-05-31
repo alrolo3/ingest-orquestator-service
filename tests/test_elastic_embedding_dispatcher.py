@@ -29,7 +29,9 @@ def test_elastic_dispatcher_uses_client_for_custom_async_endpoint(tmp_path: Path
     assert body["documents"][0]["document_id"] == "doc"
     assert body["documents"][0]["chunk_id"] == "c1"
     assert body["documents"][0]["content"] == "one"
+    assert body["documents"][0]["content_semantic"] == "one"
     assert body["documents"][0]["title"] == "Quarterly Revenue"
+    assert body["documents"][0]["title_semantic"] == "Quarterly Revenue"
     assert body["documents"][0]["input_format"] == "pdf"
     assert body["documents"][0]["pipeline"] == "standard"
     assert body["documents"][0]["page_start"] == 1
@@ -66,7 +68,9 @@ def test_elastic_dispatcher_uses_bulk_helper_for_bulk_submit(tmp_path: Path) -> 
     assert actions[0]["_id"] == "1"
     assert actions[0]["pipeline"] == "embedding-pipeline"
     assert actions[0]["_source"]["content"] == "one"
+    assert actions[0]["_source"]["content_semantic"] == "one"
     assert actions[0]["_source"]["title"] == "Quarterly Revenue"
+    assert actions[0]["_source"]["title_semantic"] == "Quarterly Revenue"
     assert actions[0]["_source"]["input_format"] == "pdf"
     assert actions[0]["_source"]["metadata"]["page_start"] == 1
     assert "source_path" not in actions[0]["_source"]["metadata"]

@@ -29,7 +29,7 @@
             }
           },
           "chunking_settings": {
-            "type": "none"
+            "strategy": "none"
           }
         },
         "title": {
@@ -51,7 +51,7 @@
             }
           },
           "chunking_settings": {
-            "type": "none"
+            "strategy": "none"
           }
         },
         "raw_text": {
@@ -88,9 +88,6 @@
           "type": "keyword"
         },
         "pipeline": {
-          "type": "keyword"
-        },
-        "profile": {
           "type": "keyword"
         },
         "chunker_strategy": {

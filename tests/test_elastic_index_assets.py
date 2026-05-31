@@ -56,9 +56,10 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
             "element_type": "float",
             "type": "int8_hnsw",
         }
-        assert field["chunking_settings"] == {"type": "none"}
+        assert field["chunking_settings"] == {"strategy": "none"}
 
     assert properties["record_id"]["type"] == "keyword"
     assert properties["document_id"]["type"] == "keyword"
     assert properties["chunk_id"]["type"] == "keyword"
+    assert "profile" not in properties
     assert properties["metadata"]["enabled"] is False
