@@ -47,7 +47,6 @@ from ingest_orquestator_server.main import app
 from ingest_orquestator_server.models.embedding_queue import (
     EmbeddingDispatchResult,
     EmbeddingQueueItem,
-    EmbeddingTaskStatus,
 )
 from tests.fakes.fake_docling_converter import FakeDoclingConverter
 
@@ -77,16 +76,27 @@ def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
         output_writer=LocalParseOutputWriter(),
         chunking_service=DocumentChunkingService(settings),
     )
+    dispatch_service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=settings.dispatch_max_bulk_size),
+        dispatcher=NoopEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
     ingestion_service = FileIngestionService(
         settings=settings,
         upload_storage=LocalUploadStorage(upload_validator=validator),
         document_parse_service=parse_service,
         job_repository=repository,
         upload_validator=validator,
+        embedding_dispatch_service=dispatch_service,
     )
 
     app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
     app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+    app.dependency_overrides[get_output_retrieval_service] = lambda: OutputRetrievalService(
+        repository
+    )
     app.dependency_overrides[get_output_retrieval_service] = lambda: OutputRetrievalService(
         repository
     )
@@ -98,7 +108,13 @@ def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
             files={"file": ("example.md", b"# Example", "text/markdown")},
         )
         assert response.status_code == 200
+        assert response.json()["status"] == "parser_queued"
+        assert response.json()["source_file_name"] == "example.md"
+        assert response.json()["status_url"].endswith(response.json()["job_id"])
+        assert response.json()["outputs_url"].endswith(f"{response.json()['job_id']}/outputs")
         job_id = response.json()["job_id"]
+        ingestion_service.process_queued_job(job_id)
+        ingestion_service.process_embedding_queue()
 
         job_response = client.get(f"/v1/ingest/jobs/{job_id}")
         assert job_response.status_code == 200
@@ -120,6 +136,66 @@ def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
         app.dependency_overrides.clear()
 
 
+def test_batch_ingest_persists_valid_jobs_and_rejections(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=DocumentChunkingService(settings),
+    )
+    dispatch_service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=settings.dispatch_max_bulk_size),
+        dispatcher=NoopEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+        embedding_dispatch_service=dispatch_service,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+    app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/files?pipeline=standard",
+            files=[
+                ("files", ("example.md", b"# Example", "text/markdown")),
+                ("files", ("bad.exe", b"nope", "application/octet-stream")),
+            ],
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["jobs"]) == 1
+        assert len(body["failed"]) == 1
+        assert body["jobs"][0]["status"] == "parser_queued"
+        assert body["failed"][0]["status"] == "failed"
+        assert body["failed"][0]["source_file_name"] == "bad.exe"
+
+        failed_job = repository.get(body["failed"][0]["job_id"])
+        assert failed_job is not None
+        assert failed_job.status == "failed"
+        assert failed_job.error is not None
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_ingest_rejects_vlm_pipeline_for_markdown(tmp_path: Path) -> None:
     settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)
@@ -136,12 +212,20 @@ def test_ingest_rejects_vlm_pipeline_for_markdown(tmp_path: Path) -> None:
         output_writer=LocalParseOutputWriter(),
         chunking_service=DocumentChunkingService(settings),
     )
+    dispatch_service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=settings.dispatch_max_bulk_size),
+        dispatcher=NoopEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
     ingestion_service = FileIngestionService(
         settings=settings,
         upload_storage=LocalUploadStorage(upload_validator=validator),
         document_parse_service=parse_service,
         job_repository=repository,
         upload_validator=validator,
+        embedding_dispatch_service=dispatch_service,
     )
 
     app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
@@ -174,16 +258,27 @@ def test_ingest_accepts_chunking_controls(tmp_path: Path) -> None:
         output_writer=LocalParseOutputWriter(),
         chunking_service=DocumentChunkingService(settings),
     )
+    dispatch_service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=settings.dispatch_max_bulk_size),
+        dispatcher=NoopEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
     ingestion_service = FileIngestionService(
         settings=settings,
         upload_storage=LocalUploadStorage(upload_validator=validator),
         document_parse_service=parse_service,
         job_repository=repository,
         upload_validator=validator,
+        embedding_dispatch_service=dispatch_service,
     )
 
     app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
     app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+    app.dependency_overrides[get_output_retrieval_service] = lambda: OutputRetrievalService(
+        repository
+    )
 
     try:
         client = TestClient(app)
@@ -193,8 +288,14 @@ def test_ingest_accepts_chunking_controls(tmp_path: Path) -> None:
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["metadata"]["chunking_enabled"] is False
-        assert body["outputs"]["chunks_json"] is None
+        assert body["status"] == "parser_queued"
+        job_id = body["job_id"]
+        ingestion_service.process_queued_job(job_id)
+        ingestion_service.process_embedding_queue()
+        job_response = client.get(f"/v1/ingest/jobs/{job_id}")
+        assert job_response.json()["metadata"]["chunking_enabled"] is False
+        outputs_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs")
+        assert outputs_response.json()["chunks_json"] is None
     finally:
         app.dependency_overrides.clear()
 
@@ -215,12 +316,20 @@ def test_async_ingest_queues_and_processes_job(tmp_path: Path) -> None:
         output_writer=LocalParseOutputWriter(),
         chunking_service=DocumentChunkingService(settings),
     )
+    dispatch_service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=settings.dispatch_max_bulk_size),
+        dispatcher=NoopEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
     ingestion_service = FileIngestionService(
         settings=settings,
         upload_storage=LocalUploadStorage(upload_validator=validator),
         document_parse_service=parse_service,
         job_repository=repository,
         upload_validator=validator,
+        embedding_dispatch_service=dispatch_service,
     )
 
     app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
@@ -233,8 +342,10 @@ def test_async_ingest_queues_and_processes_job(tmp_path: Path) -> None:
             files={"file": ("example.md", b"# Example", "text/markdown")},
         )
         assert response.status_code == 200
-        assert response.json()["status"] == "queued"
+        assert response.json()["status"] == "parser_queued"
         job_id = response.json()["job_id"]
+        ingestion_service.process_queued_job(job_id)
+        ingestion_service.process_embedding_queue()
 
         job_response = client.get(f"/v1/ingest/jobs/{job_id}")
         assert job_response.status_code == 200
@@ -251,8 +362,7 @@ def test_ingest_file_enqueues_embedding_handoff_internally(
     settings = Settings(
         storage_dir=tmp_path,
         allowed_upload_extensions=[".md"],
-        embedding_queue_enabled=True,
-        embedding_elastic_task_poll_interval_seconds=0.001,
+        dispatch_sink_mode="local_and_elastic",
     )
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)
     validator = UploadValidator(settings)
@@ -270,9 +380,10 @@ def test_ingest_file_enqueues_embedding_handoff_internally(
     )
     dispatch_service = EmbeddingDispatchService(
         settings=settings,
-        queue_service=EmbeddingQueueService(max_bulk_size=settings.embedding_queue_max_bulk_size),
+        queue_service=EmbeddingQueueService(max_bulk_size=settings.dispatch_max_bulk_size),
         dispatcher=NoopEmbeddingDispatcher(),
         job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
     )
     ingestion_service = FileIngestionService(
         settings=settings,
@@ -296,14 +407,21 @@ def test_ingest_file_enqueues_embedding_handoff_internally(
                 "/v1/ingest/file?include_document=false&pipeline=standard",
                 files={"file": ("example.md", b"# Example", "text/markdown")},
             )
+            job_id = response.json()["job_id"]
+            ingestion_service.process_queued_job(job_id)
+            ingestion_service.process_embedding_queue()
         assert response.status_code == 200
-        assert response.json()["status"] == "embedding_queued"
-        job_id = response.json()["job_id"]
+        assert response.json()["status"] == "parser_queued"
 
         job_response = client.get(f"/v1/ingest/jobs/{job_id}")
         assert job_response.status_code == 200
-        assert job_response.json()["status"] == "embedding_completed"
-        assert job_response.json()["metadata"]["embedding_handoff"]["task_id"] == "task-1"
+        assert job_response.json()["status"] == "completed"
+        assert (
+            job_response.json()["metadata"]["dispatch_handoff"]["last_response"][
+                "elastic_response"
+            ]["mode"]
+            == "bulk"
+        )
 
         outputs_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs")
         assert outputs_response.status_code == 200
@@ -318,13 +436,12 @@ def test_ingest_file_enqueues_embedding_handoff_internally(
             for record in caplog.records
             if record.name == "ingest_orquestator_server.stage"
         ]
-        assert "ingestion.upload.received" in events
-        assert "ingestion.parse.started" in events
-        assert "ingestion.parse.completed" in events
-        assert "embedding.queue.enqueued" in events
-        assert "embedding.dispatch.started" in events
-        assert "embedding.dispatch.accepted" in events
-        assert "embedding.task.completed" in events
+        assert "ingestion.upload.queued" in events
+        assert "parser.worker.started" in events
+        assert "parser.worker.completed" in events
+        assert "dispatch.queue.enqueued" in events
+        assert "dispatch.started" in events
+        assert "dispatch.completed" in events
     finally:
         app.dependency_overrides.clear()
 
@@ -332,10 +449,6 @@ def test_ingest_file_enqueues_embedding_handoff_internally(
 class NoopEmbeddingDispatcher:
     def submit_batch(self, items: list[EmbeddingQueueItem]) -> EmbeddingDispatchResult:
         return EmbeddingDispatchResult(
-            task_id="task-1",
             accepted_document_count=len(items),
-            raw_response={"task": "task-1"},
+            raw_response={"mode": "bulk", "successful": len(items)},
         )
-
-    def get_task_status(self, task_id: str) -> EmbeddingTaskStatus:
-        return EmbeddingTaskStatus(task_id=task_id, completed=True)

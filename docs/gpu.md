@@ -18,8 +18,11 @@ python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 
 python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+response=$(curl -s -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
   -F "file=@/path/to/document.pdf"
+)
+job_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' <<<"$response")
+curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}"
 ```
 
 The default GPU dependency set includes SuryaOCR on supported Linux hosts.

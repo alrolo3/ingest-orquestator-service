@@ -20,6 +20,9 @@ from ingest_orquestator_server.application.services.output_retrieval_service imp
     OutputRetrievalService,
     OutputType,
 )
+from ingest_orquestator_server.application.services.parser_worker_service import (
+    ParserWorkerService,
+)
 from ingest_orquestator_server.application.services.storage_cleanup_service import (
     CleanupResult,
     StorageCleanupService,
@@ -37,5 +40,6 @@ __all__ = [
     "JobQueryService",
     "OutputRetrievalService",
     "OutputType",
+    "ParserWorkerService",
     "StorageCleanupService",
 ]

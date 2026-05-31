@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from ingest_orquestator_server.config.config_groups import (
     ChunkingConfig,
     ConfidenceConfig,
+    DispatchConfig,
     DoclingCommonConfig,
     DoclingOcrConfig,
     DoclingVlmConfig,
@@ -161,22 +162,22 @@ class Settings(BaseSettings):
     docling_xbrl_enable_remote_fetch: bool = False
     docling_xbrl_taxonomy_path: Path | None = None
     embedding_output_enabled: bool = True
-    embedding_queue_enabled: bool = False
-    embedding_queue_max_bulk_size: int = Field(default=5, ge=1, le=5)
+    parser_worker_count: int = Field(default=2, ge=1)
+    dispatch_queue_max_size: int = Field(default=100, ge=1)
+    dispatch_queue_max_payload_bytes: int | None = Field(default=None, ge=1)
+    dispatch_max_bulk_size: int = Field(default=5, ge=1, le=5)
+    dispatch_idle_interval_seconds: float = Field(default=0.5, gt=0)
+    dispatch_sink_mode: str = "local"
+    dispatch_max_retries: int = Field(default=3, ge=0)
+    dispatch_retry_backoff_seconds: float = Field(default=1.0, ge=0)
     embedding_elastic_url: str | None = None
     embedding_elastic_username: str | None = None
     embedding_elastic_password: str | None = None
     embedding_elastic_index: str = "ingest-embedding-input"
     embedding_elastic_mapping_version: str = "v1"
     embedding_elastic_pipeline: str | None = None
-    embedding_elastic_submit_method: str = "POST"
-    embedding_elastic_submit_path: str = "/_bulk"
-    embedding_elastic_task_id_field: str = "task"
-    embedding_elastic_task_status_path_template: str = "/_tasks/{task_id}"
     embedding_elastic_verify_certs: bool = True
     embedding_elastic_request_timeout_seconds: float = Field(default=30.0, gt=0)
-    embedding_elastic_task_poll_interval_seconds: float = Field(default=2.0, gt=0)
-    embedding_elastic_task_timeout_seconds: float = Field(default=300.0, gt=0)
     embedding_elastic_max_retries: int = Field(default=3, ge=0)
     embedding_elastic_include_local_paths: bool = False
 
@@ -378,17 +379,6 @@ class Settings(BaseSettings):
             return cleaned or None
         return value
 
-    @field_validator(
-        "embedding_elastic_submit_path",
-        "embedding_elastic_task_status_path_template",
-    )
-    @classmethod
-    def normalize_elastic_path(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("must not be empty")
-        return cleaned if cleaned.startswith("/") else f"/{cleaned}"
-
     @field_validator("embedding_elastic_index")
     @classmethod
     def normalize_embedding_elastic_index(cls, value: str) -> str:
@@ -407,13 +397,21 @@ class Settings(BaseSettings):
             return "v2"
         raise ValueError("must be one of v1, dense_vector_v1, v2, or semantic_text_v2")
 
-    @field_validator("embedding_elastic_submit_method")
+    @field_validator("dispatch_sink_mode")
     @classmethod
-    def validate_embedding_elastic_submit_method(cls, value: str) -> str:
-        normalized = value.strip().upper()
-        if normalized not in {"POST", "PUT"}:
-            raise ValueError("must be POST or PUT")
-        return normalized
+    def validate_dispatch_sink_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"local", "elastic", "local_and_elastic"}:
+            return normalized
+        raise ValueError("must be one of local, elastic, or local_and_elastic")
+
+    @field_validator("dispatch_queue_max_payload_bytes", mode="before")
+    @classmethod
+    def normalize_optional_int(cls, value: object) -> object:
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return int(cleaned) if cleaned else None
+        return value
 
     @property
     def uploads_dir(self) -> Path:
@@ -536,27 +534,31 @@ class Settings(BaseSettings):
         )
 
     @property
-    def embedding_queue_config(self) -> EmbeddingQueueConfig:
-        return EmbeddingQueueConfig(
-            enabled=self.embedding_queue_enabled,
-            max_bulk_size=self.embedding_queue_max_bulk_size,
+    def dispatch_config(self) -> DispatchConfig:
+        return DispatchConfig(
+            parser_worker_count=self.parser_worker_count,
+            queue_max_size=self.dispatch_queue_max_size,
+            queue_max_payload_bytes=self.dispatch_queue_max_payload_bytes,
+            max_bulk_size=self.dispatch_max_bulk_size,
+            idle_interval_seconds=self.dispatch_idle_interval_seconds,
+            sink_mode=self.dispatch_sink_mode,
+            max_retries=self.dispatch_max_retries,
+            retry_backoff_seconds=self.dispatch_retry_backoff_seconds,
             elastic_url=self.embedding_elastic_url,
             elastic_username=self.embedding_elastic_username,
             elastic_password_configured=self.embedding_elastic_password is not None,
             elastic_index=self.embedding_elastic_index,
             elastic_mapping_version=self.embedding_elastic_mapping_version,
             elastic_pipeline=self.embedding_elastic_pipeline,
-            elastic_submit_method=self.embedding_elastic_submit_method,
-            elastic_submit_path=self.embedding_elastic_submit_path,
-            elastic_task_id_field=self.embedding_elastic_task_id_field,
-            elastic_task_status_path_template=self.embedding_elastic_task_status_path_template,
             elastic_verify_certs=self.embedding_elastic_verify_certs,
             elastic_request_timeout_seconds=self.embedding_elastic_request_timeout_seconds,
-            elastic_task_poll_interval_seconds=self.embedding_elastic_task_poll_interval_seconds,
-            elastic_task_timeout_seconds=self.embedding_elastic_task_timeout_seconds,
             elastic_max_retries=self.embedding_elastic_max_retries,
             elastic_include_local_paths=self.embedding_elastic_include_local_paths,
         )
+
+    @property
+    def embedding_queue_config(self) -> EmbeddingQueueConfig:
+        return EmbeddingQueueConfig(**self.dispatch_config.model_dump())
 
 
 @lru_cache

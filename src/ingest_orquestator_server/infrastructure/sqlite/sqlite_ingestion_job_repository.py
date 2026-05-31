@@ -64,19 +64,37 @@ class SqliteIngestionJobRepository:
         return self._from_row(row)
 
     def list_active_job_ids(self) -> set[str]:
+        active_statuses = (
+            IngestionStatus.PENDING.value,
+            IngestionStatus.QUEUED.value,
+            IngestionStatus.RUNNING.value,
+            IngestionStatus.PARSER_QUEUED.value,
+            IngestionStatus.PARSING.value,
+            IngestionStatus.PARSED.value,
+            IngestionStatus.DISPATCH_QUEUED.value,
+            IngestionStatus.DISPATCHING.value,
+            IngestionStatus.STORED_LOCAL.value,
+            IngestionStatus.INDEXED_ELASTIC.value,
+            IngestionStatus.RETRYABLE_FAILURE.value,
+        )
+        placeholders = ",".join("?" for _ in active_statuses)
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT job_id FROM ingestion_jobs WHERE status IN (?, ?, ?, ?, ?, ?)",
-                (
-                    IngestionStatus.PENDING.value,
-                    IngestionStatus.QUEUED.value,
-                    IngestionStatus.RUNNING.value,
-                    IngestionStatus.EMBEDDING_QUEUED.value,
-                    IngestionStatus.SENT_TO_EMBEDDING_SYSTEM.value,
-                    IngestionStatus.EMBEDDING_TASK_RUNNING.value,
-                ),
+                f"SELECT job_id FROM ingestion_jobs WHERE status IN ({placeholders})",
+                active_statuses,
             ).fetchall()
         return {str(row["job_id"]) for row in rows}
+
+    def list_by_status(self, statuses: set[str]) -> list[IngestionJob]:
+        if not statuses:
+            return []
+        placeholders = ",".join("?" for _ in statuses)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM ingestion_jobs WHERE status IN ({placeholders})",
+                tuple(statuses),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
 
     def _initialize(self) -> None:
         with self._connect() as connection:

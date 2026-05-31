@@ -24,6 +24,9 @@ from ingest_orquestator_server.application.services.job_query_service import Job
 from ingest_orquestator_server.application.services.output_retrieval_service import (
     OutputRetrievalService,
 )
+from ingest_orquestator_server.application.services.parser_worker_service import (
+    ParserWorkerService,
+)
 from ingest_orquestator_server.application.services.storage_cleanup_service import (
     StorageCleanupService,
 )
@@ -48,7 +51,11 @@ from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_reposi
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 
 _embedding_queue_service: EmbeddingQueueService | None = None
-_embedding_queue_key: tuple[int] | None = None
+_embedding_queue_key: tuple[int, int, int | None] | None = None
+_embedding_dispatch_service: EmbeddingDispatchService | None = None
+_embedding_dispatch_key: tuple[str, int, int, int | None] | None = None
+_parser_worker_service: ParserWorkerService | None = None
+_parser_worker_key: tuple[int] | None = None
 
 
 def get_parser_registry(settings: SettingsDependency) -> ParserRegistry:
@@ -79,10 +86,16 @@ def get_document_parse_service(
 
 def get_embedding_queue_service(settings: SettingsDependency) -> EmbeddingQueueService:
     global _embedding_queue_key, _embedding_queue_service
-    key = (settings.embedding_queue_max_bulk_size,)
+    key = (
+        settings.dispatch_max_bulk_size,
+        settings.dispatch_queue_max_size,
+        settings.dispatch_queue_max_payload_bytes,
+    )
     if _embedding_queue_service is None or _embedding_queue_key != key:
         _embedding_queue_service = EmbeddingQueueService(
-            max_bulk_size=settings.embedding_queue_max_bulk_size
+            max_bulk_size=settings.dispatch_max_bulk_size,
+            max_size=settings.dispatch_queue_max_size,
+            max_payload_bytes=settings.dispatch_queue_max_payload_bytes,
         )
         _embedding_queue_key = key
     return _embedding_queue_service
@@ -99,12 +112,53 @@ def get_embedding_dispatch_service(
         Depends(get_job_repository),
     ],
 ) -> EmbeddingDispatchService:
-    return EmbeddingDispatchService(
-        settings=settings,
-        queue_service=queue_service,
-        dispatcher=ElasticEmbeddingDispatcher(settings),
-        job_repository=job_repository,
+    global _embedding_dispatch_key, _embedding_dispatch_service
+    key = (
+        settings.dispatch_sink_mode,
+        settings.dispatch_max_bulk_size,
+        settings.dispatch_queue_max_size,
+        settings.dispatch_queue_max_payload_bytes,
     )
+    if _embedding_dispatch_service is None or _embedding_dispatch_key != key:
+        _embedding_dispatch_service = EmbeddingDispatchService(
+            settings=settings,
+            queue_service=queue_service,
+            dispatcher=ElasticEmbeddingDispatcher(settings),
+            job_repository=job_repository,
+            output_writer=LocalParseOutputWriter(),
+        )
+        _embedding_dispatch_key = key
+    _embedding_dispatch_service.start()
+    return _embedding_dispatch_service
+
+
+def get_parser_worker_service(
+    settings: SettingsDependency,
+    document_parse_service: Annotated[
+        DocumentParseService,
+        Depends(get_document_parse_service),
+    ],
+    job_repository: Annotated[
+        SqliteIngestionJobRepository,
+        Depends(get_job_repository),
+    ],
+    dispatch_service: Annotated[
+        EmbeddingDispatchService,
+        Depends(get_embedding_dispatch_service),
+    ],
+) -> ParserWorkerService:
+    global _parser_worker_key, _parser_worker_service
+    key = (settings.parser_worker_count,)
+    if _parser_worker_service is None or _parser_worker_key != key:
+        _parser_worker_service = ParserWorkerService(
+            settings=settings,
+            document_parse_service=document_parse_service,
+            job_repository=job_repository,
+            dispatch_service=dispatch_service,
+        )
+        _parser_worker_service.recover_active_jobs()
+        _parser_worker_key = key
+    return _parser_worker_service
 
 
 def get_file_ingestion_service(
@@ -122,6 +176,10 @@ def get_file_ingestion_service(
         EmbeddingDispatchService,
         Depends(get_embedding_dispatch_service),
     ],
+    parser_worker_service: Annotated[
+        ParserWorkerService,
+        Depends(get_parser_worker_service),
+    ],
 ) -> FileIngestionService:
     return FileIngestionService(
         settings=settings,
@@ -130,6 +188,7 @@ def get_file_ingestion_service(
         job_repository=job_repository,
         upload_validator=upload_validator,
         embedding_dispatch_service=embedding_dispatch_service,
+        parser_worker_service=parser_worker_service,
     )
 
 
@@ -150,3 +209,10 @@ def get_storage_cleanup_service(
     job_repository: Annotated[SqliteIngestionJobRepository, Depends(get_job_repository)],
 ) -> StorageCleanupService:
     return StorageCleanupService(settings=settings, job_repository=job_repository)
+
+
+def shutdown_background_services() -> None:
+    if _parser_worker_service is not None:
+        _parser_worker_service.shutdown()
+    if _embedding_dispatch_service is not None:
+        _embedding_dispatch_service.stop()

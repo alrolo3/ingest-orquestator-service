@@ -27,33 +27,40 @@ Query parameters:
 - `chunking_enabled`: optional request-level chunking override.
 - `chunking_strategy`: optional request-level strategy override. Supported
   values are `hybrid`, `line_based`, and `legacy_char`.
-- `async_mode`: defaults to `false`; when `true`, the API returns a queued job
-  immediately and parses the file in an in-process background task.
-- `include_document`: defaults to `true`; when `false`, the response returns file paths only.
+- `async_mode`: deprecated compatibility parameter. In v1.5 all ingest calls
+  are asynchronous and return a job immediately.
+- `include_document`: deprecated compatibility parameter. Parsed documents are
+  retrieved through job output endpoints after dispatch stores local artifacts.
 
 Example:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
   -F "file=@/path/to/document.pdf"
 ```
 
-Async example:
+Batch example:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?async_mode=true" \
-  -F "file=@/path/to/document.pdf"
+curl -X POST "http://127.0.0.1:8000/v1/ingest/files?pipeline=standard" \
+  -F "files=@/path/to/first.pdf" \
+  -F "files=@/path/to/second.pdf"
 ```
 
 Successful responses include:
 
 - `job_id`
 - `status`
+- `source_file_name`
+- `status_url`
+- `outputs_url`
 - `parser`
 - `document_id`
-- output file paths
-- optionally the normalized parsed document
-- optionally generated chunks
+- local output file paths after the dispatcher stores artifacts
+
+For async job creation, `outputs` is usually `null` in the immediate response.
+Use `status_url` to poll the job and `outputs_url` after the job reaches
+`completed`.
 
 `pipeline=vlm` is supported directly for PDF and image inputs. Other
 Docling formats use `pipeline=standard`.
@@ -61,12 +68,12 @@ Docling formats use `pipeline=standard`.
 Use `chunking_enabled=false` when a downstream embedding store will do its own
 chunking.
 
-When `INGEST_EMBEDDING_QUEUE_ENABLED=true`, a successful parse with
-`embedding_input.jsonl` is enqueued for embedding handoff. Job statuses can then
-progress through `embedding_queued`, `sent_to_embedding_system`,
-`embedding_task_running`, `embedding_completed`, or `embedding_failed`.
-The queue is internal; callers do not call a queue endpoint. Use the job API to
-observe the current state.
+In v1.5, ingestion always uses the internal queue. The status starts as
+`parser_queued`, then progresses through `parsing`, `parsed`, `dispatch_queued`,
+`dispatching`, `stored_local` and/or `indexed_elastic`, and finally `completed`
+or `failed`. Transient queue or sink pressure can surface as
+`retryable_failure`. The queue is internal; callers do not call a queue
+endpoint. Use the job API to observe the current state.
 
 ## Get Job
 

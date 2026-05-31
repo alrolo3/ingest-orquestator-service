@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import current_thread
 from typing import Any
 
 logger = logging.getLogger("ingest_orquestator_server.stage")
@@ -20,6 +21,7 @@ def log_stage(event: str, **fields: Any) -> None:
     payload = {
         "event": event,
         "timestamp": datetime.now(UTC).isoformat(),
+        "thread_name": current_thread().name,
         **{key: _sanitize(key, value) for key, value in fields.items() if value is not None},
     }
     logger.info(json.dumps(payload, sort_keys=True, default=str))

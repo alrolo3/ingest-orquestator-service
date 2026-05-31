@@ -86,32 +86,29 @@ This is the upload gate. Docling format support is controlled separately by
 
 ## Embedding Queue And Elastic Handoff
 
-These settings are disabled by default. Enable them when this service should
-send completed `embedding_input.jsonl` artifacts to a remote embedding system
-fronted by Elasticsearch 9.x. v1.4.5 uses the official `elasticsearch` 9.x
-Python client and `elasticsearch.helpers.bulk` for `_bulk` submissions. Do not
-commit real endpoint credentials; keep them in a local `.env`, shell exports, or
-your deployment secret store.
+The dispatch queue is mandatory in v1.5. Parser workers enqueue full parsed
+documents, and the dispatcher service stores local artifacts, sends Elastic bulk
+requests, or does both according to `INGEST_DISPATCH_SINK_MODE`.
 
 | Variable | Code Default | Example | Explanation |
 | --- | --- | --- | --- |
-| `INGEST_EMBEDDING_QUEUE_ENABLED` | `false` | `true` | Enables the v1.4 process-local embedding handoff queue. When enabled, completed ingestion jobs with `embedding_input.jsonl` move from `completed` to embedding handoff statuses. |
-| `INGEST_EMBEDDING_QUEUE_MAX_BULK_SIZE` | `5` | `5` | Maximum number of parsed documents submitted in one remote handoff request. The validator enforces `1..5` because v1.4 intentionally limits bulk size. |
-| `INGEST_EMBEDDING_ELASTIC_URL` | unset | `https://elastic.example:9200` | Base URL for the remote Elasticsearch or compatible embedding endpoint. Required only when the queue is enabled and dispatching. |
+| `INGEST_PARSER_WORKER_COUNT` | `2` | `4` | Number of parser worker threads that process queued uploaded files. |
+| `INGEST_DISPATCH_QUEUE_MAX_SIZE` | `100` | `100` | Maximum number of full parsed document results waiting in the process-local dispatch queue. |
+| `INGEST_DISPATCH_QUEUE_MAX_PAYLOAD_BYTES` | unset | `104857600` | Optional maximum serialized size for one full parsed document queue payload. Leave unset for no per-item limit; set it to fail oversized documents explicitly instead of allowing unbounded memory growth. |
+| `INGEST_DISPATCH_MAX_BULK_SIZE` | `5` | `5` | Maximum number of full documents drained by the dispatcher in one batch. Elastic still receives one bulk item per generated chunk. |
+| `INGEST_DISPATCH_IDLE_INTERVAL_SECONDS` | `0.5` | `0.5` | Dispatcher worker sleep interval while the queue is empty. |
+| `INGEST_DISPATCH_SINK_MODE` | `local` | `local_and_elastic` | Dispatch target mode. Valid values: `local`, `elastic`, `local_and_elastic`. |
+| `INGEST_DISPATCH_MAX_RETRIES` | `3` | `3` | Retry budget for dispatcher sink failures before a job is marked `failed`. |
+| `INGEST_DISPATCH_RETRY_BACKOFF_SECONDS` | `1` | `1` | Reserved retry backoff interval for dispatcher retries. |
+| `INGEST_EMBEDDING_ELASTIC_URL` | unset | `https://elastic.example:9200` | Base URL for Elasticsearch. Required when the dispatch sink mode includes Elastic. |
 | `INGEST_EMBEDDING_ELASTIC_USERNAME` | unset | `elastic-user` | Optional basic-auth username for the remote endpoint. |
 | `INGEST_EMBEDDING_ELASTIC_PASSWORD` | unset | local secret | Optional basic-auth password. This is never included in grouped config metadata; only a boolean `elastic_password_configured` is exposed. |
-| `INGEST_EMBEDDING_ELASTIC_INDEX` | `ingest-embedding-input` | `open-rag-embeddings-v2` | Target index used when the submit path is Elasticsearch `_bulk`. For custom async endpoints, it is still included in config metadata but not injected into the request path. |
+| `INGEST_EMBEDDING_ELASTIC_INDEX` | `ingest-embedding-input` | `open-rag-embeddings-v2` | Target Elasticsearch index for chunk documents sent through the official bulk helper. |
 | `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION` | `v1` | `v2` | Dispatcher output schema. `v1` sends `content` and `title` for the dense-vector ingest pipeline. `v2` also sends `content_semantic` and `title_semantic` for the `semantic_text` mapping and suppresses the bulk action pipeline. Aliases: `dense_vector_v1`, `semantic_text_v2`. |
 | `INGEST_EMBEDDING_ELASTIC_PIPELINE` | unset | blank for v2 | Optional Elasticsearch ingest pipeline name. In `_bulk` mode, the adapter passes this value only for `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v1`. Use `qwen3_embeddings_pipeline` for v1. Leave blank for v2 because `semantic_text` fields run inference through field mapping. |
-| `INGEST_EMBEDDING_ELASTIC_SUBMIT_METHOD` | `POST` | `POST` | HTTP method used for the submit request. Valid values: `POST`, `PUT`. |
-| `INGEST_EMBEDDING_ELASTIC_SUBMIT_PATH` | `/_bulk` | `/_embedding/tasks` | Submit path. `/_bulk` uses the official client bulk helper and completes synchronously with an internal `elastic-bulk:*` task marker. Any other path is treated as a custom async endpoint that must return a task id. |
-| `INGEST_EMBEDDING_ELASTIC_TASK_ID_FIELD` | `task` | `task.id` | Dotted JSON field path used to extract the remote task id from custom async submit responses. Not used by bulk helper mode. |
-| `INGEST_EMBEDDING_ELASTIC_TASK_STATUS_PATH_TEMPLATE` | `/_tasks/{task_id}` | `/_tasks/{task_id}` | Path template used to poll custom remote tasks. The service replaces `{task_id}` with the returned id. Bulk helper mode completes locally after the bulk response succeeds. |
 | `INGEST_EMBEDDING_ELASTIC_VERIFY_CERTS` | `true` | `false` | Enables TLS certificate verification. Keep `true` outside local lab environments. |
-| `INGEST_EMBEDDING_ELASTIC_REQUEST_TIMEOUT_SECONDS` | `30` | `30` | Timeout for submit and status HTTP requests. |
-| `INGEST_EMBEDDING_ELASTIC_TASK_POLL_INTERVAL_SECONDS` | `2` | `2` | Poll interval used by the internal background drain loop while waiting for a custom async task to finish. |
-| `INGEST_EMBEDDING_ELASTIC_TASK_TIMEOUT_SECONDS` | `300` | `300` | Maximum task wait budget reserved for worker implementations. |
-| `INGEST_EMBEDDING_ELASTIC_MAX_RETRIES` | `3` | `3` | Number of submit retries before a document is marked `embedding_failed`. |
+| `INGEST_EMBEDDING_ELASTIC_REQUEST_TIMEOUT_SECONDS` | `30` | `30` | Timeout for Elasticsearch bulk helper requests. |
+| `INGEST_EMBEDDING_ELASTIC_MAX_RETRIES` | `3` | `3` | Elasticsearch client retry count for bulk request transport retries. |
 | `INGEST_EMBEDDING_ELASTIC_INCLUDE_LOCAL_PATHS` | `false` | `false` | Controls whether `metadata.source_path` from embedding records is sent to the remote endpoint. Keep `false` unless the remote embedding system is allowed to receive local filesystem paths. |
 
 ## Confidence Output

@@ -218,15 +218,22 @@ curl http://127.0.0.1:8000/health
 
 ```bash
 printf "# GPU smoke test\n\nHello from NVIDIA.\n" > /tmp/ingest-smoke.md
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+response=$(curl -s -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
   -F "file=@/tmp/ingest-smoke.md"
+)
+echo "$response"
+job_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' <<<"$response")
+curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}"
 ```
 
 For a real PDF parse:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+response=$(curl -s -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
   -F "file=@/path/to/document.pdf"
+)
+job_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' <<<"$response")
+curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}"
 ```
 
 ## FlashAttention Notes

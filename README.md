@@ -6,16 +6,17 @@
 ingest file -> parse with Docling -> normalized/chunked/embedding-ready output
 ```
 
-It does not include vector storage or RAG query APIs yet.
+It does not include RAG query APIs yet. It can optionally dispatch chunk
+documents to Elasticsearch for embedding/indexing.
 
 ## What It Provides
 
-- FastAPI service with synchronous and background file ingestion.
+- FastAPI service with always-async file ingestion jobs.
 - Parser interface with a Docling implementation.
 - Multi-format Docling `DocumentConverter` support.
 - Java-style module layout with separate model, service, adapter, and route files.
 - Normalized document, chunk, and embedding input outputs.
-- Optional v1.4 local embedding queue handoff through the official Elasticsearch Python client.
+- Mandatory full-document dispatch queue with local and/or Elasticsearch sinks.
 - Local filesystem storage for uploaded files and parser outputs.
 - Docker and Compose resources for running the service.
 
@@ -55,17 +56,20 @@ The NVIDIA tutorial installs the default GPU requirements and uses
 ## API Usage
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
   -F "file=@/path/to/document.pdf"
 ```
 
-The response includes the parser status and the output file paths.
+The API returns immediately with a persisted job, usually in `parser_queued`
+state. Parser workers run Docling outside the request path, then the dispatcher
+stores local artifacts and/or sends one Elasticsearch bulk item per RAG chunk.
 
-For long-running GPU parses:
+Batch upload creates one job per file:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?async_mode=true&pipeline=vlm" \
-  -F "file=@/path/to/document.pdf"
+curl -X POST "http://127.0.0.1:8000/v1/ingest/files?pipeline=standard" \
+  -F "files=@/path/to/first.pdf" \
+  -F "files=@/path/to/second.pdf"
 ```
 
 Check a persisted ingestion job:
@@ -128,6 +132,11 @@ INGEST_CHUNK_MAX_TOKENS=768
 INGEST_CHUNK_SIZE_CHARS=1200
 INGEST_CHUNK_OVERLAP_CHARS=150
 INGEST_EMBEDDING_OUTPUT_ENABLED=true
+INGEST_PARSER_WORKER_COUNT=2
+INGEST_DISPATCH_QUEUE_MAX_SIZE=100
+INGEST_DISPATCH_QUEUE_MAX_PAYLOAD_BYTES=
+INGEST_DISPATCH_MAX_BULK_SIZE=5
+INGEST_DISPATCH_SINK_MODE=local
 INGEST_CONFIDENCE_OUTPUT_ENABLED=true
 INGEST_CONFIDENCE_WARN_ONLY=true
 INGEST_RETENTION_DAYS=30

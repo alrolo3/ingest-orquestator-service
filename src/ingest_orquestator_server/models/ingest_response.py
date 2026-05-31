@@ -17,7 +17,10 @@ class IngestResponse(BaseModel):
     status: IngestionStatus
     parser: str
     document_id: str | None = None
+    source_file_name: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    status_url: str | None = None
+    outputs_url: str | None = None
     input_path: Path | None = None
     outputs: OutputFiles | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

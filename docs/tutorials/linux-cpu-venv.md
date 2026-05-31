@@ -73,12 +73,17 @@ curl http://127.0.0.1:8000/health
 
 ```bash
 printf "# CPU smoke test\n\nHello from Linux.\n" > /tmp/ingest-smoke.md
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+response=$(curl -s -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
   -F "file=@/tmp/ingest-smoke.md"
+)
+echo "$response"
+job_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' <<<"$response")
+curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}"
 ```
 
-Expected result: a new output directory under `.data/outputs` containing the
-parsed document artifacts.
+Expected result: the initial response is `parser_queued`; after parser and
+dispatcher completion the job reaches `completed` and a new output directory is
+available under `.data/outputs`.
 
 ## Troubleshooting
 

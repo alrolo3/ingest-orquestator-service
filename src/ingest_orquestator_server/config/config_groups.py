@@ -87,22 +87,26 @@ class ConfidenceConfig(BaseModel):
     warn_only: bool
 
 
-class EmbeddingQueueConfig(BaseModel):
-    enabled: bool
+class DispatchConfig(BaseModel):
+    parser_worker_count: int
+    queue_max_size: int
+    queue_max_payload_bytes: int | None
     max_bulk_size: int
+    idle_interval_seconds: float
+    sink_mode: str
+    max_retries: int
+    retry_backoff_seconds: float
     elastic_url: str | None
     elastic_username: str | None
     elastic_password_configured: bool
     elastic_index: str
     elastic_mapping_version: str
     elastic_pipeline: str | None
-    elastic_submit_method: str
-    elastic_submit_path: str
-    elastic_task_id_field: str
-    elastic_task_status_path_template: str
     elastic_verify_certs: bool
     elastic_request_timeout_seconds: float
-    elastic_task_poll_interval_seconds: float
-    elastic_task_timeout_seconds: float
     elastic_max_retries: int
     elastic_include_local_paths: bool
+
+
+class EmbeddingQueueConfig(DispatchConfig):
+    """Backward-compatible grouped config name for existing callers."""

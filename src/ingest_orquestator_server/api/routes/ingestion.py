@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from ingest_orquestator_server.api.dependencies import (
@@ -25,6 +25,7 @@ from ingest_orquestator_server.application.services.output_retrieval_service imp
     OutputRetrievalService,
     OutputType,
 )
+from ingest_orquestator_server.models.ingest_batch_response import IngestBatchResponse
 from ingest_orquestator_server.models.ingest_response import IngestResponse
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.output_files import OutputFiles
@@ -35,7 +36,6 @@ router = APIRouter(prefix="/v1/ingest")
 @router.post("/file", response_model=IngestResponse)
 async def ingest_file(
     file: Annotated[UploadFile, File()],
-    background_tasks: BackgroundTasks,
     service: Annotated[FileIngestionService, Depends(get_file_ingestion_service)],
     parser: Annotated[str, Query()] = "docling",
     pipeline: Annotated[str | None, Query()] = None,
@@ -45,18 +45,7 @@ async def ingest_file(
     include_document: Annotated[bool, Query()] = True,
 ) -> IngestResponse:
     try:
-        if async_mode:
-            response = await service.enqueue_upload(
-                upload=file,
-                parser_name=parser,
-                pipeline=pipeline,
-                chunking_enabled=chunking_enabled,
-                chunking_strategy=chunking_strategy,
-            )
-            background_tasks.add_task(service.process_queued_job, response.job_id)
-            background_tasks.add_task(service.process_embedding_queue)
-            return response
-        response = await service.ingest_upload(
+        return await service.ingest_upload(
             upload=file,
             parser_name=parser,
             pipeline=pipeline,
@@ -64,8 +53,6 @@ async def ingest_file(
             chunking_strategy=chunking_strategy,
             include_document=include_document,
         )
-        background_tasks.add_task(service.process_embedding_queue)
-        return response
     except UploadValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except (
@@ -77,6 +64,36 @@ async def ingest_file(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to parse file: {exc}") from exc
+
+
+@router.post("/files", response_model=IngestBatchResponse)
+async def ingest_files(
+    files: Annotated[list[UploadFile], File()],
+    service: Annotated[FileIngestionService, Depends(get_file_ingestion_service)],
+    parser: Annotated[str, Query()] = "docling",
+    pipeline: Annotated[str | None, Query()] = None,
+    chunking_enabled: Annotated[bool | None, Query()] = None,
+    chunking_strategy: Annotated[str | None, Query()] = None,
+) -> IngestBatchResponse:
+    try:
+        return await service.enqueue_uploads(
+            uploads=list(files),
+            parser_name=parser,
+            pipeline=pipeline,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+        )
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except (
+        UnsupportedParserError,
+        UnsupportedDocumentFormatError,
+        UnsupportedIngestionOptionError,
+        UnsupportedPipelineError,
+    ) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue files: {exc}") from exc
 
 
 @router.get("/jobs/{job_id}", response_model=IngestionJob)

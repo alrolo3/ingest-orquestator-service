@@ -7,11 +7,15 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ingest_orquestator_server.models.document_chunk import DocumentChunk
+from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
+from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
+from ingest_orquestator_server.models.parse_output import ParseOutput
+
 
 class EmbeddingQueueItemStatus(StrEnum):
     QUEUED = "queued"
     DISPATCHING = "dispatching"
-    SENT = "sent"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -23,12 +27,14 @@ class EmbeddingQueueItem(BaseModel):
     job_id: str
     document_id: str
     source_file_name: str | None = None
-    embedding_input_path: Path
+    parse_output: ParseOutput
+    chunks: list[DocumentChunk] = Field(default_factory=list)
+    embedding_records: list[EmbeddingRecord] = Field(default_factory=list)
+    diagnostics: ParseDiagnostics
     output_dir: Path | None = None
-    record_count: int
+    record_count: int = 0
     status: EmbeddingQueueItemStatus = EmbeddingQueueItemStatus.QUEUED
     attempts: int = 0
-    task_id: str | None = None
     last_error: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     enqueued_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -37,11 +43,12 @@ class EmbeddingQueueItem(BaseModel):
 
 class EmbeddingQueueSnapshot(BaseModel):
     max_bulk_size: int
+    max_size: int
+    max_payload_bytes: int | None = None
     queued_count: int
     in_flight_count: int
     completed_count: int
     failed_count: int
-    active_task_ids: list[str]
     queued_items: list[EmbeddingQueueItem]
     in_flight_items: list[EmbeddingQueueItem]
     completed_items: list[EmbeddingQueueItem]
@@ -49,21 +56,19 @@ class EmbeddingQueueSnapshot(BaseModel):
 
 
 class EmbeddingDispatchResult(BaseModel):
-    task_id: str
     accepted_document_count: int
-    raw_response: dict[str, Any] = Field(default_factory=dict)
-
-
-class EmbeddingTaskStatus(BaseModel):
-    task_id: str
-    completed: bool
-    failed: bool = False
-    error: str | None = None
+    accepted_chunk_count: int = 0
     raw_response: dict[str, Any] = Field(default_factory=dict)
 
 
 class EmbeddingDispatchRunResult(BaseModel):
     queue_status: EmbeddingQueueSnapshot
-    submitted_task_id: str | None = None
-    completed_task_ids: list[str] = Field(default_factory=list)
-    failed_task_ids: list[str] = Field(default_factory=list)
+    submitted_document_count: int = 0
+    submitted_chunk_count: int = 0
+
+
+DispatchQueueItem = EmbeddingQueueItem
+DispatchQueueItemStatus = EmbeddingQueueItemStatus
+DispatchQueueSnapshot = EmbeddingQueueSnapshot
+DispatchResult = EmbeddingDispatchResult
+DispatchRunResult = EmbeddingDispatchRunResult

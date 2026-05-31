@@ -55,8 +55,10 @@ def test_env_example_loads() -> None:
     assert settings.docling_vlm_max_new_tokens == 4096
     assert settings.effective_docling_vlm_trust_remote_code is False
     assert settings.docling_vllm_max_model_len == 32768
-    assert settings.embedding_queue_enabled is False
-    assert settings.embedding_queue_max_bulk_size == 5
+    assert settings.parser_worker_count == 2
+    assert settings.dispatch_queue_max_payload_bytes is None
+    assert settings.dispatch_max_bulk_size == 5
+    assert settings.dispatch_sink_mode == "local"
     assert settings.embedding_elastic_mapping_version == "v2"
     assert settings.embedding_elastic_index == "open-rag-embeddings-v2"
     assert settings.embedding_elastic_pipeline is None
@@ -151,10 +153,12 @@ def test_settings_grouped_config_views() -> None:
     assert settings.docling_xbrl_config.enable_local_fetch is False
     assert settings.chunking_config.embedding_output_enabled is True
     assert settings.confidence_config.output_enabled is True
-    assert settings.embedding_queue_config.max_bulk_size == 5
-    assert settings.embedding_queue_config.elastic_mapping_version == "v1"
-    assert settings.embedding_queue_config.elastic_password_configured is False
-    assert settings.embedding_queue_config.elastic_include_local_paths is False
+    assert settings.dispatch_config.max_bulk_size == 5
+    assert settings.dispatch_config.queue_max_payload_bytes is None
+    assert settings.dispatch_config.sink_mode == "local"
+    assert settings.dispatch_config.elastic_mapping_version == "v1"
+    assert settings.dispatch_config.elastic_password_configured is False
+    assert settings.dispatch_config.elastic_include_local_paths is False
 
 
 def test_settings_normalize_elastic_mapping_version_aliases() -> None:
@@ -170,9 +174,9 @@ def test_settings_reject_unknown_elastic_mapping_version() -> None:
         Settings(embedding_elastic_mapping_version="v3")
 
 
-def test_settings_reject_embedding_bulk_size_over_five() -> None:
+def test_settings_reject_dispatch_bulk_size_over_five() -> None:
     with pytest.raises(ValidationError):
-        Settings(embedding_queue_max_bulk_size=6)
+        Settings(dispatch_max_bulk_size=6)
 
 
 def test_settings_embedding_queue_config_redacts_password() -> None:
@@ -182,7 +186,7 @@ def test_settings_embedding_queue_config_redacts_password() -> None:
         embedding_elastic_password="secret",
     )
 
-    config = settings.embedding_queue_config.model_dump()
+    config = settings.dispatch_config.model_dump()
 
     assert config["elastic_password_configured"] is True
     assert "secret" not in str(config)

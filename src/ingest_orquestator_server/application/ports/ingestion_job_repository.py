@@ -14,3 +14,6 @@ class IngestionJobRepository(Protocol):
 
     def list_active_job_ids(self) -> set[str]:
         """Return jobs that should be protected from cleanup."""
+
+    def list_by_status(self, statuses: set[str]) -> list[IngestionJob]:
+        """Return jobs with any of the requested status values."""

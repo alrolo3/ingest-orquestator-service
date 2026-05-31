@@ -7,9 +7,9 @@ from ingest_orquestator_server.models.embedding_queue import (
     EmbeddingQueueItem,
     EmbeddingQueueItemStatus,
     EmbeddingQueueSnapshot,
-    EmbeddingTaskStatus,
 )
 from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
+from ingest_orquestator_server.models.ingest_batch_response import IngestBatchResponse
 from ingest_orquestator_server.models.ingest_response import IngestResponse
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
@@ -28,9 +28,9 @@ __all__ = [
     "EmbeddingQueueItemStatus",
     "EmbeddingQueueSnapshot",
     "EmbeddingRecord",
-    "EmbeddingTaskStatus",
     "IngestionJob",
     "IngestResponse",
+    "IngestBatchResponse",
     "IngestionStatus",
     "OutputFiles",
     "ParseDiagnostics",

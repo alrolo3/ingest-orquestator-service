@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from threading import Event, Lock, Thread
 from time import perf_counter, sleep
 
 from ingest_orquestator_server.application.ports.embedding_dispatcher import (
@@ -9,6 +10,10 @@ from ingest_orquestator_server.application.ports.embedding_dispatcher import (
 )
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
+)
+from ingest_orquestator_server.application.ports.parse_output_writer import ParseOutputWriter
+from ingest_orquestator_server.application.services.document_parse_service import (
+    DocumentParseResult,
 )
 from ingest_orquestator_server.application.services.embedding_queue_service import (
     EmbeddingQueueError,
@@ -19,10 +24,10 @@ from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.models.embedding_queue import (
     EmbeddingDispatchRunResult,
     EmbeddingQueueItem,
-    EmbeddingTaskStatus,
 )
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
+from ingest_orquestator_server.models.output_files import OutputFiles
 
 logger = logging.getLogger(__name__)
 
@@ -35,54 +40,90 @@ class EmbeddingDispatchService:
         queue_service: EmbeddingQueueService,
         dispatcher: EmbeddingDispatcher,
         job_repository: IngestionJobRepository,
+        output_writer: ParseOutputWriter,
     ) -> None:
         self._settings = settings
         self._queue_service = queue_service
         self._dispatcher = dispatcher
         self._job_repository = job_repository
+        self._output_writer = output_writer
+        self._wake_event = Event()
+        self._stop_event = Event()
+        self._thread: Thread | None = None
+        self._thread_lock = Lock()
 
-    def enqueue_job(self, job: IngestionJob) -> IngestionJob:
-        if not self._settings.embedding_queue_enabled:
-            log_stage(
-                "embedding.queue.skipped",
-                job_id=job.job_id,
-                document_id=job.document_id,
-                reason="embedding queue disabled",
+    def start(self) -> None:
+        with self._thread_lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._stop_event.clear()
+            self._thread = Thread(
+                target=self._run_loop,
+                name="ingest-dispatcher",
+                daemon=True,
             )
-            return job
+            self._thread.start()
+            log_stage("dispatch.worker.started")
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        self._wake_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5)
+        log_stage("dispatch.worker.stopped")
+
+    def notify(self) -> None:
+        self.start()
+        self._wake_event.set()
+
+    def _run_loop(self) -> None:
+        while not self._stop_event.is_set():
+            result = self.run_once()
+            if result.queue_status.queued_count == 0:
+                self._wake_event.wait(self._settings.dispatch_idle_interval_seconds)
+                self._wake_event.clear()
+            else:
+                sleep(0)
+
+    def enqueue_parse_result(
+        self,
+        job: IngestionJob,
+        parse_result: DocumentParseResult,
+    ) -> IngestionJob:
         try:
-            item = self._queue_service.enqueue_job(job)
+            item = self._queue_service.enqueue_parse_result(job, parse_result)
         except EmbeddingQueueError as exc:
             log_stage(
-                "embedding.queue.skipped",
+                "dispatch.queue.failed",
                 job_id=job.job_id,
-                document_id=job.document_id,
+                document_id=parse_result.parse_output.document.document_id,
                 reason=str(exc),
             )
             logger.warning(
-                "embedding.queue.skipped",
+                "dispatch.queue.failed",
                 extra={"job_id": job.job_id, "reason": str(exc)},
             )
             return job.model_copy(
                 update={
+                    "status": IngestionStatus.RETRYABLE_FAILURE,
                     "metadata": job.metadata
-                    | {
-                        "embedding_handoff": {
-                            "enabled": True,
-                            "queued": False,
-                            "reason": str(exc),
-                        }
-                    },
+                    | self._dispatch_metadata(
+                        state=IngestionStatus.RETRYABLE_FAILURE.value,
+                        queue_items=[],
+                        error=str(exc),
+                    ),
                     "updated_at": datetime.now(UTC),
                 }
             )
 
         queued_job = job.model_copy(
             update={
-                "status": IngestionStatus.EMBEDDING_QUEUED,
-                "metadata": self._metadata(
-                    job,
-                    state=IngestionStatus.EMBEDDING_QUEUED.value,
+                "status": IngestionStatus.DISPATCH_QUEUED,
+                "document_id": item.document_id,
+                "metadata": job.metadata
+                | parse_result.diagnostics.metadata
+                | self._dispatch_metadata(
+                    state=IngestionStatus.DISPATCH_QUEUED.value,
                     queue_items=[item],
                 ),
                 "updated_at": datetime.now(UTC),
@@ -90,86 +131,68 @@ class EmbeddingDispatchService:
         )
         self._job_repository.save(queued_job)
         log_stage(
-            "embedding.queue.enqueued",
+            "dispatch.queue.enqueued",
             job_id=job.job_id,
             document_id=item.document_id,
             queue_id=item.queue_id,
             source_file_name=item.source_file_name,
             record_count=item.record_count,
-            output_dir=item.output_dir,
+            chunk_count=len(item.chunks),
+            sink_mode=self._settings.dispatch_sink_mode,
         )
         return queued_job
 
-    def run_once(self) -> EmbeddingDispatchRunResult:
-        completed_task_ids: list[str] = []
-        failed_task_ids: list[str] = []
-        for task_id in self._queue_service.snapshot().active_task_ids:
-            status = self._dispatcher.get_task_status(task_id)
-            if status.completed or status.failed:
-                self._complete_remote_task(status)
-                if status.failed:
-                    failed_task_ids.append(task_id)
-                else:
-                    completed_task_ids.append(task_id)
+    def enqueue_job(self, job: IngestionJob) -> IngestionJob:
+        raise EmbeddingQueueError(
+            "Dispatch queue requires the full parsed document. Use enqueue_parse_result()."
+        )
 
-        submitted_task_id = self.dispatch_next_batch()
+    def run_once(self) -> EmbeddingDispatchRunResult:
+        submitted_document_count = self.dispatch_next_batch()
         return EmbeddingDispatchRunResult(
             queue_status=self._queue_service.snapshot(),
-            submitted_task_id=submitted_task_id,
-            completed_task_ids=completed_task_ids,
-            failed_task_ids=failed_task_ids,
+            submitted_document_count=submitted_document_count,
         )
 
     def drain(self) -> EmbeddingDispatchRunResult:
         result = self.run_once()
-        if not self._settings.embedding_queue_enabled:
-            return result
-
-        started = perf_counter()
         while result.queue_status.queued_count > 0 or result.queue_status.in_flight_count > 0:
-            if perf_counter() - started > self._settings.embedding_elastic_task_timeout_seconds:
-                return result
-            sleep(self._settings.embedding_elastic_task_poll_interval_seconds)
             result = self.run_once()
         return result
 
-    def dispatch_next_batch(self) -> str | None:
-        if not self._settings.embedding_queue_enabled:
-            return None
-        if self._queue_service.snapshot().active_task_ids:
-            return None
-
-        batch = self._queue_service.dequeue_batch(self._settings.embedding_queue_max_bulk_size)
+    def dispatch_next_batch(self) -> int:
+        batch = self._queue_service.dequeue_batch(self._settings.dispatch_max_bulk_size)
         if not batch:
-            return None
+            return 0
 
+        started = perf_counter()
         for item in batch:
-            self._save_item_state(item, IngestionStatus.EMBEDDING_TASK_RUNNING)
+            self._save_item_state(item, IngestionStatus.DISPATCHING)
         log_stage(
-            "embedding.dispatch.started",
+            "dispatch.started",
             queue_ids=[item.queue_id for item in batch],
             job_ids=[item.job_id for item in batch],
             document_ids=[item.document_id for item in batch],
             document_bulk_size=len(batch),
             record_count=sum(item.record_count for item in batch),
+            sink_mode=self._settings.dispatch_sink_mode,
         )
 
         try:
-            result = self._dispatcher.submit_batch(batch)
+            local_outputs = self._store_local(batch) if self._should_store_local else {}
+            result = self._dispatcher.submit_batch(batch) if self._should_dispatch_elastic else None
         except Exception as exc:
-            retry = any(
-                item.attempts <= self._settings.embedding_elastic_max_retries for item in batch
-            )
+            retry = any(item.attempts <= self._settings.dispatch_max_retries for item in batch)
             updated_items = self._queue_service.mark_batch_failed(
                 batch,
                 error=str(exc),
                 retry=retry,
             )
-            status = IngestionStatus.EMBEDDING_QUEUED if retry else IngestionStatus.EMBEDDING_FAILED
+            status = IngestionStatus.DISPATCH_QUEUED if retry else IngestionStatus.FAILED
             for item in updated_items:
                 self._save_item_state(item, status, error=str(exc))
             log_stage(
-                "embedding.dispatch.failed",
+                "dispatch.failed",
                 queue_ids=[item.queue_id for item in batch],
                 job_ids=[item.job_id for item in batch],
                 document_ids=[item.document_id for item in batch],
@@ -177,79 +200,45 @@ class EmbeddingDispatchService:
                 error=str(exc),
                 retry=retry,
             )
-            logger.exception("embedding.dispatch.failed")
-            return None
+            logger.exception("dispatch.failed")
+            return 0
 
-        self._queue_service.mark_sent(batch, result.task_id)
-        sent_items = self._queue_service.items_for_task(result.task_id)
-        for item in sent_items:
+        for item in batch:
+            outputs = local_outputs.get(item.queue_id)
+            metadata = {
+                "local_outputs": outputs.model_dump(mode="json") if outputs is not None else None,
+                "elastic_response": result.raw_response if result is not None else None,
+            }
             self._save_item_state(
                 item,
-                IngestionStatus.SENT_TO_EMBEDDING_SYSTEM,
-                task_id=result.task_id,
-                raw_response=result.raw_response,
+                IngestionStatus.COMPLETED,
+                outputs=outputs,
+                raw_response=metadata,
             )
+        completed_items = self._queue_service.mark_completed(batch)
         log_stage(
-            "embedding.dispatch.accepted",
-            task_id=result.task_id,
-            queue_ids=[item.queue_id for item in sent_items],
-            job_ids=[item.job_id for item in sent_items],
-            document_ids=[item.document_id for item in sent_items],
-            accepted_document_count=result.accepted_document_count,
+            "dispatch.completed",
+            queue_ids=[item.queue_id for item in completed_items],
+            job_ids=[item.job_id for item in completed_items],
+            document_ids=[item.document_id for item in completed_items],
+            accepted_document_count=(result.accepted_document_count if result else len(batch)),
+            accepted_chunk_count=(result.accepted_chunk_count if result else 0),
+            sink_mode=self._settings.dispatch_sink_mode,
+            elapsed_ms=round((perf_counter() - started) * 1000),
         )
-        return result.task_id
+        return result.accepted_document_count if result else len(batch)
 
     def queue_status(self):
         return self._queue_service.snapshot()
-
-    def _complete_remote_task(self, status: EmbeddingTaskStatus) -> None:
-        if status.failed:
-            items = self._queue_service.mark_task_failed(
-                status.task_id,
-                status.error or "Remote embedding task failed.",
-            )
-            for item in items:
-                self._save_item_state(
-                    item,
-                    IngestionStatus.EMBEDDING_FAILED,
-                    task_id=status.task_id,
-                    error=status.error,
-                    raw_response=status.raw_response,
-                )
-            log_stage(
-                "embedding.task.failed",
-                task_id=status.task_id,
-                queue_ids=[item.queue_id for item in items],
-                job_ids=[item.job_id for item in items],
-                document_ids=[item.document_id for item in items],
-                error=status.error,
-            )
-            return
-
-        items = self._queue_service.mark_task_completed(status.task_id)
-        for item in items:
-            self._save_item_state(
-                item,
-                IngestionStatus.EMBEDDING_COMPLETED,
-                task_id=status.task_id,
-                raw_response=status.raw_response,
-            )
-        log_stage(
-            "embedding.task.completed",
-            task_id=status.task_id,
-            queue_ids=[item.queue_id for item in items],
-            job_ids=[item.job_id for item in items],
-            document_ids=[item.document_id for item in items],
-        )
 
     def _save_item_state(
         self,
         item: EmbeddingQueueItem,
         status: IngestionStatus,
         *,
-        task_id: str | None = None,
         error: str | None = None,
         raw_response: dict | None = None,
+        outputs: OutputFiles | None = None,
     ) -> None:
         job = self._job_repository.get(item.job_id)
         if job is None:
@@ -257,42 +246,71 @@ class EmbeddingDispatchService:
         updated = job.model_copy(
             update={
                 "status": status,
-                "metadata": self._metadata(
-                    job,
+                "outputs": outputs or job.outputs,
+                "metadata": job.metadata
+                | self._dispatch_metadata(
                     state=status.value,
                     queue_items=[item],
-                    task_id=task_id or item.task_id,
                     error=error or item.last_error,
                     raw_response=raw_response,
                 ),
-                "error": error if status == IngestionStatus.EMBEDDING_FAILED else job.error,
+                "error": error if status == IngestionStatus.FAILED else job.error,
                 "updated_at": datetime.now(UTC),
+                "completed_at": datetime.now(UTC)
+                if status == IngestionStatus.COMPLETED
+                else job.completed_at,
             }
         )
         self._job_repository.save(updated)
 
-    def _metadata(
+    def _dispatch_metadata(
         self,
-        job: IngestionJob,
-        *,
         state: str,
         queue_items: list[EmbeddingQueueItem],
-        task_id: str | None = None,
         error: str | None = None,
         raw_response: dict | None = None,
     ) -> dict:
         handoff = {
             "enabled": True,
             "state": state,
+            "sink_mode": self._settings.dispatch_sink_mode,
             "queue_ids": [item.queue_id for item in queue_items],
-            "task_id": task_id,
             "document_bulk_size": len(queue_items),
             "record_count": sum(item.record_count for item in queue_items),
-            "elastic": self._settings.embedding_queue_config.model_dump(),
+            "dispatch": self._settings.dispatch_config.model_dump(),
             "updated_at": datetime.now(UTC).isoformat(),
         }
         if raw_response is not None:
             handoff["last_response"] = raw_response
         if error:
             handoff["error"] = error
-        return job.metadata | {"embedding_handoff": handoff}
+        return {"dispatch_handoff": handoff}
+
+    @property
+    def _should_store_local(self) -> bool:
+        return self._settings.dispatch_sink_mode in {"local", "local_and_elastic"}
+
+    @property
+    def _should_dispatch_elastic(self) -> bool:
+        return self._settings.dispatch_sink_mode in {"elastic", "local_and_elastic"}
+
+    def _store_local(self, batch: list[EmbeddingQueueItem]) -> dict[str, OutputFiles]:
+        outputs_by_queue_id: dict[str, OutputFiles] = {}
+        for item in batch:
+            outputs = self._output_writer.write(
+                item.parse_output,
+                self._settings.outputs_dir,
+                chunks=item.chunks if item.chunks else None,
+                embedding_records=item.embedding_records if item.embedding_records else None,
+                diagnostics=item.diagnostics,
+            )
+            outputs_by_queue_id[item.queue_id] = outputs
+            self._save_item_state(item, IngestionStatus.STORED_LOCAL, outputs=outputs)
+            log_stage(
+                "dispatch.local.stored",
+                job_id=item.job_id,
+                document_id=item.document_id,
+                queue_id=item.queue_id,
+                output_dir=outputs.output_dir,
+            )
+        return outputs_by_queue_id

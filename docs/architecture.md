@@ -7,11 +7,12 @@ For a Mermaid diagram view, see [Architecture Diagram](architecture-diagram.md).
 ```text
 FastAPI
 -> application service
--> parser/output/storage ports
+-> parser worker pool
+-> mandatory full-document dispatch queue
+-> dispatcher-owned storage and sink ports
 -> Docling and filesystem adapters
 -> normalized document models
--> chunks, embedding records, and local output files
--> optional local embedding queue and Elastic handoff
+-> chunks, embedding records, local output files, and optional Elastic bulk indexing
 ```
 
 ## Boundaries
@@ -23,7 +24,7 @@ FastAPI
 - `infrastructure/docling/` adapts Docling into the `DocumentParser` port.
 - `infrastructure/filesystem/` stores uploads and writes parser artifacts.
 - `infrastructure/sqlite/` persists ingestion job state.
-- `infrastructure/elastic/` submits embedding handoff batches and polls remote task status.
+- `infrastructure/elastic/` submits dispatcher batches through the official Elasticsearch Python client bulk helper.
 - `main.py` only exposes the ASGI `app` for Uvicorn.
 
 ## Project Shape
@@ -49,23 +50,18 @@ src/ingest_orquestator_server/
 
 ## Current MVP Behavior
 
-The service can run parsing synchronously or enqueue an in-process background
-job for heavier OCR/VLM parsing.
+The API is asynchronous. Upload requests create one persisted job per file and
+return immediately with `parser_queued` status. A configurable parser worker
+pool runs Docling or another parser off the request thread, then enqueues the
+full parsed document result in the mandatory process-local dispatch queue.
 
-Both flows persist job state, outputs, diagnostics, confidence summaries,
-chunks, and embedding-ready JSONL records. Later iterations can replace the
-in-process background worker with an external queue if multi-process scaling is
-needed.
-
-When `INGEST_EMBEDDING_QUEUE_ENABLED=true`, completed jobs with
-`embedding_input.jsonl` are added to a process-local `EmbeddingQueueService`.
-`EmbeddingDispatchService` submits up to five documents per remote request
-through the official Elasticsearch Python client. Before submit, each
-`embedding_input.jsonl` line is flattened into its own Elasticsearch document,
-so one normalized chunk maps to one indexed document with `_id = record_id`.
-`_bulk` mode records an internal `elastic-bulk:*` marker and completes after the
-bulk helper returns; custom async endpoints record the returned remote task id,
-poll completion, and persist handoff states back into SQLite.
+`EmbeddingDispatchService` is the dispatcher coordinator. It drains up to the
+configured number of full documents per batch, stores local artifacts when the
+local sink is enabled, and sends Elastic bulk requests when the Elastic sink is
+enabled. Elastic payload generation happens in the dispatcher: each parsed
+document is chunked into one indexed Elasticsearch document per RAG chunk with
+deterministic `_id = record_id`. Bulk failures are retried and then persisted as
+`failed` when retry budget is exhausted.
 
 ## Adding A Parser
 

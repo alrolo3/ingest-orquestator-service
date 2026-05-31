@@ -142,15 +142,21 @@ INGEST_DOCLING_VLM_TRUST_REMOTE_CODE=true
 Full-page VLM with vLLM:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=vlm" \
+response=$(curl -s -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=vlm" \
   -F "file=@sample-inputs/sample.pdf"
+)
+job_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' <<<"$response")
+curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}"
 ```
 
 Standard pipeline with vLLM picture descriptions:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+response=$(curl -s -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
   -F "file=@sample-inputs/qwen3-picture-description-smoke.pdf"
+)
+job_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["job_id"])' <<<"$response")
+curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}"
 ```
 
 Inspect runtime metadata:

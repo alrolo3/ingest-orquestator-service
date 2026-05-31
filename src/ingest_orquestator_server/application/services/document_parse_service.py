@@ -23,7 +23,7 @@ from ingest_orquestator_server.models.parse_output import ParseOutput
 @dataclass(frozen=True)
 class DocumentParseResult:
     parse_output: ParseOutput
-    outputs: OutputFiles
+    outputs: OutputFiles | None
     chunks: list[DocumentChunk]
     embedding_records: list[EmbeddingRecord]
     diagnostics: ParseDiagnostics
@@ -50,7 +50,7 @@ class DocumentParseService:
         *,
         file_path: Path,
         parser_name: str,
-        output_root: Path,
+        output_root: Path | None = None,
         document_id: str | None = None,
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
@@ -64,7 +64,7 @@ class DocumentParseService:
             document_id=document_id,
             pipeline=pipeline,
         )
-        return self._persist_parse_output(
+        return self._build_parse_result(
             parse_output,
             parser_name=parser_name,
             output_root=output_root,
@@ -80,7 +80,7 @@ class DocumentParseService:
         *,
         file_paths: list[Path],
         parser_name: str,
-        output_root: Path,
+        output_root: Path | None = None,
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
@@ -107,7 +107,7 @@ class DocumentParseService:
             pipeline=pipeline,
         )
         return [
-            self._persist_parse_output(
+            self._build_parse_result(
                 parse_output,
                 parser_name=parser_name,
                 output_root=output_root,
@@ -120,12 +120,12 @@ class DocumentParseService:
             for parse_output in parse_outputs
         ]
 
-    def _persist_parse_output(
+    def _build_parse_result(
         self,
         parse_output: ParseOutput,
         *,
         parser_name: str,
-        output_root: Path,
+        output_root: Path | None,
         pipeline: str | None,
         chunking_enabled: bool | None,
         chunking_strategy: str | None,
@@ -189,17 +189,38 @@ class DocumentParseService:
                 "warnings": parse_output.warnings,
             },
         )
-        outputs = self._output_writer.write(
-            parse_output,
-            output_root,
-            chunks=chunks if chunking_is_enabled else None,
-            embedding_records=embedding_records if embedding_records else None,
-            diagnostics=diagnostics,
-        )
+        outputs = None
+        if output_root is not None:
+            outputs = self.write_parse_result(
+                parse_output=parse_output,
+                output_root=output_root,
+                chunks=chunks,
+                embedding_records=embedding_records,
+                diagnostics=diagnostics,
+                chunking_enabled=chunking_is_enabled,
+            )
         return DocumentParseResult(
             parse_output=parse_output,
             outputs=outputs,
             chunks=chunks,
             embedding_records=embedding_records,
+            diagnostics=diagnostics,
+        )
+
+    def write_parse_result(
+        self,
+        *,
+        parse_output: ParseOutput,
+        output_root: Path,
+        chunks: list[DocumentChunk],
+        embedding_records: list[EmbeddingRecord],
+        diagnostics: ParseDiagnostics,
+        chunking_enabled: bool | None = None,
+    ) -> OutputFiles:
+        return self._output_writer.write(
+            parse_output,
+            output_root,
+            chunks=chunks if chunking_enabled is not False else None,
+            embedding_records=embedding_records if embedding_records else None,
             diagnostics=diagnostics,
         )
