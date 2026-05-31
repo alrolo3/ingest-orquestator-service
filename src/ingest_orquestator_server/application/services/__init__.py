@@ -5,6 +5,13 @@ from ingest_orquestator_server.application.services.document_parse_service impor
     DocumentParseResult,
     DocumentParseService,
 )
+from ingest_orquestator_server.application.services.embedding_dispatch_service import (
+    EmbeddingDispatchService,
+)
+from ingest_orquestator_server.application.services.embedding_queue_service import (
+    EmbeddingQueueError,
+    EmbeddingQueueService,
+)
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
 )
@@ -23,6 +30,9 @@ __all__ = [
     "DocumentChunkingService",
     "DocumentParseResult",
     "DocumentParseService",
+    "EmbeddingDispatchService",
+    "EmbeddingQueueError",
+    "EmbeddingQueueService",
     "FileIngestionService",
     "JobQueryService",
     "OutputRetrievalService",

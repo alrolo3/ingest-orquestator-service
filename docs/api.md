@@ -63,6 +63,13 @@ Docling formats use `pipeline=standard`.
 Use `profile=parse_only&chunking_enabled=false` when a downstream embedding
 store will do its own chunking.
 
+When `INGEST_EMBEDDING_QUEUE_ENABLED=true`, a successful parse with
+`embedding_input.jsonl` is enqueued for embedding handoff. Job statuses can then
+progress through `embedding_queued`, `sent_to_embedding_system`,
+`embedding_task_running`, `embedding_completed`, or `embedding_failed`.
+The queue is internal; callers do not call a queue endpoint. Use the job API to
+observe the current state.
+
 ## Get Job
 
 ```http

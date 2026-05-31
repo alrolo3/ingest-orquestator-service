@@ -15,6 +15,8 @@ flowchart LR
     App --> Docling["Docling DocumentConverter"]
     App --> Storage["Local filesystem storage"]
     App --> Jobs["SQLite job repository"]
+    App --> Queue["Local embedding queue<br/>v1.4 optional"]
+    Queue --> Elastic["Official Elasticsearch Python client<br/>bulk or custom async"]
 
     Docling --> Models["Docling models<br/>Layout, OCR, tables, pictures, VLM"]
     Storage --> Outputs["Parse artifacts<br/>normalized, markdown, text, chunks, embedding JSONL, confidence"]
@@ -38,6 +40,8 @@ flowchart TB
         Embedding["EmbeddingRecordService"]
         OutputRetrieval["OutputRetrievalService"]
         JobQuery["JobQueryService"]
+        EmbeddingQueue["EmbeddingQueueService"]
+        EmbeddingDispatch["EmbeddingDispatchService"]
         Registry["ParserRegistry"]
     end
 
@@ -46,6 +50,7 @@ flowchart TB
         WriterPort["ParseOutputWriter"]
         UploadPort["UploadStorage"]
         JobRepoPort["IngestionJobRepository"]
+        EmbeddingPort["EmbeddingDispatcher"]
     end
 
     subgraph Infrastructure["Infrastructure Adapters"]
@@ -56,6 +61,7 @@ flowchart TB
         Writer["LocalParseOutputWriter"]
         Uploads["LocalUploadStorage"]
         SQLite["SqliteIngestionJobRepository"]
+        ElasticDispatch["ElasticEmbeddingDispatcher"]
     end
 
     subgraph Config["Configuration"]
@@ -72,6 +78,7 @@ flowchart TB
     FileIngestion --> UploadPort
     FileIngestion --> JobRepoPort
     FileIngestion --> ParseService
+    FileIngestion --> EmbeddingDispatch
     FileIngestion --> JobQuery
 
     ParseService --> Registry
@@ -84,6 +91,10 @@ flowchart TB
     WriterPort --> Writer
     UploadPort --> Uploads
     JobRepoPort --> SQLite
+    EmbeddingPort --> ElasticDispatch
+    EmbeddingDispatch --> EmbeddingQueue
+    EmbeddingDispatch --> EmbeddingPort
+    EmbeddingDispatch --> JobRepoPort
 
     DoclingParser --> ConverterFactory
     DoclingParser --> Normalizer
@@ -109,6 +120,8 @@ sequenceDiagram
     participant Chunker as "DocumentChunkingService"
     participant Writer as "LocalParseOutputWriter"
     participant Jobs as "SQLite job repository"
+    participant EmbQueue as "Embedding queue / dispatcher"
+    participant Elastic as "Official Elasticsearch Python client"
 
     Client->>Route: "Submit file and options"
     Route->>Ingestion: "ingest_upload or enqueue_upload"
@@ -124,8 +137,31 @@ sequenceDiagram
     Ingestion->>Writer: "Write artifacts"
     Writer-->>Ingestion: "OutputFiles"
     Ingestion->>Jobs: "Persist completed/failed job"
+    opt "INGEST_EMBEDDING_QUEUE_ENABLED=true"
+        Ingestion->>EmbQueue: "Enqueue embedding_input.jsonl"
+        EmbQueue->>Jobs: "status = embedding_queued"
+        EmbQueue->>Elastic: "Submit chunks from up to 5 parsed docs"
+        Elastic-->>EmbQueue: "bulk result or task id"
+        EmbQueue->>Jobs: "status = sent_to_embedding_system"
+    end
     Ingestion-->>Route: "IngestResponse"
     Route-->>Client: "Job, metadata, outputs, optional document/chunks"
+```
+
+## Embedding Handoff
+
+```mermaid
+flowchart LR
+    Completed["Completed parse<br/>embedding_input.jsonl"] --> Queue["EmbeddingQueueService<br/>process-local"]
+    Queue --> Bulk{"Up to<br/>max 5 parsed docs"}
+    Bulk --> ChunkDocs["Flatten JSONL records<br/>1 chunk = 1 ES document"]
+    ChunkDocs --> Submit["ElasticEmbeddingDispatcher<br/>official Python client"]
+    Submit --> Task["Bulk marker or remote task id"]
+    Task --> Poll["Poll custom async status"]
+    Poll --> Done{"Task done?"}
+    Done -->|No| Poll
+    Done -->|Yes| CompletedState["embedding_completed"]
+    Done -->|Failed| FailedState["embedding_failed"]
 ```
 
 ## Docling Pipeline Routing

@@ -16,6 +16,7 @@ It does not include vector storage or RAG query APIs yet.
 - Multi-format Docling `DocumentConverter` support.
 - Java-style module layout with separate model, service, adapter, and route files.
 - Normalized document, chunk, and embedding input outputs.
+- Optional v1.4 local embedding queue handoff through the official Elasticsearch Python client.
 - Local filesystem storage for uploaded files and parser outputs.
 - Docker and Compose resources for running the service.
 
@@ -45,6 +46,7 @@ Use the tutorial that matches the machine:
 - [Extension playbooks](docs/extension-playbooks.md)
 - [Environment configuration reference](docs/environment-config.md)
 - [CLI usage reference](docs/cli-usage.md)
+- [Embedding handoff guide](docs/embedding-handoff.md)
 - [Docling vLLM migration playbook](docs/docling-vllm-migration.md)
 - [Docling model runtime matrix](docs/docling-model-runtime-matrix.md)
 

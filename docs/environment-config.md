@@ -10,6 +10,11 @@ Use one of the checked-in profiles as a starting point:
 cp .env.example .env
 ```
 
+The checked-in profile files contain every `INGEST_` setting as an assignment,
+including optional settings. Values that are deployment-specific, especially
+Elastic passwords, are placeholders and must be changed in the untracked local
+`.env`.
+
 For shell-sourced profiles:
 
 ```bash
@@ -79,6 +84,35 @@ This is the upload gate. Docling format support is controlled separately by
 | Variable | Code Default | Example | Explanation |
 | --- | --- | --- | --- |
 | `INGEST_EMBEDDING_OUTPUT_ENABLED` | `true` | `true` | Writes `embedding_input.jsonl` from generated chunks. Each record includes chunk text plus document, page, parser, pipeline, element, and provenance metadata for downstream embedding. |
+
+## Embedding Queue And Elastic Handoff
+
+These settings are disabled by default. Enable them when this service should
+send completed `embedding_input.jsonl` artifacts to a remote embedding system
+fronted by Elasticsearch 9.x. v1.4.5 uses the official `elasticsearch` 9.x
+Python client and `elasticsearch.helpers.bulk` for `_bulk` submissions. Do not
+commit real endpoint credentials; keep them in a local `.env`, shell exports, or
+your deployment secret store.
+
+| Variable | Code Default | Example | Explanation |
+| --- | --- | --- | --- |
+| `INGEST_EMBEDDING_QUEUE_ENABLED` | `false` | `true` | Enables the v1.4 process-local embedding handoff queue. When enabled, completed ingestion jobs with `embedding_input.jsonl` move from `completed` to embedding handoff statuses. |
+| `INGEST_EMBEDDING_QUEUE_MAX_BULK_SIZE` | `5` | `5` | Maximum number of parsed documents submitted in one remote handoff request. The validator enforces `1..5` because v1.4 intentionally limits bulk size. |
+| `INGEST_EMBEDDING_ELASTIC_URL` | unset | `https://elastic.example:9200` | Base URL for the remote Elasticsearch or compatible embedding endpoint. Required only when the queue is enabled and dispatching. |
+| `INGEST_EMBEDDING_ELASTIC_USERNAME` | unset | `elastic-user` | Optional basic-auth username for the remote endpoint. |
+| `INGEST_EMBEDDING_ELASTIC_PASSWORD` | unset | local secret | Optional basic-auth password. This is never included in grouped config metadata; only a boolean `elastic_password_configured` is exposed. |
+| `INGEST_EMBEDDING_ELASTIC_INDEX` | `ingest-embedding-input` | `rag-embedding-input` | Target index used when the submit path is Elasticsearch `_bulk`. For custom async endpoints, it is still included in config metadata but not injected into the request path. |
+| `INGEST_EMBEDDING_ELASTIC_PIPELINE` | unset | `embedding-pipeline` | Optional Elasticsearch ingest pipeline name. When the submit path is `_bulk`, the adapter passes this value to the official bulk helper as the action pipeline. |
+| `INGEST_EMBEDDING_ELASTIC_SUBMIT_METHOD` | `POST` | `POST` | HTTP method used for the submit request. Valid values: `POST`, `PUT`. |
+| `INGEST_EMBEDDING_ELASTIC_SUBMIT_PATH` | `/_bulk` | `/_embedding/tasks` | Submit path. `/_bulk` uses the official client bulk helper and completes synchronously with an internal `elastic-bulk:*` task marker. Any other path is treated as a custom async endpoint that must return a task id. |
+| `INGEST_EMBEDDING_ELASTIC_TASK_ID_FIELD` | `task` | `task.id` | Dotted JSON field path used to extract the remote task id from custom async submit responses. Not used by bulk helper mode. |
+| `INGEST_EMBEDDING_ELASTIC_TASK_STATUS_PATH_TEMPLATE` | `/_tasks/{task_id}` | `/_tasks/{task_id}` | Path template used to poll custom remote tasks. The service replaces `{task_id}` with the returned id. Bulk helper mode completes locally after the bulk response succeeds. |
+| `INGEST_EMBEDDING_ELASTIC_VERIFY_CERTS` | `true` | `false` | Enables TLS certificate verification. Keep `true` outside local lab environments. |
+| `INGEST_EMBEDDING_ELASTIC_REQUEST_TIMEOUT_SECONDS` | `30` | `30` | Timeout for submit and status HTTP requests. |
+| `INGEST_EMBEDDING_ELASTIC_TASK_POLL_INTERVAL_SECONDS` | `2` | `2` | Poll interval used by the internal background drain loop while waiting for a custom async task to finish. |
+| `INGEST_EMBEDDING_ELASTIC_TASK_TIMEOUT_SECONDS` | `300` | `300` | Maximum task wait budget reserved for worker implementations. |
+| `INGEST_EMBEDDING_ELASTIC_MAX_RETRIES` | `3` | `3` | Number of submit retries before a document is marked `embedding_failed`. |
+| `INGEST_EMBEDDING_ELASTIC_INCLUDE_LOCAL_PATHS` | `false` | `false` | Controls whether `metadata.source_path` from embedding records is sent to the remote endpoint. Keep `false` unless the remote embedding system is allowed to receive local filesystem paths. |
 
 ## Confidence Output
 

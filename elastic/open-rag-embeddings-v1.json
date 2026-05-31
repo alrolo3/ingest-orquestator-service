@@ -1,0 +1,180 @@
+{
+  "index_name": "open-rag-embeddings-v1",
+  "pipeline_name": "qwen3_embeddings_pipeline",
+  "index": {
+    "mappings": {
+      "dynamic": false,
+      "properties": {
+        "content_embedding": {
+          "type": "dense_vector",
+          "dims": 4096,
+          "element_type": "float",
+          "similarity": "dot_product",
+          "index": true,
+          "index_options": {
+            "type": "int8_hnsw"
+          }
+        },
+        "title_embedding": {
+          "type": "dense_vector",
+          "dims": 4096,
+          "element_type": "float",
+          "similarity": "dot_product",
+          "index": true,
+          "index_options": {
+            "type": "int8_hnsw"
+          }
+        },
+        "content": {
+          "type": "text"
+        },
+        "raw_text": {
+          "type": "text",
+          "index": false
+        },
+        "record_id": {
+          "type": "keyword"
+        },
+        "document_id": {
+          "type": "keyword"
+        },
+        "chunk_id": {
+          "type": "keyword"
+        },
+        "schema_version": {
+          "type": "keyword"
+        },
+        "source_file_name": {
+          "type": "keyword",
+          "fields": {
+            "text": {
+              "type": "text"
+            }
+          }
+        },
+        "title": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 512
+            }
+          }
+        },
+        "mime_type": {
+          "type": "keyword"
+        },
+        "input_format": {
+          "type": "keyword"
+        },
+        "parser": {
+          "type": "keyword"
+        },
+        "pipeline": {
+          "type": "keyword"
+        },
+        "profile": {
+          "type": "keyword"
+        },
+        "chunker_strategy": {
+          "type": "keyword"
+        },
+        "vlm_model": {
+          "type": "keyword"
+        },
+        "vlm_runtime": {
+          "type": "keyword"
+        },
+        "picture_description_model": {
+          "type": "keyword"
+        },
+        "picture_description_runtime": {
+          "type": "keyword"
+        },
+        "contextualized": {
+          "type": "boolean"
+        },
+        "page_start": {
+          "type": "integer"
+        },
+        "page_end": {
+          "type": "integer"
+        },
+        "element_ids": {
+          "type": "keyword"
+        },
+        "element_types": {
+          "type": "keyword"
+        },
+        "confidence": {
+          "properties": {
+            "parse_score": {
+              "type": "float"
+            },
+            "layout_score": {
+              "type": "float"
+            },
+            "table_score": {
+              "type": "float"
+            },
+            "ocr_score": {
+              "type": "float"
+            },
+            "mean_score": {
+              "type": "float"
+            },
+            "low_score": {
+              "type": "float"
+            },
+            "mean_grade": {
+              "type": "keyword"
+            },
+            "low_grade": {
+              "type": "keyword"
+            },
+            "page_count": {
+              "type": "integer"
+            }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "enabled": false
+        },
+        "metadata": {
+          "type": "object",
+          "enabled": false
+        },
+        "ingested_at": {
+          "type": "date"
+        }
+      }
+    }
+  },
+  "pipeline": {
+    "description": "Generate Qwen3-Embedding-8B vectors for each normalized RAG chunk.",
+    "processors": [
+      {
+        "set": {
+          "field": "ingested_at",
+          "value": "{{{_ingest.timestamp}}}"
+        }
+      },
+      {
+        "inference": {
+          "model_id": "qwen3-embedding-8b",
+          "input_output": [
+            {
+              "input_field": "content",
+              "output_field": "content_embedding"
+            },
+            {
+              "input_field": "title",
+              "output_field": "title_embedding"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

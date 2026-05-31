@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ingest_orquestator_server.application.exceptions import (
@@ -24,6 +25,11 @@ from ingest_orquestator_server.models.ingest_response import IngestResponse
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
 
+if TYPE_CHECKING:
+    from ingest_orquestator_server.application.services.embedding_dispatch_service import (
+        EmbeddingDispatchService,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,12 +42,14 @@ class FileIngestionService:
         document_parse_service: DocumentParseService,
         job_repository: IngestionJobRepository,
         upload_validator: UploadValidator,
+        embedding_dispatch_service: EmbeddingDispatchService | None = None,
     ) -> None:
         self._settings = settings
         self._upload_storage = upload_storage
         self._document_parse_service = document_parse_service
         self._job_repository = job_repository
         self._upload_validator = upload_validator
+        self._embedding_dispatch_service = embedding_dispatch_service
 
     async def ingest_upload(
         self,
@@ -139,6 +147,7 @@ class FileIngestionService:
             }
         )
         self._job_repository.save(completed_job)
+        completed_job = self._maybe_enqueue_for_embedding(completed_job)
         logger.info(
             "ingestion.parse.completed",
             extra={
@@ -151,12 +160,12 @@ class FileIngestionService:
 
         return IngestResponse(
             job_id=job_id,
-            status=IngestionStatus.COMPLETED,
+            status=completed_job.status,
             parser=parser_name,
             document_id=parse_result.parse_output.document.document_id,
             input_path=upload_path,
             outputs=parse_result.outputs,
-            metadata=completed_metadata,
+            metadata=completed_job.metadata,
             document=parse_result.parse_output.document if include_document else None,
             chunks=parse_result.chunks if include_document else None,
         )
@@ -282,6 +291,7 @@ class FileIngestionService:
             }
         )
         self._job_repository.save(completed_job)
+        self._maybe_enqueue_for_embedding(completed_job)
         logger.info(
             "ingestion.background.parse.completed",
             extra={
@@ -291,6 +301,10 @@ class FileIngestionService:
                 "output_dir": str(parse_result.outputs.output_dir),
             },
         )
+
+    def process_embedding_queue(self) -> None:
+        if self._embedding_dispatch_service is not None:
+            self._embedding_dispatch_service.drain()
 
     @staticmethod
     def _error_metadata(exc: Exception) -> dict[str, str]:
@@ -322,6 +336,14 @@ class FileIngestionService:
         if chunking_strategy is not None:
             metadata["requested_chunking_strategy"] = chunking_strategy
         return metadata
+
+    def _maybe_enqueue_for_embedding(self, job: IngestionJob) -> IngestionJob:
+        if self._embedding_dispatch_service is None:
+            return job
+        queued_job = self._embedding_dispatch_service.enqueue_job(job)
+        if queued_job.status != job.status or queued_job.metadata != job.metadata:
+            self._job_repository.save(queued_job)
+        return self._job_repository.get(job.job_id) or queued_job
 
     def _validate_parser_request(
         self,

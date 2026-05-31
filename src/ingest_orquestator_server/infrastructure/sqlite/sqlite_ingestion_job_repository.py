@@ -66,11 +66,14 @@ class SqliteIngestionJobRepository:
     def list_active_job_ids(self) -> set[str]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT job_id FROM ingestion_jobs WHERE status IN (?, ?, ?)",
+                "SELECT job_id FROM ingestion_jobs WHERE status IN (?, ?, ?, ?, ?, ?)",
                 (
                     IngestionStatus.PENDING.value,
                     IngestionStatus.QUEUED.value,
                     IngestionStatus.RUNNING.value,
+                    IngestionStatus.EMBEDDING_QUEUED.value,
+                    IngestionStatus.SENT_TO_EMBEDDING_SYSTEM.value,
+                    IngestionStatus.EMBEDDING_TASK_RUNNING.value,
                 ),
             ).fetchall()
         return {str(row["job_id"]) for row in rows}

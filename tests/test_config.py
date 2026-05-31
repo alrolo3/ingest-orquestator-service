@@ -9,6 +9,19 @@ def test_env_example_matches_cuda_gpu_env() -> None:
         assert example_file.read() == cuda_file.read()
 
 
+def test_env_files_define_all_settings_keys() -> None:
+    expected = {f"INGEST_{name.upper()}" for name in Settings.model_fields}
+
+    for path in [".env.example", "env-cuda-gpu", "env-cpu"]:
+        with open(path) as env_file:
+            actual = {
+                line.split("=", 1)[0].strip()
+                for line in env_file
+                if line.strip().startswith("INGEST_") and "=" in line
+            }
+        assert expected <= actual
+
+
 def test_settings_accept_cuda_device() -> None:
     settings = Settings(docling_accelerator_device="CUDA:1")
 
@@ -42,7 +55,9 @@ def test_env_example_loads() -> None:
     assert settings.docling_vllm_fallback_on_unsupported is True
     assert settings.docling_vlm_max_new_tokens == 4096
     assert settings.effective_docling_vlm_trust_remote_code is False
-    assert settings.docling_vllm_max_model_len is None
+    assert settings.docling_vllm_max_model_len == 32768
+    assert settings.embedding_queue_enabled is False
+    assert settings.embedding_queue_max_bulk_size == 5
 
 
 def test_cuda_gpu_env_loads() -> None:
@@ -66,6 +81,7 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_vllm_tensor_parallel_size == 1
     assert settings.docling_vllm_gpu_memory_utilization > 0
     assert settings.docling_vlm_max_new_tokens == 4096
+    assert settings.docling_vllm_max_model_len == 32768
     assert settings.effective_docling_vlm_trust_remote_code is False
 
 
@@ -134,6 +150,27 @@ def test_settings_grouped_config_views() -> None:
     assert settings.docling_xbrl_config.enable_local_fetch is False
     assert settings.chunking_config.embedding_output_enabled is True
     assert settings.confidence_config.output_enabled is True
+    assert settings.embedding_queue_config.max_bulk_size == 5
+    assert settings.embedding_queue_config.elastic_password_configured is False
+    assert settings.embedding_queue_config.elastic_include_local_paths is False
+
+
+def test_settings_reject_embedding_bulk_size_over_five() -> None:
+    with pytest.raises(ValidationError):
+        Settings(embedding_queue_max_bulk_size=6)
+
+
+def test_settings_embedding_queue_config_redacts_password() -> None:
+    settings = Settings(
+        embedding_elastic_url="https://elastic.example:9200",
+        embedding_elastic_username="user",
+        embedding_elastic_password="secret",
+    )
+
+    config = settings.embedding_queue_config.model_dump()
+
+    assert config["elastic_password_configured"] is True
+    assert "secret" not in str(config)
 
 
 def test_settings_vlm_trust_remote_code_overrides_legacy_vllm_alias() -> None:

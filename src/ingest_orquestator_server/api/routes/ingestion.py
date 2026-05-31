@@ -56,8 +56,9 @@ async def ingest_file(
                 chunking_strategy=chunking_strategy,
             )
             background_tasks.add_task(service.process_queued_job, response.job_id)
+            background_tasks.add_task(service.process_embedding_queue)
             return response
-        return await service.ingest_upload(
+        response = await service.ingest_upload(
             upload=file,
             parser_name=parser,
             pipeline=pipeline,
@@ -66,6 +67,8 @@ async def ingest_file(
             chunking_strategy=chunking_strategy,
             include_document=include_document,
         )
+        background_tasks.add_task(service.process_embedding_queue)
+        return response
     except UploadValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except (

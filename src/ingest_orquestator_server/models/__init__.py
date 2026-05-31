@@ -1,6 +1,14 @@
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
 from ingest_orquestator_server.models.document_element import DocumentElement
 from ingest_orquestator_server.models.document_page import DocumentPage
+from ingest_orquestator_server.models.embedding_queue import (
+    EmbeddingDispatchResult,
+    EmbeddingDispatchRunResult,
+    EmbeddingQueueItem,
+    EmbeddingQueueItemStatus,
+    EmbeddingQueueSnapshot,
+    EmbeddingTaskStatus,
+)
 from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.ingest_response import IngestResponse
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
@@ -14,7 +22,13 @@ __all__ = [
     "DocumentChunk",
     "DocumentElement",
     "DocumentPage",
+    "EmbeddingDispatchResult",
+    "EmbeddingDispatchRunResult",
+    "EmbeddingQueueItem",
+    "EmbeddingQueueItemStatus",
+    "EmbeddingQueueSnapshot",
     "EmbeddingRecord",
+    "EmbeddingTaskStatus",
     "IngestionJob",
     "IngestResponse",
     "IngestionStatus",

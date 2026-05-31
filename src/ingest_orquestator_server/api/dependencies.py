@@ -11,6 +11,12 @@ from ingest_orquestator_server.application.services.document_chunking_service im
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
+from ingest_orquestator_server.application.services.embedding_dispatch_service import (
+    EmbeddingDispatchService,
+)
+from ingest_orquestator_server.application.services.embedding_queue_service import (
+    EmbeddingQueueService,
+)
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
 )
@@ -23,6 +29,9 @@ from ingest_orquestator_server.application.services.storage_cleanup_service impo
 )
 from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
 from ingest_orquestator_server.config.settings import Settings, get_settings
+from ingest_orquestator_server.infrastructure.elastic.elastic_embedding_dispatcher import (
+    ElasticEmbeddingDispatcher,
+)
 from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writer import (
     LocalParseOutputWriter,
 )
@@ -37,6 +46,9 @@ from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_reposi
 )
 
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
+
+_embedding_queue_service: EmbeddingQueueService | None = None
+_embedding_queue_key: tuple[int] | None = None
 
 
 def get_parser_registry(settings: SettingsDependency) -> ParserRegistry:
@@ -65,6 +77,36 @@ def get_document_parse_service(
     )
 
 
+def get_embedding_queue_service(settings: SettingsDependency) -> EmbeddingQueueService:
+    global _embedding_queue_key, _embedding_queue_service
+    key = (settings.embedding_queue_max_bulk_size,)
+    if _embedding_queue_service is None or _embedding_queue_key != key:
+        _embedding_queue_service = EmbeddingQueueService(
+            max_bulk_size=settings.embedding_queue_max_bulk_size
+        )
+        _embedding_queue_key = key
+    return _embedding_queue_service
+
+
+def get_embedding_dispatch_service(
+    settings: SettingsDependency,
+    queue_service: Annotated[
+        EmbeddingQueueService,
+        Depends(get_embedding_queue_service),
+    ],
+    job_repository: Annotated[
+        SqliteIngestionJobRepository,
+        Depends(get_job_repository),
+    ],
+) -> EmbeddingDispatchService:
+    return EmbeddingDispatchService(
+        settings=settings,
+        queue_service=queue_service,
+        dispatcher=ElasticEmbeddingDispatcher(settings),
+        job_repository=job_repository,
+    )
+
+
 def get_file_ingestion_service(
     settings: SettingsDependency,
     document_parse_service: Annotated[
@@ -76,6 +118,10 @@ def get_file_ingestion_service(
         Depends(get_job_repository),
     ],
     upload_validator: Annotated[UploadValidator, Depends(get_upload_validator)],
+    embedding_dispatch_service: Annotated[
+        EmbeddingDispatchService,
+        Depends(get_embedding_dispatch_service),
+    ],
 ) -> FileIngestionService:
     return FileIngestionService(
         settings=settings,
@@ -83,6 +129,7 @@ def get_file_ingestion_service(
         document_parse_service=document_parse_service,
         job_repository=job_repository,
         upload_validator=upload_validator,
+        embedding_dispatch_service=embedding_dispatch_service,
     )
 
 
