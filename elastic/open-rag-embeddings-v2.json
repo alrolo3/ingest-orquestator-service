@@ -1,5 +1,6 @@
 {
   "index_name": "open-rag-embeddings-v2",
+  "pipeline_name": "open_rag_embeddings_v2_semantic_pipeline",
   "index": {
     "mappings": {
       "dynamic": false,
@@ -164,5 +165,30 @@
         }
       }
     }
+  },
+  "pipeline": {
+    "description": "Populate semantic_text fields for each normalized RAG chunk.",
+    "processors": [
+      {
+        "set": {
+          "field": "ingested_at",
+          "value": "{{{_ingest.timestamp}}}"
+        }
+      },
+      {
+        "set": {
+          "field": "content_semantic",
+          "copy_from": "content",
+          "ignore_empty_value": true
+        }
+      },
+      {
+        "set": {
+          "field": "title_semantic",
+          "copy_from": "title",
+          "ignore_empty_value": true
+        }
+      }
+    ]
   }
 }

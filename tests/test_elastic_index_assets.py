@@ -38,9 +38,10 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
     asset = json.loads(asset_path.read_text(encoding="utf-8"))
     mappings = asset["index"]["mappings"]
     properties = mappings["properties"]
+    processors = asset["pipeline"]["processors"]
 
     assert asset["index_name"] == "open-rag-embeddings-v2"
-    assert "pipeline" not in asset
+    assert asset["pipeline_name"] == "open_rag_embeddings_v2_semantic_pipeline"
     assert mappings["_meta"]["inference_id"] == "qwen3-embedding-8b"
     assert "content_embedding" not in properties
     assert "title_embedding" not in properties
@@ -63,3 +64,25 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
     assert properties["chunk_id"]["type"] == "keyword"
     assert "profile" not in properties
     assert properties["metadata"]["enabled"] is False
+    assert processors == [
+        {
+            "set": {
+                "field": "ingested_at",
+                "value": "{{{_ingest.timestamp}}}",
+            }
+        },
+        {
+            "set": {
+                "field": "content_semantic",
+                "copy_from": "content",
+                "ignore_empty_value": True,
+            }
+        },
+        {
+            "set": {
+                "field": "title_semantic",
+                "copy_from": "title",
+                "ignore_empty_value": True,
+            }
+        },
+    ]

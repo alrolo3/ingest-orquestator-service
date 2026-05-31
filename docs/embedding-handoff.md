@@ -69,7 +69,7 @@ export INGEST_EMBEDDING_ELASTIC_USERNAME="your-user"
 export INGEST_EMBEDDING_ELASTIC_PASSWORD="your-password"
 export INGEST_EMBEDDING_ELASTIC_INDEX="open-rag-embeddings-v2"
 export INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION="v2"
-export INGEST_EMBEDDING_ELASTIC_PIPELINE=
+export INGEST_EMBEDDING_ELASTIC_PIPELINE="open_rag_embeddings_v2_semantic_pipeline"
 ```
 
 `INGEST_DISPATCH_SINK_MODE` accepts:
@@ -99,10 +99,37 @@ For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v1`, the dispatcher sends
 `content` and `title` through the configured ingest pipeline to populate
 `content_embedding` and `title_embedding`.
 
-For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v2`, the dispatcher also sends
-`content_semantic` and `title_semantic` for the `semantic_text` fields. It does
-not attach an ingest pipeline in this mode because inference is configured by
-the field mapping.
+For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v2`, the dispatcher sends
+`content` and `title` and attaches the configured ingest pipeline. The default
+v2 pipeline copies `content` into `content_semantic` and `title` into
+`title_semantic`; those `semantic_text` fields run inference through their field
+mapping.
+
+The v2 asset at `elastic/open-rag-embeddings-v2.json` contains both the index
+mapping and the ingest pipeline. Create the pipeline before indexing documents:
+
+```bash
+python - <<'PY'
+import json
+from pathlib import Path
+
+asset = json.loads(Path("elastic/open-rag-embeddings-v2.json").read_text())
+Path("/tmp/open-rag-embeddings-v2-index.json").write_text(json.dumps(asset["index"]))
+Path("/tmp/open-rag-embeddings-v2-pipeline.json").write_text(json.dumps(asset["pipeline"]))
+print(asset["index_name"])
+print(asset["pipeline_name"])
+PY
+
+curl -k -u "$ELASTIC_USER:$ELASTIC_PASS" \
+  -H "Content-Type: application/json" \
+  -X PUT "$ELASTIC_URL/_ingest/pipeline/open_rag_embeddings_v2_semantic_pipeline" \
+  --data-binary @/tmp/open-rag-embeddings-v2-pipeline.json
+
+curl -k -u "$ELASTIC_USER:$ELASTIC_PASS" \
+  -H "Content-Type: application/json" \
+  -X PUT "$ELASTIC_URL/open-rag-embeddings-v2" \
+  --data-binary @/tmp/open-rag-embeddings-v2-index.json
+```
 
 By default, `metadata.source_path` is removed before dispatch so local
 filesystem paths are not sent outside the service. Set

@@ -46,12 +46,12 @@ def test_elastic_dispatcher_uses_bulk_helper_for_bulk_submit(tmp_path: Path) -> 
     assert captured["kwargs"]["request_timeout"] == 30.0
 
 
-def test_elastic_dispatcher_uses_semantic_text_v2_without_pipeline(tmp_path: Path) -> None:
+def test_elastic_dispatcher_uses_semantic_text_v2_pipeline(tmp_path: Path) -> None:
     settings = Settings(
         embedding_elastic_url="https://elastic.example:9200",
         embedding_elastic_index="open-rag-embeddings-v2",
         embedding_elastic_mapping_version="semantic_text_v2",
-        embedding_elastic_pipeline="qwen3_embeddings_pipeline",
+        embedding_elastic_pipeline="open_rag_embeddings_v2_semantic_pipeline",
     )
     client = FakeElasticsearchClient()
     captured: dict[str, object] = {}
@@ -69,11 +69,11 @@ def test_elastic_dispatcher_uses_semantic_text_v2_without_pipeline(tmp_path: Pat
     actions = captured["actions"]
     assert result.raw_response["mapping_version"] == "v2"
     assert actions[0]["_index"] == "open-rag-embeddings-v2"
-    assert "pipeline" not in actions[0]
+    assert actions[0]["pipeline"] == "open_rag_embeddings_v2_semantic_pipeline"
     assert actions[0]["_source"]["content"] == "one"
-    assert actions[0]["_source"]["content_semantic"] == "one"
+    assert "content_semantic" not in actions[0]["_source"]
     assert actions[0]["_source"]["title"] == "Quarterly Revenue"
-    assert actions[0]["_source"]["title_semantic"] == "Quarterly Revenue"
+    assert "title_semantic" not in actions[0]["_source"]
 
 
 class FakeElasticsearchClient:
