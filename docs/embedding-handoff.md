@@ -113,8 +113,8 @@ For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v2`, the v2 index sets
 Elasticsearch automatically runs the pipeline for normal bulk indexing
 requests. That pipeline copies `content` into `content_semantic` and `title`
 into `title_semantic`; those `semantic_text` fields run inference through their
-field mapping. The index `_source` excludes `content_semantic` and
-`title_semantic` so search responses do not return duplicate text.
+field mapping. The index keeps `content_semantic` and `title_semantic` in
+`_source` so search and debug responses can show the text sent to inference.
 
 The v2 asset at `elastic/open-rag-embeddings-v2.json` contains the index
 mapping, the index default-pipeline setting, and the ingest pipeline. Create the

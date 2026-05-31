@@ -6,12 +6,6 @@
       "index.default_pipeline": "open_rag_embeddings_v2_semantic_pipeline"
     },
     "mappings": {
-      "_source": {
-        "excludes": [
-          "content_semantic",
-          "title_semantic"
-        ]
-      },
       "dynamic": false,
       "_meta": {
         "description": "Semantic text mapping for one normalized RAG chunk per indexed document.",

@@ -60,7 +60,7 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
     assert asset["index_name"] == "open-rag-embeddings-v2"
     assert asset["pipeline_name"] == "open_rag_embeddings_v2_semantic_pipeline"
     assert settings["index.default_pipeline"] == "open_rag_embeddings_v2_semantic_pipeline"
-    assert mappings["_source"]["excludes"] == ["content_semantic", "title_semantic"]
+    assert "_source" not in mappings
     assert mappings["_meta"]["inference_id"] == "qwen3-embedding-8b"
     assert "content_embedding" not in properties
     assert "title_embedding" not in properties
