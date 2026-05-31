@@ -34,7 +34,6 @@ Then install the default deployment requirements:
 
 ```bash
 python -m pip install -r requirements.txt
-python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 ```
 
@@ -42,8 +41,9 @@ The default GPU install path includes SuryaOCR. FlashAttention-2 is optional and
 is not installed by default because it often requires a long source build.
 SuryaOCR requires `transformers>=4.57,<5`; this keeps Qwen3-VL support while
 avoiding a SuryaOCR runtime failure with Transformers 5.x.
-`requirements-vllm.txt` is optional for CPU hosts, but required when this GPU
-environment is changed to resolve supported VLM stages through vLLM.
+RemoteLLM calls go through an external OpenAI-compatible endpoint. Install
+`requirements-vllm.txt` only in the separate environment that runs `vllm serve`,
+not as part of the API service install.
 
 To enable FlashAttention-2, install it explicitly after confirming that `nvcc`
 matches `torch.version.cuda`:
@@ -142,7 +142,7 @@ These values are aggressive for an A100 80GB. If GPU memory spikes or the
 process becomes less stable under concurrent requests, reduce the three batch
 sizes from `32` to `16`.
 
-## vLLM
+## RemoteLLM
 
 The environment keeps Transformers as the default backend:
 
@@ -153,15 +153,20 @@ INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=transformers
 ```
 
-vLLM can still be enabled explicitly for supported presets or experimental
-custom models. Unsupported models fall back to Transformers by default:
+To offload full-page VLM conversion or picture descriptions to an external
+inference server, switch the relevant runtime to `remote_llm`:
 
 ```text
-INGEST_DOCLING_VLLM_FALLBACK_ON_UNSUPPORTED=true
-INGEST_DOCLING_VLLM_FALLBACK_RUNTIME=transformers
+INGEST_DOCLING_VLM_RUNTIME=remote_llm
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=remote_llm
+INGEST_DOCLING_REMOTE_LLM_URL=http://127.0.0.1:8000/v1/chat/completions
+INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
+INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
+INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED=true
 ```
 
-See [Docling vLLM migration playbook](docling-vllm-migration.md) and
+See [Docling RemoteLLM playbook](docling-remote-llm.md) and
 [Docling model runtime matrix](docling-model-runtime-matrix.md).
 
 ## FlashAttention 3/4

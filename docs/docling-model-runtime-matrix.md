@@ -1,59 +1,53 @@
 # Docling Model Runtime Matrix
 
-This matrix tracks which loaded Docling models can use vLLM in this service.
+This matrix tracks how the service routes Docling model stages after the
+RemoteLLM rework.
 
 Source references:
 
 - https://docling-project.github.io/docling/reference/document_converter/
+- https://docling-project.github.io/docling/reference/pipeline_options/
 - https://docling-project.github.io/docling/usage/model_catalog/
 
 ## VLM Convert
 
-| Preset | Model | vLLM | Service behavior |
-| --- | --- | --- | --- |
-| `granite_docling` | Granite-Docling-258M | No | Use Docling default/Transformers/MLX/API path. |
-| `smoldocling` | SmolDocling-256M | No | Use Docling default/Transformers/MLX path. |
-| `deepseek_ocr` | DeepSeek-OCR-3B | No | API-oriented preset; not used for inline vLLM. |
-| `granite_vision` | Granite-Vision-3.3-2B | Yes | Supported vLLM full-page conversion preset. |
-| `pixtral` | Pixtral-12B | No | Use Transformers/MLX path. |
-| `got_ocr` | GOT-OCR-2.0 | No | Use Transformers path. |
-| `phi4` | Phi-4-Multimodal | Yes | Supported vLLM full-page conversion preset. |
-| `qwen` | Qwen2.5-VL-3B-Instruct | No | Use Transformers/MLX path. |
-| `nanonets_ocr2` | Nanonets-OCR2-3B | Yes | Supported vLLM full-page conversion preset. |
-| `gemma_12b` | Gemma-3-12B | No | MLX-only in Docling catalog. |
-| `gemma_27b` | Gemma-3-27B | No | MLX-only in Docling catalog. |
-| `dolphin` | Dolphin | No | Use Transformers path. |
+| Runtime | Service behavior |
+| --- | --- |
+| `transformers` | Load the configured model locally through Docling inline VLM options. This remains the default for `env-cuda-gpu`. |
+| `auto` | Resolve to local Transformers for predictable API-server behavior. |
+| `auto_inline` | Use Docling auto-inline VLM engine selection with `prefer_vllm=false`. |
+| `remote_llm` | Send VLM requests to an external OpenAI-compatible endpoint through Docling `ApiVlmOptions`. |
+| `vllm` | Accepted only as a legacy alias for `remote_llm`; the API server does not import or initialize vLLM. |
 
 ## Picture Description
 
-| Preset | Model | vLLM | Service behavior |
-| --- | --- | --- | --- |
-| `smolvlm` | SmolVLM-256M | No | Use Transformers/MLX/API fallback. |
-| `granite_vision` | Granite-Vision-3.3-2B | Yes | Supported vLLM picture-description preset. |
-| `pixtral` | Pixtral-12B | No | Use Transformers/MLX fallback. |
-| `qwen` | Qwen2.5-VL-3B-Instruct | No | Use Transformers/MLX fallback. |
-| `Qwen/Qwen3-VL-8B-Instruct` | Qwen3-VL-8B-Instruct | Unverified | Defaults to Transformers fallback. Can be tested with `INGEST_DOCLING_VLLM_ALLOW_UNVERIFIED_MODELS=true`. |
+| Runtime | Service behavior |
+| --- | --- |
+| `transformers` | Load the configured picture-description model locally through Docling picture-description options. |
+| `auto` | Resolve to local Transformers. |
+| `auto_inline` | Use Docling auto-inline engine selection with `prefer_vllm=false`. |
+| `remote_llm` | Send picture-description requests to the external OpenAI-compatible endpoint through Docling `PictureDescriptionApiOptions`. |
+| `vllm` | Accepted only as a legacy alias for `remote_llm`. |
 
 ## Other Loaded Models
 
-| Stage | Model | Runtime | vLLM Migration |
+| Stage | Model | Runtime | RemoteLLM Migration |
 | --- | --- | --- | --- |
 | Layout | `docling-layout-heron-101` | `docling-ibm-models` | Not applicable. |
 | OCR | `suryaocr` | SuryaOCR/PyTorch | Not applicable. |
 | Table structure | TableFormer accurate | `docling-ibm-models` | Not applicable. |
-| Table structure VLM | `granite-vision-4.1-4b` | Transformers | Not vLLM in current Docling catalog. |
+| Table structure VLM | `granite-vision-4.1-4b` | Transformers | Not routed through RemoteLLM by Docling's standard pipeline options today. |
 | Picture classifier | `DocumentFigureClassifier-v2.5` | Transformers image classification | Not applicable. |
-| Code/formula | `CodeFormulaV2` | Transformers | Not vLLM in current Docling catalog. |
+| Code/formula | `CodeFormulaV2` | Transformers | Not routed through RemoteLLM by Docling's current enrichment options. |
 
 ## Runtime Policy
 
 The service resolves runtime per stage:
 
-1. If a stage/model is documented as vLLM-capable and runtime is `vllm` or
-   `auto`, use vLLM.
-2. If the model is unsupported and fallback is enabled, use
-   `INGEST_DOCLING_VLLM_FALLBACK_RUNTIME`.
-3. If fallback is disabled, reject the configuration before model load.
-4. If `INGEST_DOCLING_VLLM_ALLOW_UNVERIFIED_MODELS=true`, custom repository ids
-   may be attempted through Docling's inline vLLM path and must be validated by
-   GPU smoke tests.
+1. `remote_llm` means "call an external endpoint", regardless of the model id.
+2. Legacy `vllm` is normalized to `remote_llm` for old `.env` files.
+3. Local `transformers` stays available for GPU hosts that want Docling to load
+   Qwen3 directly.
+4. Non-generative stages stay on their Docling/engine-specific runtimes.
+5. Remote endpoint compatibility is checked with `/health/remote-llm` and,
+   optionally, startup validation.

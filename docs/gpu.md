@@ -14,7 +14,6 @@ python -m pip install --upgrade pip setuptools wheel
 
 # Install a CUDA-enabled torch build first, then install deployment requirements.
 python -m pip install -r requirements.txt
-python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 
 python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
@@ -30,9 +29,9 @@ SuryaOCR is GPL-3.0-only, requires Python 3.12+ on Linux, and is loaded by
 Docling as an external plugin. If the plugin is not available, set
 `INGEST_DOCLING_PDF_OCR_ENGINE=auto` to use Docling's built-in OCR selection.
 FlashAttention-2 is optional; see the NVIDIA GPU venv tutorial before enabling
-it.
-vLLM is installed through `requirements-vllm.txt` and is used only for Docling
-VLM stages/models documented as vLLM-capable.
+it. RemoteLLM uses a separate OpenAI-compatible inference endpoint for VLM
+calls; do not install vLLM in the API service venv unless this host also runs
+the external inference server.
 
 SuryaOCR currently requires `transformers>=4.57,<5`. If an existing venv has
 Transformers 5.x, reinstall the pinned dependency set:
@@ -103,9 +102,10 @@ INGEST_DOCLING_PIPELINE=standard
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
 INGEST_DOCLING_VLM_RUNTIME=transformers
-INGEST_DOCLING_VLLM_FALLBACK_RUNTIME=transformers
-INGEST_DOCLING_VLLM_FALLBACK_ON_UNSUPPORTED=true
-INGEST_DOCLING_VLLM_ALLOW_UNVERIFIED_MODELS=false
+INGEST_DOCLING_REMOTE_LLM_URL=http://localhost:8000/v1/chat/completions
+INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
+INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
 INGEST_DOCLING_PDF_DO_OCR=true
 INGEST_DOCLING_PDF_OCR_ENGINE=suryaocr
 INGEST_DOCLING_PDF_OCR_LANGUAGES=en
@@ -134,8 +134,8 @@ Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let 
 
 Use `pipeline=vlm` only for PDF and image inputs.
 For details, see [`docs/docling-ingestion.md`](docling-ingestion.md).
-For vLLM runtime details, see
-[`docs/docling-vllm-migration.md`](docling-vllm-migration.md).
+For RemoteLLM endpoint details, see
+[`docs/docling-remote-llm.md`](docling-remote-llm.md).
 
 `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true` should only be enabled when the
 environment has a compatible `flash-attn` installation and the GPU architecture

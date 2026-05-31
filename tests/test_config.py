@@ -51,11 +51,13 @@ def test_env_example_loads() -> None:
     assert settings.docling_xbrl_enable_local_fetch is True
     assert settings.docling_pdf_picture_description_runtime == "transformers"
     assert settings.docling_vlm_runtime == "transformers"
-    assert settings.docling_vllm_fallback_on_unsupported is True
+    assert settings.docling_remote_llm_url == "http://localhost:8000/v1/chat/completions"
+    assert settings.docling_remote_llm_model == "Qwen/Qwen3-VL-8B-Instruct"
+    assert settings.docling_remote_llm_concurrency == 8
     assert settings.docling_vlm_max_new_tokens == 4096
     assert settings.docling_pdf_picture_description_max_new_tokens == 1024
     assert settings.effective_docling_vlm_trust_remote_code is False
-    assert settings.docling_vllm_max_model_len == 32768
+    assert settings.docling_remote_llm_page_batch_size == 8
     assert settings.parser_worker_count == 2
     assert settings.dispatch_queue_max_payload_bytes is None
     assert settings.dispatch_max_bulk_size == 5
@@ -83,11 +85,10 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_vlm_runtime == "transformers"
     assert settings.docling_pdf_picture_description_model == "Qwen/Qwen3-VL-8B-Instruct"
     assert settings.docling_pdf_picture_description_runtime == "transformers"
-    assert settings.docling_vllm_tensor_parallel_size == 1
-    assert settings.docling_vllm_gpu_memory_utilization > 0
+    assert settings.docling_remote_llm_concurrency == 8
     assert settings.docling_vlm_max_new_tokens == 4096
     assert settings.docling_pdf_picture_description_max_new_tokens == 1024
-    assert settings.docling_vllm_max_model_len == 32768
+    assert settings.docling_remote_llm_page_batch_size == 8
     assert settings.effective_docling_vlm_trust_remote_code is False
 
 
@@ -152,7 +153,9 @@ def test_settings_grouped_config_views() -> None:
 
     assert settings.docling_common_config.pipeline == "vlm"
     assert settings.docling_vlm_config.runtime == "transformers"
-    assert settings.docling_vlm_config.vllm_fallback_runtime == "transformers"
+    assert settings.docling_vlm_config.remote_llm_url == (
+        "http://localhost:8000/v1/chat/completions"
+    )
     assert settings.docling_vlm_config.max_new_tokens == 4096
     assert settings.docling_xbrl_config.enable_local_fetch is False
     assert settings.chunking_config.embedding_output_enabled is True
@@ -220,6 +223,16 @@ def test_settings_reject_unknown_table_structure_backend() -> None:
 def test_settings_reject_unknown_vlm_runtime() -> None:
     with pytest.raises(ValidationError):
         Settings(docling_vlm_runtime="unknown")
+
+
+def test_settings_maps_legacy_vllm_runtime_to_remote_llm() -> None:
+    settings = Settings(
+        docling_vlm_runtime="vllm",
+        docling_pdf_picture_description_runtime="vllm",
+    )
+
+    assert settings.docling_vlm_runtime == "remote_llm"
+    assert settings.docling_pdf_picture_description_runtime == "remote_llm"
 
 
 def test_settings_reject_unknown_picture_description_runtime() -> None:

@@ -16,7 +16,10 @@ def test_converter_factory_allows_configured_formats_without_pdf_options_for_md(
     )
 
     assert converter.allowed_formats == [InputFormat.MD, InputFormat.PDF]
-    assert converter.format_to_options[InputFormat.PDF].pipeline_cls == StandardPdfPipeline
+    assert issubclass(
+        converter.format_to_options[InputFormat.PDF].pipeline_cls,
+        StandardPdfPipeline,
+    )
 
 
 def test_converter_factory_uses_vlm_pipeline_for_pdf() -> None:
@@ -33,49 +36,56 @@ def test_converter_factory_uses_vlm_pipeline_for_pdf() -> None:
     )
 
 
-def test_converter_factory_uses_vllm_vlm_preset_for_pdf() -> None:
+def test_converter_factory_uses_remote_llm_options_for_pdf() -> None:
     converter = DoclingConverterFactory().create(
         Settings(
             docling_allowed_formats=["pdf"],
             docling_pdf_ocr_engine="auto",
             docling_vlm_model="granite_vision",
-            docling_vlm_runtime="vllm",
+            docling_vlm_runtime="remote_llm",
+            docling_remote_llm_url="http://llm.example/v1/chat/completions",
+            docling_remote_llm_concurrency=8,
         ),
         input_format="pdf",
         pipeline="vlm",
     )
 
     vlm_options = converter.format_to_options[InputFormat.PDF].pipeline_options.vlm_options
-    assert vlm_options.model_spec.default_repo_id == "ibm-granite/granite-vision-3.3-2b"
-    assert vlm_options.engine_options.engine_type.value == "vllm"
+    assert str(vlm_options.url) == "http://llm.example/v1/chat/completions"
+    assert vlm_options.params == {
+        "model": "granite_vision",
+        "max_tokens": 4096,
+        "temperature": 0.0,
+    }
+    assert vlm_options.concurrency == 8
 
 
-def test_converter_factory_passes_vllm_tuning_to_custom_inline_model() -> None:
+def test_converter_factory_passes_remote_llm_tuning_to_api_options() -> None:
     converter = DoclingConverterFactory().create(
         Settings(
             docling_allowed_formats=["pdf"],
             docling_pdf_ocr_engine="auto",
             docling_vlm_model="Qwen/Qwen3-VL-8B-Instruct",
-            docling_vlm_runtime="vllm",
-            docling_vllm_allow_unverified_models=True,
-            docling_vllm_gpu_memory_utilization=0.87,
-            docling_vllm_cudagraph_mode="NONE",
-            docling_vllm_max_model_len=32768,
-            docling_vllm_max_num_batched_tokens=4096,
-            docling_vlm_trust_remote_code=True,
+            docling_vlm_runtime="remote_llm",
+            docling_remote_llm_url="http://llm.example/v1/chat/completions",
+            docling_remote_llm_model="served-qwen3",
+            docling_remote_llm_max_tokens=2048,
+            docling_remote_llm_temperature=0.2,
+            docling_remote_llm_concurrency=3,
         ),
         input_format="pdf",
         pipeline="vlm",
     )
 
     vlm_options = converter.format_to_options[InputFormat.PDF].pipeline_options.vlm_options
-    assert vlm_options.repo_id == "Qwen/Qwen3-VL-8B-Instruct"
-    assert vlm_options.inference_framework.value == "vllm"
-    assert vlm_options.trust_remote_code is True
-    assert vlm_options.extra_generation_config["gpu_memory_utilization"] == 0.87
-    assert vlm_options.extra_generation_config["enforce_eager"] is True
-    assert vlm_options.extra_generation_config["max_model_len"] == 32768
-    assert vlm_options.extra_generation_config["max_num_batched_tokens"] == 4096
+    assert str(vlm_options.url) == "http://llm.example/v1/chat/completions"
+    assert vlm_options.params == {
+        "model": "served-qwen3",
+        "max_tokens": 2048,
+        "temperature": 0.2,
+    }
+    assert vlm_options.temperature == 0.2
+    assert vlm_options.concurrency == 3
 
 
 def test_converter_factory_uses_vlm_pipeline_for_image() -> None:

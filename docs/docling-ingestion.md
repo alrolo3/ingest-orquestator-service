@@ -42,6 +42,12 @@ taxonomy resources from the network.
 `pipeline=auto` resolves to `standard`. Pre-rendering Office or HTML
 documents to force VLM mode is deferred to a later milestone.
 
+The converter factory builds Docling `FormatOption` objects per format. PDF and
+image use `PdfFormatOption`/`ImageFormatOption` with `StandardPdfPipeline` or
+`VlmPipeline`; Office, HTML, Markdown, CSV, spreadsheet, and XML routes use the
+format option classes exposed by Docling's `DocumentConverter` API. Route
+metadata is written to job diagnostics and normalized output.
+
 ## Options
 
 The service is RAG-first. Standard parsing writes normalized artifacts,
@@ -64,6 +70,10 @@ INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
 INGEST_DOCLING_VLM_RUNTIME=transformers
 ```
+
+Set `INGEST_DOCLING_VLM_RUNTIME=remote_llm` to call an external
+OpenAI-compatible inference endpoint instead of loading the model inside the API
+server. See [Docling RemoteLLM playbook](docling-remote-llm.md).
 
 Picture description still uses the standard PDF pipeline enrichment settings,
 for example `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL`.

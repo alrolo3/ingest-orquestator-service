@@ -74,7 +74,7 @@ def resolve_pipeline_mode(requested_pipeline: str, input_format: str) -> str:
         return "standard"
     if pipeline == "vlm" and input_format not in VLM_SUPPORTED_FORMATS:
         raise UnsupportedPipelineError(
-            "Docling VLM pipeline is supported only for PDF and image inputs in v1.2. "
+            "Docling VLM pipeline is supported only for PDF and image inputs. "
             f"Input format '{input_format}' must use pipeline=standard."
         )
     return pipeline

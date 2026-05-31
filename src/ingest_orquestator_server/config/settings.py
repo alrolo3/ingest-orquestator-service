@@ -152,6 +152,19 @@ class Settings(BaseSettings):
     docling_vlm_load_in_8bit: bool = False
     docling_vlm_max_new_tokens: int = Field(default=4096, ge=1)
     docling_vlm_trust_remote_code: bool | None = None
+    docling_remote_llm_url: str = "http://localhost:8000/v1/chat/completions"
+    docling_remote_llm_model: str | None = None
+    docling_remote_llm_api_key: str | None = None
+    docling_remote_llm_api_key_header: str = "Authorization"
+    docling_remote_llm_api_key_scheme: str = "Bearer"
+    docling_remote_llm_timeout_seconds: float = Field(default=90.0, gt=0)
+    docling_remote_llm_concurrency: int = Field(default=1, ge=1)
+    docling_remote_llm_page_batch_size: int | None = Field(default=None, ge=1)
+    docling_remote_llm_max_tokens: int = Field(default=4096, ge=1)
+    docling_remote_llm_temperature: float = Field(default=0.0, ge=0)
+    docling_remote_llm_provider: str = "openai_compatible"
+    docling_remote_llm_health_check_enabled: bool = False
+    docling_remote_llm_health_check_timeout_seconds: float = Field(default=5.0, gt=0)
     docling_vllm_tensor_parallel_size: int = Field(default=1, ge=1)
     docling_vllm_gpu_memory_utilization: float = Field(default=0.9, gt=0, le=1)
     docling_vllm_trust_remote_code: bool = False
@@ -315,18 +328,44 @@ class Settings(BaseSettings):
     @field_validator("docling_vlm_runtime")
     @classmethod
     def validate_docling_vlm_runtime(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized in {"auto", "auto_inline", "transformers", "vllm"}:
+        normalized = value.strip().lower().replace("-", "_")
+        if normalized == "vllm":
+            return "remote_llm"
+        if normalized in {"remote", "remote_llm", "api"}:
+            return "remote_llm"
+        if normalized in {"auto", "auto_inline", "transformers"}:
             return normalized
-        raise ValueError("must be one of auto, auto_inline, transformers, or vllm")
+        raise ValueError("must be one of auto, auto_inline, transformers, or remote_llm")
 
     @field_validator("docling_pdf_picture_description_runtime")
     @classmethod
     def validate_docling_pdf_picture_description_runtime(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized in {"auto", "auto_inline", "transformers", "vllm"}:
+        normalized = value.strip().lower().replace("-", "_")
+        if normalized == "vllm":
+            return "remote_llm"
+        if normalized in {"remote", "remote_llm", "api"}:
+            return "remote_llm"
+        if normalized in {"auto", "auto_inline", "transformers"}:
             return normalized
-        raise ValueError("must be one of auto, auto_inline, transformers, or vllm")
+        raise ValueError("must be one of auto, auto_inline, transformers, or remote_llm")
+
+    @field_validator("docling_remote_llm_url")
+    @classmethod
+    def validate_docling_remote_llm_url(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("must not be empty")
+        if not cleaned.startswith(("http://", "https://")):
+            raise ValueError("must be an HTTP(S) URL")
+        return cleaned
+
+    @field_validator("docling_remote_llm_provider")
+    @classmethod
+    def validate_docling_remote_llm_provider(cls, value: str) -> str:
+        normalized = value.strip().lower().replace("-", "_")
+        if normalized in {"openai_compatible", "openai"}:
+            return "openai_compatible"
+        raise ValueError("must be openai_compatible")
 
     @field_validator("docling_vllm_fallback_runtime")
     @classmethod
@@ -375,6 +414,8 @@ class Settings(BaseSettings):
         "embedding_elastic_username",
         "embedding_elastic_password",
         "embedding_elastic_pipeline",
+        "docling_remote_llm_model",
+        "docling_remote_llm_api_key",
         mode="before",
     )
     @classmethod
@@ -487,17 +528,21 @@ class Settings(BaseSettings):
             load_in_8bit=self.docling_vlm_load_in_8bit,
             max_new_tokens=self.docling_vlm_max_new_tokens,
             trust_remote_code=self.effective_docling_vlm_trust_remote_code,
-            vllm_tensor_parallel_size=self.docling_vllm_tensor_parallel_size,
-            vllm_gpu_memory_utilization=self.docling_vllm_gpu_memory_utilization,
-            vllm_trust_remote_code=self.docling_vllm_trust_remote_code,
-            vllm_cudagraph_mode=self.docling_vllm_cudagraph_mode,
-            vllm_model_impl=self.docling_vllm_model_impl,
-            vllm_enforce_eager=self.docling_vllm_enforce_eager,
-            vllm_max_model_len=self.docling_vllm_max_model_len,
-            vllm_max_num_batched_tokens=self.docling_vllm_max_num_batched_tokens,
-            vllm_fallback_runtime=self.docling_vllm_fallback_runtime,
-            vllm_fallback_on_unsupported=self.docling_vllm_fallback_on_unsupported,
-            vllm_allow_unverified_models=self.docling_vllm_allow_unverified_models,
+            remote_llm_url=self.docling_remote_llm_url,
+            remote_llm_model=self.docling_remote_llm_model,
+            remote_llm_api_key_configured=self.docling_remote_llm_api_key is not None,
+            remote_llm_api_key_header=self.docling_remote_llm_api_key_header,
+            remote_llm_api_key_scheme=self.docling_remote_llm_api_key_scheme,
+            remote_llm_timeout_seconds=self.docling_remote_llm_timeout_seconds,
+            remote_llm_concurrency=self.docling_remote_llm_concurrency,
+            remote_llm_page_batch_size=self.docling_remote_llm_page_batch_size,
+            remote_llm_max_tokens=self.docling_remote_llm_max_tokens,
+            remote_llm_temperature=self.docling_remote_llm_temperature,
+            remote_llm_provider=self.docling_remote_llm_provider,
+            remote_llm_health_check_enabled=self.docling_remote_llm_health_check_enabled,
+            remote_llm_health_check_timeout_seconds=(
+                self.docling_remote_llm_health_check_timeout_seconds
+            ),
         )
 
     @property

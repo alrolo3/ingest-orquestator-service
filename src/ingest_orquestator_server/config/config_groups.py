@@ -48,17 +48,19 @@ class DoclingVlmConfig(BaseModel):
     load_in_8bit: bool
     max_new_tokens: int
     trust_remote_code: bool
-    vllm_tensor_parallel_size: int
-    vllm_gpu_memory_utilization: float
-    vllm_trust_remote_code: bool
-    vllm_cudagraph_mode: str
-    vllm_model_impl: str
-    vllm_enforce_eager: bool | None
-    vllm_max_model_len: int | None
-    vllm_max_num_batched_tokens: int | None
-    vllm_fallback_runtime: str
-    vllm_fallback_on_unsupported: bool
-    vllm_allow_unverified_models: bool
+    remote_llm_url: str
+    remote_llm_model: str | None
+    remote_llm_api_key_configured: bool
+    remote_llm_api_key_header: str
+    remote_llm_api_key_scheme: str
+    remote_llm_timeout_seconds: float
+    remote_llm_concurrency: int
+    remote_llm_page_batch_size: int | None
+    remote_llm_max_tokens: int
+    remote_llm_temperature: float
+    remote_llm_provider: str
+    remote_llm_health_check_enabled: bool
+    remote_llm_health_check_timeout_seconds: float
 
 
 class DoclingXbrlConfig(BaseModel):

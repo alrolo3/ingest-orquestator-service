@@ -11,8 +11,8 @@ from ingest_orquestator_server.config.docling_defaults import (
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabilities import (
     RUNTIME_AUTO_INLINE,
+    RUNTIME_REMOTE_LLM,
     RUNTIME_TRANSFORMERS,
-    RUNTIME_VLLM,
     RuntimeResolution,
     resolve_picture_description_runtime,
     resolve_vlm_convert_runtime,
@@ -117,10 +117,27 @@ def build_picture_classification_options(settings: Settings) -> Any:
 
 
 def build_picture_description_options(settings: Settings) -> Any:
-    from docling.datamodel.pipeline_options import PictureDescriptionVlmEngineOptions
+    from docling.datamodel.pipeline_options import (
+        PictureDescriptionApiOptions,
+        PictureDescriptionVlmEngineOptions,
+    )
 
     model_name = settings.docling_pdf_picture_description_model.strip()
     resolution = resolve_picture_description_runtime(settings)
+    if resolution.resolved_runtime == RUNTIME_REMOTE_LLM:
+        return PictureDescriptionApiOptions(
+            url=settings.docling_remote_llm_url,
+            headers=remote_llm_headers(settings),
+            params=remote_llm_params(
+                settings,
+                model=settings.docling_pdf_picture_description_model,
+                max_tokens=settings.docling_pdf_picture_description_max_new_tokens,
+            ),
+            timeout=settings.docling_remote_llm_timeout_seconds,
+            concurrency=settings.docling_remote_llm_concurrency,
+            prompt=settings.docling_pdf_picture_description_prompt,
+            provenance=f"{settings.docling_pdf_picture_description_model} (remote_llm)",
+        )
     engine_options = build_vlm_engine_options(resolution, settings)
     generation_config = _picture_description_generation_config(settings)
     if resolution.preset is not None:
@@ -149,6 +166,7 @@ def build_code_formula_options(settings: Settings) -> Any:
 def build_vlm_convert_options(settings: Settings) -> Any:
     from docling.datamodel.pipeline_options import VlmConvertOptions
     from docling.datamodel.pipeline_options_vlm_model import (
+        ApiVlmOptions,
         InferenceFramework,
         InlineVlmOptions,
         ResponseFormat,
@@ -156,6 +174,22 @@ def build_vlm_convert_options(settings: Settings) -> Any:
     )
 
     resolution = resolve_vlm_convert_runtime(settings)
+    if resolution.resolved_runtime == RUNTIME_REMOTE_LLM:
+        return ApiVlmOptions(
+            prompt=settings.docling_vlm_prompt,
+            scale=settings.docling_vlm_scale,
+            temperature=settings.docling_remote_llm_temperature,
+            url=settings.docling_remote_llm_url,
+            headers=remote_llm_headers(settings),
+            params=remote_llm_params(
+                settings,
+                model=settings.docling_remote_llm_model or settings.docling_vlm_model,
+                max_tokens=settings.docling_remote_llm_max_tokens,
+            ),
+            timeout=settings.docling_remote_llm_timeout_seconds,
+            concurrency=settings.docling_remote_llm_concurrency,
+            response_format=ResponseFormat(settings.docling_vlm_response_format),
+        )
     trust_remote_code = settings.effective_docling_vlm_trust_remote_code
     if resolution.preset is not None:
         return VlmConvertOptions.from_preset(
@@ -167,9 +201,7 @@ def build_vlm_convert_options(settings: Settings) -> Any:
     return InlineVlmOptions(
         prompt=settings.docling_vlm_prompt,
         repo_id=settings.docling_vlm_model,
-        inference_framework=InferenceFramework(
-            RUNTIME_VLLM if resolution.resolved_runtime == RUNTIME_VLLM else RUNTIME_TRANSFORMERS
-        ),
+        inference_framework=InferenceFramework(RUNTIME_TRANSFORMERS),
         transformers_model_type=TransformersModelType.AUTOMODEL_IMAGETEXTTOTEXT,
         response_format=ResponseFormat(settings.docling_vlm_response_format),
         torch_dtype=settings.docling_vlm_torch_dtype,
@@ -177,7 +209,7 @@ def build_vlm_convert_options(settings: Settings) -> Any:
         trust_remote_code=trust_remote_code,
         scale=settings.docling_vlm_scale,
         max_new_tokens=settings.docling_vlm_max_new_tokens,
-        extra_generation_config=_inline_vllm_extra_generation_config(settings, resolution),
+        extra_generation_config={},
     )
 
 
@@ -185,50 +217,15 @@ def build_vlm_engine_options(resolution: RuntimeResolution, settings: Settings) 
     from docling.datamodel.vlm_engine_options import (
         AutoInlineVlmEngineOptions,
         TransformersVlmEngineOptions,
-        VllmCudaGraphMode,
-        VllmVlmEngineOptions,
     )
 
-    if resolution.resolved_runtime == RUNTIME_VLLM:
-        return VllmVlmEngineOptions(
-            tensor_parallel_size=settings.docling_vllm_tensor_parallel_size,
-            gpu_memory_utilization=settings.docling_vllm_gpu_memory_utilization,
-            trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
-            cudagraph_mode=VllmCudaGraphMode(settings.docling_vllm_cudagraph_mode),
-            model_impl=settings.docling_vllm_model_impl,
-        )
     if resolution.resolved_runtime == RUNTIME_AUTO_INLINE:
-        return AutoInlineVlmEngineOptions(prefer_vllm=resolution.vllm_supported)
+        return AutoInlineVlmEngineOptions(prefer_vllm=False)
     return TransformersVlmEngineOptions(
         torch_dtype=settings.docling_vlm_torch_dtype,
         load_in_8bit=settings.docling_vlm_load_in_8bit,
         trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
     )
-
-
-def _inline_vllm_extra_generation_config(
-    settings: Settings,
-    resolution: RuntimeResolution,
-) -> dict[str, Any]:
-    if resolution.resolved_runtime != RUNTIME_VLLM:
-        return {}
-
-    extra_config: dict[str, Any] = {
-        "gpu_memory_utilization": settings.docling_vllm_gpu_memory_utilization,
-        "tensor_parallel_size": settings.docling_vllm_tensor_parallel_size,
-    }
-    if settings.docling_vlm_torch_dtype:
-        extra_config["dtype"] = settings.docling_vlm_torch_dtype
-    if settings.docling_vllm_max_model_len is not None:
-        extra_config["max_model_len"] = settings.docling_vllm_max_model_len
-    if settings.docling_vllm_max_num_batched_tokens is not None:
-        extra_config["max_num_batched_tokens"] = settings.docling_vllm_max_num_batched_tokens
-    if settings.docling_vllm_enforce_eager is not None:
-        extra_config["enforce_eager"] = settings.docling_vllm_enforce_eager
-    elif settings.docling_vllm_cudagraph_mode == "NONE":
-        extra_config["enforce_eager"] = True
-
-    return extra_config
 
 
 def _build_qwen3_picture_description_options(
@@ -327,9 +324,29 @@ def _supported_picture_description_engines(resolution: RuntimeResolution) -> set
     from docling.models.inference_engines.vlm.base import VlmEngineType
 
     engines = {VlmEngineType.TRANSFORMERS}
-    if resolution.resolved_runtime == RUNTIME_VLLM or resolution.allow_unverified_vllm_model:
-        engines.add(VlmEngineType.VLLM)
     return engines
+
+
+def remote_llm_headers(settings: Settings) -> dict[str, str]:
+    if settings.docling_remote_llm_api_key is None:
+        return {}
+    value = settings.docling_remote_llm_api_key
+    if settings.docling_remote_llm_api_key_scheme:
+        value = f"{settings.docling_remote_llm_api_key_scheme} {value}"
+    return {settings.docling_remote_llm_api_key_header: value}
+
+
+def remote_llm_params(
+    settings: Settings,
+    *,
+    model: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    return {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": settings.docling_remote_llm_temperature,
+    }
 
 
 def _validate_granite_vision_table_model(model: str) -> None:

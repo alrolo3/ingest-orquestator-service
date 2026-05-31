@@ -13,7 +13,10 @@ from ingest_orquestator_server.infrastructure.docling.docling_model_options impo
     build_vlm_convert_options,
 )
 from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabilities import (
+    RUNTIME_REMOTE_LLM,
     docling_runtime_metadata,
+    resolve_picture_description_runtime,
+    resolve_vlm_convert_runtime,
 )
 
 
@@ -28,6 +31,10 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
 
     pdf_pipeline_options = PdfPipelineOptions()
     pdf_pipeline_options.accelerator_options = build_accelerator_options(settings)
+    pdf_pipeline_options.enable_remote_services = (
+        settings.docling_pdf_do_picture_description
+        and resolve_picture_description_runtime(settings).resolved_runtime == RUNTIME_REMOTE_LLM
+    )
     pdf_pipeline_options.allow_external_plugins = settings.docling_allow_external_plugins
     pdf_pipeline_options.do_ocr = settings.docling_pdf_do_ocr
     pdf_pipeline_options.ocr_options = build_ocr_options(settings)
@@ -59,13 +66,28 @@ def build_vlm_pipeline_options(settings: Settings) -> Any:
             "`python -m pip install -e .` inside the project virtual environment."
         ) from exc
 
+    resolution = resolve_vlm_convert_runtime(settings)
+    if resolution.resolved_runtime == RUNTIME_REMOTE_LLM:
+        _configure_remote_llm_docling_batch_size(settings)
+
     return VlmPipelineOptions(
         accelerator_options=build_accelerator_options(settings),
+        enable_remote_services=resolution.resolved_runtime == RUNTIME_REMOTE_LLM,
         allow_external_plugins=settings.docling_allow_external_plugins,
         images_scale=settings.docling_vlm_scale,
         generate_page_images=True,
         vlm_options=build_vlm_convert_options(settings),
     )
+
+
+def _configure_remote_llm_docling_batch_size(settings: Settings) -> None:
+    from docling.datamodel.settings import settings as docling_settings
+
+    page_batch_size = (
+        settings.docling_remote_llm_page_batch_size or settings.docling_remote_llm_concurrency
+    )
+    if docling_settings.perf.page_batch_size < page_batch_size:
+        docling_settings.perf.page_batch_size = page_batch_size
 
 
 def build_convert_pipeline_options(settings: Settings) -> Any:
@@ -162,8 +184,9 @@ def _common_options(
         "num_threads": settings.docling_num_threads,
         "cuda_use_flash_attention2": settings.docling_cuda_use_flash_attention2,
         "allow_external_plugins": settings.docling_allow_external_plugins,
-        "vllm_fallback_on_unsupported": settings.docling_vllm_fallback_on_unsupported,
-        "vllm_allow_unverified_models": settings.docling_vllm_allow_unverified_models,
+        "remote_llm_provider": settings.docling_remote_llm_provider,
+        "remote_llm_url": settings.docling_remote_llm_url,
+        "remote_llm_api_key_configured": settings.docling_remote_llm_api_key is not None,
     }
 
 
@@ -249,17 +272,16 @@ def _vlm_options(settings: Settings) -> dict[str, Any]:
         "load_in_8bit": settings.docling_vlm_load_in_8bit,
         "max_new_tokens": settings.docling_vlm_max_new_tokens,
         "trust_remote_code": settings.effective_docling_vlm_trust_remote_code,
-        "vllm_tensor_parallel_size": settings.docling_vllm_tensor_parallel_size,
-        "vllm_gpu_memory_utilization": settings.docling_vllm_gpu_memory_utilization,
-        "vllm_trust_remote_code": settings.docling_vllm_trust_remote_code,
-        "vllm_cudagraph_mode": settings.docling_vllm_cudagraph_mode,
-        "vllm_model_impl": settings.docling_vllm_model_impl,
-        "vllm_enforce_eager": settings.docling_vllm_enforce_eager,
-        "vllm_max_model_len": settings.docling_vllm_max_model_len,
-        "vllm_max_num_batched_tokens": settings.docling_vllm_max_num_batched_tokens,
-        "vllm_fallback_runtime": settings.docling_vllm_fallback_runtime,
-        "vllm_fallback_on_unsupported": settings.docling_vllm_fallback_on_unsupported,
-        "vllm_allow_unverified_models": settings.docling_vllm_allow_unverified_models,
+        "remote_llm_url": settings.docling_remote_llm_url,
+        "remote_llm_model": settings.docling_remote_llm_model,
+        "remote_llm_api_key_configured": settings.docling_remote_llm_api_key is not None,
+        "remote_llm_api_key_header": settings.docling_remote_llm_api_key_header,
+        "remote_llm_timeout_seconds": settings.docling_remote_llm_timeout_seconds,
+        "remote_llm_concurrency": settings.docling_remote_llm_concurrency,
+        "remote_llm_page_batch_size": settings.docling_remote_llm_page_batch_size,
+        "remote_llm_max_tokens": settings.docling_remote_llm_max_tokens,
+        "remote_llm_temperature": settings.docling_remote_llm_temperature,
+        "remote_llm_provider": settings.docling_remote_llm_provider,
     }
 
 

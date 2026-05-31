@@ -7,8 +7,8 @@ from ingest_orquestator_server.config.settings import Settings
 
 RUNTIME_AUTO = "auto"
 RUNTIME_AUTO_INLINE = "auto_inline"
+RUNTIME_REMOTE_LLM = "remote_llm"
 RUNTIME_TRANSFORMERS = "transformers"
-RUNTIME_VLLM = "vllm"
 
 VLM_CONVERT_STAGE = "vlm_convert"
 PICTURE_DESCRIPTION_STAGE = "picture_description"
@@ -17,73 +17,61 @@ VLM_CONVERT_PRESETS: dict[str, dict[str, Any]] = {
     "granite_docling": {
         "model": "Granite-Docling-258M",
         "repo_id": "ibm-granite/granite-docling-258M",
-        "vllm_supported": False,
         "response_format": "doctags",
     },
     "smoldocling": {
         "model": "SmolDocling-256M",
         "repo_id": "docling-project/SmolDocling-256M-preview",
-        "vllm_supported": False,
         "response_format": "doctags",
     },
     "deepseek_ocr": {
         "model": "DeepSeek-OCR-3B",
         "repo_id": "deepseek-ai/DeepSeek-OCR",
-        "vllm_supported": False,
         "response_format": "markdown",
     },
     "granite_vision": {
         "model": "Granite-Vision-3.3-2B",
         "repo_id": "ibm-granite/granite-vision-3.3-2b",
-        "vllm_supported": True,
         "response_format": "markdown",
     },
     "pixtral": {
         "model": "Pixtral-12B",
         "repo_id": "mistral-community/pixtral-12b",
-        "vllm_supported": False,
         "response_format": "markdown",
     },
     "got_ocr": {
         "model": "GOT-OCR-2.0",
         "repo_id": "stepfun-ai/GOT-OCR-2.0-hf",
-        "vllm_supported": False,
         "response_format": "markdown",
     },
     "phi4": {
         "model": "Phi-4-Multimodal",
         "repo_id": "microsoft/Phi-4-multimodal-instruct",
-        "vllm_supported": True,
         "response_format": "markdown",
     },
     "qwen": {
         "model": "Qwen2.5-VL-3B-Instruct",
         "repo_id": "Qwen/Qwen2.5-VL-3B-Instruct",
-        "vllm_supported": False,
         "response_format": "markdown",
     },
     "nanonets_ocr2": {
         "model": "Nanonets-OCR2-3B",
         "repo_id": "nanonets/Nanonets-OCR2-3B",
-        "vllm_supported": True,
         "response_format": "markdown",
     },
     "gemma_12b": {
         "model": "Gemma-3-12B",
         "repo_id": "google/gemma-3-12b-it",
-        "vllm_supported": False,
         "response_format": "markdown",
     },
     "gemma_27b": {
         "model": "Gemma-3-27B",
         "repo_id": "google/gemma-3-27b-it",
-        "vllm_supported": False,
         "response_format": "markdown",
     },
     "dolphin": {
         "model": "Dolphin",
         "repo_id": "ByteDance/Dolphin",
-        "vllm_supported": False,
         "response_format": "markdown",
     },
 }
@@ -92,25 +80,21 @@ PICTURE_DESCRIPTION_PRESETS: dict[str, dict[str, Any]] = {
     "smolvlm": {
         "model": "SmolVLM-256M",
         "repo_id": "HuggingFaceTB/SmolVLM-256M-Instruct",
-        "vllm_supported": False,
         "response_format": "plaintext",
     },
     "granite_vision": {
         "model": "Granite-Vision-3.3-2B",
         "repo_id": "ibm-granite/granite-vision-3.3-2b",
-        "vllm_supported": True,
         "response_format": "plaintext",
     },
     "pixtral": {
         "model": "Pixtral-12B",
         "repo_id": "mistral-community/pixtral-12b",
-        "vllm_supported": False,
         "response_format": "plaintext",
     },
     "qwen": {
         "model": "Qwen2.5-VL-3B-Instruct",
         "repo_id": "Qwen/Qwen2.5-VL-3B-Instruct",
-        "vllm_supported": False,
         "response_format": "plaintext",
     },
 }
@@ -124,7 +108,7 @@ NON_VLLM_STAGE_RUNTIMES: dict[str, dict[str, Any]] = {
     "ocr": {
         "model": "suryaocr",
         "runtime": "ocr-engine-specific",
-        "reason": "OCR engines use their own runtimes and are not served by vLLM.",
+        "reason": "OCR engines use their own runtimes and are not served by RemoteLLM.",
     },
     "table_structure": {
         "model": "TableFormer",
@@ -183,12 +167,12 @@ class RuntimeResolution:
     preset: str | None
     requested_runtime: str
     resolved_runtime: str
-    vllm_supported: bool
+    remote_llm_supported: bool
     fallback_runtime: str | None = None
     fallback_reason: str | None = None
     response_format: str | None = None
     mode: str = "inline"
-    allow_unverified_vllm_model: bool = False
+    legacy_vllm_alias: bool = False
 
     def to_metadata(self) -> dict[str, Any]:
         return asdict(self)
@@ -199,9 +183,6 @@ def resolve_vlm_convert_runtime(settings: Settings) -> RuntimeResolution:
         stage=VLM_CONVERT_STAGE,
         model=settings.docling_vlm_model,
         requested_runtime=settings.docling_vlm_runtime,
-        fallback_runtime=settings.docling_vllm_fallback_runtime,
-        fallback_on_unsupported=settings.docling_vllm_fallback_on_unsupported,
-        allow_unverified_vllm_model=settings.docling_vllm_allow_unverified_models,
         aliases=_VLM_CONVERT_ALIASES,
         presets=VLM_CONVERT_PRESETS,
         response_format=settings.docling_vlm_response_format,
@@ -213,9 +194,6 @@ def resolve_picture_description_runtime(settings: Settings) -> RuntimeResolution
         stage=PICTURE_DESCRIPTION_STAGE,
         model=settings.docling_pdf_picture_description_model,
         requested_runtime=settings.docling_pdf_picture_description_runtime,
-        fallback_runtime=settings.docling_vllm_fallback_runtime,
-        fallback_on_unsupported=settings.docling_vllm_fallback_on_unsupported,
-        allow_unverified_vllm_model=settings.docling_vllm_allow_unverified_models,
         aliases=_PICTURE_DESCRIPTION_ALIASES,
         presets=PICTURE_DESCRIPTION_PRESETS,
         response_format="plaintext",
@@ -231,20 +209,22 @@ def docling_runtime_metadata(
     picture_resolution = resolve_picture_description_runtime(settings)
     return {
         "policy": {
-            "fallback_on_unsupported": settings.docling_vllm_fallback_on_unsupported,
-            "fallback_runtime": settings.docling_vllm_fallback_runtime,
-            "allow_unverified_vllm_models": settings.docling_vllm_allow_unverified_models,
-            "vllm": {
-                "tensor_parallel_size": settings.docling_vllm_tensor_parallel_size,
-                "gpu_memory_utilization": settings.docling_vllm_gpu_memory_utilization,
-                "trust_remote_code": settings.effective_docling_vlm_trust_remote_code,
-                "legacy_vllm_trust_remote_code": settings.docling_vllm_trust_remote_code,
-                "cudagraph_mode": settings.docling_vllm_cudagraph_mode,
-                "model_impl": settings.docling_vllm_model_impl,
-                "enforce_eager": settings.docling_vllm_enforce_eager,
-                "max_model_len": settings.docling_vllm_max_model_len,
-                "max_num_batched_tokens": settings.docling_vllm_max_num_batched_tokens,
+            "local_runtimes": [RUNTIME_TRANSFORMERS, RUNTIME_AUTO_INLINE],
+            "remote_runtime": RUNTIME_REMOTE_LLM,
+            "remote_llm": {
+                "provider": settings.docling_remote_llm_provider,
+                "url": settings.docling_remote_llm_url,
+                "model": settings.docling_remote_llm_model,
+                "api_key_configured": settings.docling_remote_llm_api_key is not None,
+                "api_key_header": settings.docling_remote_llm_api_key_header,
+                "timeout_seconds": settings.docling_remote_llm_timeout_seconds,
+                "concurrency": settings.docling_remote_llm_concurrency,
+                "page_batch_size": settings.docling_remote_llm_page_batch_size,
+                "max_tokens": settings.docling_remote_llm_max_tokens,
+                "temperature": settings.docling_remote_llm_temperature,
+                "health_check_enabled": settings.docling_remote_llm_health_check_enabled,
             },
+            "legacy_vllm_env_compatibility": True,
         },
         "active_pipeline_stage": (vlm_resolution.to_metadata() if pipeline == "vlm" else None),
         "stages": {
@@ -267,57 +247,42 @@ def _resolve_runtime(
     stage: str,
     model: str,
     requested_runtime: str,
-    fallback_runtime: str,
-    fallback_on_unsupported: bool,
-    allow_unverified_vllm_model: bool,
     aliases: dict[str, str],
     presets: dict[str, dict[str, Any]],
     response_format: str,
 ) -> RuntimeResolution:
-    normalized_runtime = requested_runtime.strip().lower()
+    original_runtime = requested_runtime.strip().lower().replace("-", "_")
+    legacy_vllm_alias = original_runtime == "vllm"
+    normalized_runtime = RUNTIME_REMOTE_LLM if original_runtime == "vllm" else original_runtime
     normalized_model = _normalize_model_key(model)
     preset = aliases.get(normalized_model)
     preset_metadata = presets.get(preset or "")
-    vllm_supported = bool(preset_metadata and preset_metadata["vllm_supported"])
-    if preset is None and allow_unverified_vllm_model:
-        vllm_supported = True
+    remote_llm_supported = True
 
     if normalized_runtime == RUNTIME_AUTO:
-        resolved_runtime = RUNTIME_VLLM if vllm_supported else fallback_runtime
+        resolved_runtime = RUNTIME_TRANSFORMERS
     elif normalized_runtime == RUNTIME_AUTO_INLINE:
         resolved_runtime = RUNTIME_AUTO_INLINE
-    elif normalized_runtime == RUNTIME_VLLM and not vllm_supported:
-        if not fallback_on_unsupported:
-            raise ValueError(
-                f"Docling {stage} model {model!r} is not documented as vLLM-capable. "
-                "Choose a vLLM-supported preset or enable "
-                "`INGEST_DOCLING_VLLM_ALLOW_UNVERIFIED_MODELS=true`."
-            )
-        resolved_runtime = fallback_runtime
+    elif normalized_runtime == RUNTIME_REMOTE_LLM:
+        resolved_runtime = RUNTIME_REMOTE_LLM
     else:
         resolved_runtime = normalized_runtime
 
     fallback_reason = None
     effective_fallback_runtime = None
-    if normalized_runtime == RUNTIME_VLLM and resolved_runtime != RUNTIME_VLLM:
-        effective_fallback_runtime = resolved_runtime
+    if legacy_vllm_alias:
         fallback_reason = (
-            f"Docling model catalog does not list {model!r} as vLLM-capable for {stage}."
-        )
-    if normalized_runtime == RUNTIME_AUTO and resolved_runtime != RUNTIME_VLLM:
-        effective_fallback_runtime = resolved_runtime
-        fallback_reason = (
-            f"Automatic runtime resolved to {resolved_runtime!r} because {model!r} "
-            f"is not documented as vLLM-capable for {stage}."
+            "`vllm` is a deprecated in-process runtime name. It is treated as "
+            "`remote_llm` and must point to an external OpenAI-compatible endpoint."
         )
 
     return RuntimeResolution(
         stage=stage,
         model=model,
         preset=preset,
-        requested_runtime=normalized_runtime,
+        requested_runtime=original_runtime,
         resolved_runtime=resolved_runtime,
-        vllm_supported=vllm_supported,
+        remote_llm_supported=remote_llm_supported,
         fallback_runtime=effective_fallback_runtime,
         fallback_reason=fallback_reason,
         response_format=(
@@ -325,7 +290,8 @@ def _resolve_runtime(
             if preset_metadata is not None
             else response_format
         ),
-        allow_unverified_vllm_model=allow_unverified_vllm_model,
+        mode="remote" if resolved_runtime == RUNTIME_REMOTE_LLM else "inline",
+        legacy_vllm_alias=legacy_vllm_alias,
     )
 
 
@@ -334,10 +300,10 @@ def _table_structure_metadata(settings: Settings) -> dict[str, Any]:
         return {
             "model": settings.docling_pdf_table_structure_vlm_model,
             "runtime": "transformers",
-            "vllm_supported": False,
+            "remote_llm_supported": False,
             "reason": (
                 "Docling catalog currently lists Granite Vision table structure "
-                "with Transformers, not vLLM."
+                "with Transformers in the standard pipeline."
             ),
         }
     return NON_VLLM_STAGE_RUNTIMES["table_structure"] | {

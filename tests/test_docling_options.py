@@ -45,20 +45,28 @@ def test_build_pdf_pipeline_options_can_select_granite_vision_table_structure() 
     assert options.table_structure_options.kind == "granite_vision_table"
 
 
-def test_build_pdf_pipeline_options_can_select_vllm_picture_description() -> None:
+def test_build_pdf_pipeline_options_can_select_remote_picture_description() -> None:
     options = build_pdf_pipeline_options(
         Settings(
             docling_pdf_ocr_engine="auto",
             docling_pdf_picture_description_model="granite_vision",
-            docling_pdf_picture_description_runtime="vllm",
+            docling_pdf_picture_description_runtime="remote_llm",
+            docling_remote_llm_url="http://llm.example/v1/chat/completions",
+            docling_remote_llm_concurrency=4,
         )
     )
 
-    assert options.picture_description_options.model_spec.default_repo_id == (
-        "ibm-granite/granite-vision-3.3-2b"
+    assert options.enable_remote_services is True
+    assert str(options.picture_description_options.url) == (
+        "http://llm.example/v1/chat/completions"
     )
-    assert options.picture_description_options.engine_options.engine_type.value == "vllm"
-    assert options.picture_description_options.generation_config["max_new_tokens"] == 1024
+    assert options.picture_description_options.params == {
+        "model": "granite_vision",
+        "max_tokens": 1024,
+        "temperature": 0.0,
+    }
+    assert options.picture_description_options.concurrency == 4
+    assert options.picture_description_options.provenance == "granite_vision (remote_llm)"
 
 
 def test_build_pdf_pipeline_options_passes_remote_code_to_custom_picture_model() -> None:
@@ -95,22 +103,27 @@ def test_docling_options_metadata_records_runtime_decisions() -> None:
     metadata = docling_options_metadata(
         Settings(
             docling_vlm_model="granite_vision",
-            docling_vlm_runtime="vllm",
+            docling_vlm_runtime="remote_llm",
             docling_vlm_trust_remote_code=True,
             docling_pdf_picture_description_model="Qwen/Qwen3-VL-8B-Instruct",
-            docling_pdf_picture_description_runtime="vllm",
+            docling_pdf_picture_description_runtime="remote_llm",
         ),
         input_format="pdf",
         pipeline="vlm",
     )
 
-    assert metadata["runtime"]["stages"]["vlm_convert"]["resolved_runtime"] == "vllm"
+    assert metadata["runtime"]["stages"]["vlm_convert"]["resolved_runtime"] == "remote_llm"
     assert metadata["active_options"]["pipeline_options"]["trust_remote_code"] is True
-    assert metadata["runtime"]["policy"]["vllm"]["trust_remote_code"] is True
+    assert metadata["runtime"]["policy"]["remote_runtime"] == "remote_llm"
     assert (
-        metadata["runtime"]["stages"]["picture_description"]["resolved_runtime"] == "transformers"
+        metadata["runtime"]["policy"]["remote_llm"]["url"]
+        == "http://localhost:8000/v1/chat/completions"
     )
-    assert metadata["runtime"]["stages"]["picture_description"]["fallback_reason"]
+    assert (
+        metadata["runtime"]["stages"]["picture_description"]["resolved_runtime"]
+        == "remote_llm"
+    )
+    assert metadata["runtime"]["stages"]["picture_description"]["mode"] == "remote"
 
 
 def test_default_surya_ocr_engine_requires_external_plugin() -> None:

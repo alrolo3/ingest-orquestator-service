@@ -186,7 +186,7 @@ flowchart TD
     StandardConverter --> XBRL["XBRL<br/>XBRLBackendOptions"]
 
     PdfImage --> Stages["Layout, OCR, table structure,<br/>picture classification/description,<br/>code/formula enrichment"]
-    VLMConverter --> Qwen["Qwen3 full-page VLM conversion"]
+    VLMConverter --> VLMRuntime["Local Transformers<br/>or RemoteLLM endpoint"]
     XBRL --> Taxonomy["Local/remote taxonomy fetch controls"]
 ```
 
@@ -225,13 +225,15 @@ flowchart TB
     subgraph OptionalGPU["NVIDIA GPU runtime"]
         CUDA["CUDA PyTorch"]
         Surya["SuryaOCR plugin"]
-        Qwen["Qwen3-VL model"]
+        Qwen["Local Qwen3-VL model"]
+        RemoteLLM["External RemoteLLM server<br/>OpenAI-compatible endpoint"]
     end
 
     Venv --> APIProcess
     APIProcess --> DataDir
     APIProcess --> ModelsCache
     APIProcess --> CUDA
+    APIProcess --> RemoteLLM
     CUDA --> Surya
     CUDA --> Qwen
 ```

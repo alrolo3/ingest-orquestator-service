@@ -32,6 +32,13 @@
         "content_semantic": {
           "type": "semantic_text",
           "inference_id": "qwen3-embedding-8b",
+          "model_settings": {
+            "service": "custom",
+            "task_type": "text_embedding",
+            "dimensions": 4096,
+            "similarity": "dot_product",
+            "element_type": "float"
+          },
           "index_options": {
             "dense_vector": {
               "element_type": "float",
@@ -54,6 +61,13 @@
         "title_semantic": {
           "type": "semantic_text",
           "inference_id": "qwen3-embedding-8b",
+          "model_settings": {
+            "service": "custom",
+            "task_type": "text_embedding",
+            "dimensions": 4096,
+            "similarity": "dot_product",
+            "element_type": "float"
+          },
           "index_options": {
             "dense_vector": {
               "element_type": "float",

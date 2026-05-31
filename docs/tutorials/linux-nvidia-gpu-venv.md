@@ -77,7 +77,6 @@ with Transformers 5.x, while Qwen3-VL is supported in Transformers 4.57+.
 
 ```bash
 python -m pip install -r requirements.txt
-python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 ```
 
@@ -103,25 +102,38 @@ Expected result: a 4.57+ version lower than 5.0. If SuryaOCR previously failed
 with `SuryaDecoderConfig` missing `pad_token_id`, this version mismatch was the
 cause.
 
-## 6. Verify vLLM
+## 6. Optional: Start A RemoteLLM Server
 
-The checked-in GPU environment defaults to Qwen3 through Transformers. vLLM remains
-available for explicit experiments with supported presets or unverified custom
-models.
+The checked-in GPU environment defaults to Qwen3 through Transformers inside
+Docling. For higher VLM throughput, run vLLM as a separate OpenAI-compatible
+inference server and point the API service to that endpoint.
 
 ```bash
-python - <<'PY'
-import vllm
+python3.12 -m venv .venv-vllm
+source .venv-vllm/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements-vllm.txt
 
-print("vllm", vllm.__version__)
-PY
+vllm serve Qwen/Qwen3-VL-8B-Instruct \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --max-num-seqs 64 \
+  --max-num-batched-tokens 8192 \
+  --enable-chunked-prefill \
+  --gpu-memory-utilization 0.9 \
+  --trust-remote-code
 ```
 
-If vLLM should be disabled for troubleshooting, set:
+Then set these values in the API service `.env` when you want to use the
+endpoint:
 
 ```text
-INGEST_DOCLING_VLM_RUNTIME=transformers
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=transformers
+INGEST_DOCLING_VLM_RUNTIME=remote_llm
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=remote_llm
+INGEST_DOCLING_REMOTE_LLM_URL=http://127.0.0.1:8000/v1/chat/completions
+INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
+INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
 ```
 
 ## 7. Optional: Enable FlashAttention-2

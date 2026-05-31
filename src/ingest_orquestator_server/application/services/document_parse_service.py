@@ -169,6 +169,7 @@ class DocumentParseService:
                 "element_count": len(parse_output.document.elements),
                 "input_format": docling_metadata.get("input_format"),
                 "pipeline": docling_metadata.get("pipeline") or pipeline,
+                "route": docling_metadata.get("route"),
                 "ocr_engine": docling_metadata.get("ocr_engine"),
                 "vlm_model": docling_metadata.get("vlm_model"),
                 "vlm_runtime": docling_metadata.get("vlm_runtime"),

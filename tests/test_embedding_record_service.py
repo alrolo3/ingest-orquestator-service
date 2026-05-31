@@ -15,11 +15,11 @@ def test_embedding_records_include_chunk_and_docling_metadata() -> None:
                 "input_format": "pdf",
                 "pipeline": "standard",
                 "picture_description_model": "granite_vision",
-                "picture_description_runtime": "vllm",
+                "picture_description_runtime": "remote_llm",
                 "runtime": {
                     "stages": {
                         "picture_description": {
-                            "resolved_runtime": "vllm",
+                            "resolved_runtime": "remote_llm",
                         }
                     }
                 },
@@ -48,10 +48,10 @@ def test_embedding_records_include_chunk_and_docling_metadata() -> None:
     assert records[0].record_id == "doc-1:embedding:1"
     assert records[0].metadata["input_format"] == "pdf"
     assert records[0].metadata["pipeline"] == "standard"
-    assert records[0].metadata["picture_description_runtime"] == "vllm"
+    assert records[0].metadata["picture_description_runtime"] == "remote_llm"
     assert (
         records[0].metadata["runtime"]["stages"]["picture_description"]["resolved_runtime"]
-        == "vllm"
+        == "remote_llm"
     )
     assert records[0].metadata["element_types"] == ["image"]
     assert records[0].schema_version == "1.3"

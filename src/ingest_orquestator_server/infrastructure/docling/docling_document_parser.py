@@ -10,6 +10,9 @@ from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_converter_factory import (
     DoclingConverterFactory,
 )
+from ingest_orquestator_server.infrastructure.docling.docling_format_routes import (
+    route_metadata_for,
+)
 from ingest_orquestator_server.infrastructure.docling.docling_formats import (
     detect_input_format,
     resolve_pipeline_mode,
@@ -108,6 +111,14 @@ class DoclingDocumentParser:
                     else None,
                     "vlm_model": settings.docling_vlm_model
                     if resolved_pipeline == "vlm"
+                    else None,
+                    "remote_llm_url": settings.docling_remote_llm_url
+                    if resolved_pipeline == "vlm"
+                    and settings.docling_vlm_runtime == "remote_llm"
+                    else None,
+                    "remote_llm_concurrency": settings.docling_remote_llm_concurrency
+                    if resolved_pipeline == "vlm"
+                    and settings.docling_vlm_runtime == "remote_llm"
                     else None,
                     "accelerator_device": settings.docling_accelerator_device,
                 },
@@ -252,6 +263,10 @@ class DoclingDocumentParser:
             "parser": self.name,
             "input_format": input_format,
             "pipeline": resolved_pipeline,
+            "route": route_metadata_for(
+                input_format=input_format,
+                pipeline=resolved_pipeline,
+            ),
             "ocr_engine": settings.docling_pdf_ocr_engine,
             "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
             "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,

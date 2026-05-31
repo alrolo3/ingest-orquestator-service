@@ -46,7 +46,7 @@ Use the tutorial that matches the machine:
 - [Extension playbooks](docs/extension-playbooks.md)
 - [Environment configuration reference](docs/environment-config.md)
 - [Embedding handoff guide](docs/embedding-handoff.md)
-- [Docling vLLM migration playbook](docs/docling-vllm-migration.md)
+- [Docling RemoteLLM playbook](docs/docling-remote-llm.md)
 - [Docling model runtime matrix](docs/docling-model-runtime-matrix.md)
 
 CPU tutorials install the base package directly and use [env-cpu](env-cpu).
@@ -148,6 +148,9 @@ INGEST_DOCLING_PIPELINE=standard
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
 INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_REMOTE_LLM_URL=http://localhost:8000/v1/chat/completions
+INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=1
 INGEST_DOCLING_XBRL_ENABLE_LOCAL_FETCH=false
 INGEST_DOCLING_XBRL_ENABLE_REMOTE_FETCH=false
 INGEST_DOCLING_PDF_LAYOUT_MODEL=docling-layout-heron-101

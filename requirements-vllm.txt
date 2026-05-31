@@ -1,4 +1,5 @@
-# Optional Linux NVIDIA GPU runtime for Docling VLM stages backed by vLLM.
-# Install after the base requirements inside the same venv:
-# python -m pip install -r requirements-vllm.txt
+# Optional dependency set for an external OpenAI-compatible vLLM server.
+# The API service uses RemoteLLM HTTP endpoints and does not import vLLM.
+# Install this in a separate inference-server venv, or in this venv only if
+# this machine also starts `vllm serve`.
 vllm>=0.22,<1; python_version >= "3.12" and platform_system == "Linux" and platform_machine == "x86_64"

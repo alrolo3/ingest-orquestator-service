@@ -42,9 +42,6 @@ flash-attn = [
 surya = [
   "docling-surya==0.1.0; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
 ]
-vllm = [
-  "vllm>=0.22,<1; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
-]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ingest_orquestator_server"]
