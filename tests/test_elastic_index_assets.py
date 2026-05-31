@@ -30,3 +30,35 @@ def test_open_rag_embedding_index_asset_maps_chunk_documents() -> None:
             "output_field": "title_embedding",
         },
     ]
+
+
+def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunking() -> None:
+    asset_path = Path("elastic/open-rag-embeddings-v2.json")
+
+    asset = json.loads(asset_path.read_text(encoding="utf-8"))
+    mappings = asset["index"]["mappings"]
+    properties = mappings["properties"]
+
+    assert asset["index_name"] == "open-rag-embeddings-v2"
+    assert "pipeline" not in asset
+    assert mappings["_meta"]["inference_id"] == "qwen3-embedding-8b"
+    assert "content_embedding" not in properties
+    assert "title_embedding" not in properties
+    assert properties["content"]["type"] == "text"
+    assert properties["title"]["type"] == "text"
+    assert properties["title"]["fields"]["keyword"]["type"] == "keyword"
+
+    for field_name in ["content_semantic", "title_semantic"]:
+        field = properties[field_name]
+        assert field["type"] == "semantic_text"
+        assert field["inference_id"] == "qwen3-embedding-8b"
+        assert field["index_options"]["dense_vector"] == {
+            "element_type": "float",
+            "type": "int8_hnsw",
+        }
+        assert field["chunking_settings"] == {"type": "none"}
+
+    assert properties["record_id"]["type"] == "keyword"
+    assert properties["document_id"]["type"] == "keyword"
+    assert properties["chunk_id"]["type"] == "keyword"
+    assert properties["metadata"]["enabled"] is False
