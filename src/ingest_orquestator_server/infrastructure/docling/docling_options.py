@@ -294,7 +294,7 @@ def _vlm_options(settings: Settings) -> dict[str, Any]:
         "torch_dtype": settings.docling_vlm_torch_dtype,
         "load_in_8bit": settings.docling_vlm_load_in_8bit,
         "max_new_tokens": settings.docling_vlm_max_new_tokens,
-        "trust_remote_code": settings.effective_docling_vlm_trust_remote_code,
+        "trust_remote_code": settings.docling_vlm_trust_remote_code,
         "remote_llm_url": settings.docling_remote_llm_url,
         "remote_llm_model": settings.docling_remote_llm_model,
         "remote_llm_api_key_configured": settings.docling_remote_llm_api_key is not None,

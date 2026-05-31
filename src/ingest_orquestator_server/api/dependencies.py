@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from ingest_orquestator_server.application.parser_registry import ParserRegistry
+from ingest_orquestator_server.application.ports.job_queue import JobQueuePublisher
 from ingest_orquestator_server.application.services.document_chunking_service import (
     DocumentChunkingService,
 )
@@ -54,6 +55,7 @@ from ingest_orquestator_server.infrastructure.parser.parser_registry_factory imp
 from ingest_orquestator_server.infrastructure.parser.parser_request_validator_factory import (
     build_parser_request_validator,
 )
+from ingest_orquestator_server.infrastructure.queue import DramatiqJobQueuePublisher
 from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_repository import (
     SqliteIngestionJobRepository,
 )
@@ -63,9 +65,11 @@ SettingsDependency = Annotated[Settings, Depends(get_settings)]
 _embedding_queue_service: EmbeddingQueueService | None = None
 _embedding_queue_key: tuple[int, int, int | None] | None = None
 _embedding_dispatch_service: EmbeddingDispatchService | None = None
-_embedding_dispatch_key: tuple[str, int, int, int | None] | None = None
+_embedding_dispatch_key: tuple[str, int, int, int | None, int, str, str, str, str] | None = None
 _parser_worker_service: ParserWorkerService | None = None
-_parser_worker_key: tuple[int] | None = None
+_parser_worker_key: tuple[int, str] | None = None
+_job_queue_publisher: JobQueuePublisher | None = None
+_job_queue_key: tuple[str, str, str, str] | None = None
 _docling_engine_registry: DoclingEngineRegistry | None = None
 _docling_engine_registry_key: str | None = None
 _docling_conversion_scheduler: DoclingConversionScheduler | None = None
@@ -155,6 +159,22 @@ def get_embedding_queue_service(settings: SettingsDependency) -> EmbeddingQueueS
     return _embedding_queue_service
 
 
+def get_job_queue_publisher(settings: SettingsDependency) -> JobQueuePublisher | None:
+    global _job_queue_key, _job_queue_publisher
+    if settings.queue_backend == "local":
+        return None
+    key = (
+        settings.queue_backend,
+        settings.rabbitmq_url,
+        settings.dramatiq_parser_queue_name,
+        settings.dramatiq_dispatch_queue_name,
+    )
+    if _job_queue_publisher is None or _job_queue_key != key:
+        _job_queue_publisher = DramatiqJobQueuePublisher.from_settings(settings)
+        _job_queue_key = key
+    return _job_queue_publisher
+
+
 def get_embedding_dispatch_service(
     settings: SettingsDependency,
     queue_service: Annotated[
@@ -165,6 +185,10 @@ def get_embedding_dispatch_service(
         SqliteIngestionJobRepository,
         Depends(get_job_repository),
     ],
+    job_queue_publisher: Annotated[
+        JobQueuePublisher | None,
+        Depends(get_job_queue_publisher),
+    ],
 ) -> EmbeddingDispatchService:
     global _embedding_dispatch_key, _embedding_dispatch_service
     key = (
@@ -172,6 +196,11 @@ def get_embedding_dispatch_service(
         settings.dispatch_max_bulk_size,
         settings.dispatch_queue_max_size,
         settings.dispatch_queue_max_payload_bytes,
+        settings.dispatch_worker_count,
+        settings.queue_backend,
+        settings.rabbitmq_url,
+        settings.dramatiq_parser_queue_name,
+        settings.dramatiq_dispatch_queue_name,
     )
     if _embedding_dispatch_service is None or _embedding_dispatch_key != key:
         _embedding_dispatch_service = EmbeddingDispatchService(
@@ -180,9 +209,11 @@ def get_embedding_dispatch_service(
             dispatcher=ElasticEmbeddingDispatcher(settings),
             job_repository=job_repository,
             output_writer=LocalParseOutputWriter(),
+            dispatch_job_queue=job_queue_publisher,
         )
         _embedding_dispatch_key = key
-    _embedding_dispatch_service.start()
+    if settings.queue_backend == "local":
+        _embedding_dispatch_service.start()
     return _embedding_dispatch_service
 
 
@@ -202,7 +233,7 @@ def get_parser_worker_service(
     ],
 ) -> ParserWorkerService:
     global _parser_worker_key, _parser_worker_service
-    key = (settings.parser_worker_count,)
+    key = (settings.parser_worker_count, settings.queue_backend)
     if _parser_worker_service is None or _parser_worker_key != key:
         _parser_worker_service = ParserWorkerService(
             settings=settings,
@@ -210,7 +241,8 @@ def get_parser_worker_service(
             job_repository=job_repository,
             dispatch_service=dispatch_service,
         )
-        _parser_worker_service.recover_active_jobs()
+        if settings.queue_backend == "local":
+            _parser_worker_service.recover_active_jobs()
         _parser_worker_key = key
     return _parser_worker_service
 
@@ -238,6 +270,10 @@ def get_file_ingestion_service(
         ParserWorkerService,
         Depends(get_parser_worker_service),
     ],
+    job_queue_publisher: Annotated[
+        JobQueuePublisher | None,
+        Depends(get_job_queue_publisher),
+    ],
 ) -> FileIngestionService:
     return FileIngestionService(
         settings=settings,
@@ -248,6 +284,7 @@ def get_file_ingestion_service(
         parser_request_validator=parser_request_validator,
         embedding_dispatch_service=embedding_dispatch_service,
         parser_worker_service=parser_worker_service,
+        parser_job_queue=job_queue_publisher,
     )
 
 

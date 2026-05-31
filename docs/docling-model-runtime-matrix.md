@@ -17,7 +17,6 @@ Source references:
 | `auto` | Resolve to local Transformers for predictable API-server behavior. |
 | `auto_inline` | Use Docling auto-inline VLM engine selection with `prefer_vllm=false`. |
 | `remote_llm` | Send VLM requests to an external OpenAI-compatible endpoint through Docling `ApiVlmOptions`. |
-| `vllm` | Accepted only as a legacy alias for `remote_llm`; the API server does not import or initialize vLLM. |
 
 ## Picture Description
 
@@ -27,7 +26,6 @@ Source references:
 | `auto` | Resolve to local Transformers. |
 | `auto_inline` | Use Docling auto-inline engine selection with `prefer_vllm=false`. |
 | `remote_llm` | Send picture-description requests to the external OpenAI-compatible endpoint through Docling `PictureDescriptionApiOptions`. |
-| `vllm` | Accepted only as a legacy alias for `remote_llm`. |
 
 ## Other Loaded Models
 
@@ -45,9 +43,8 @@ Source references:
 The service resolves runtime per stage:
 
 1. `remote_llm` means "call an external endpoint", regardless of the model id.
-2. Legacy `vllm` is normalized to `remote_llm` for old `.env` files.
-3. Local `transformers` stays available for GPU hosts that want Docling to load
+2. Local `transformers` stays available for GPU hosts that want Docling to load
    Qwen3 directly.
-4. Non-generative stages stay on their Docling/engine-specific runtimes.
-5. Remote endpoint compatibility is checked with `/health/remote-llm` and,
+3. Non-generative stages stay on their Docling/engine-specific runtimes.
+4. Remote endpoint compatibility is checked with `/health/remote-llm` and,
    optionally, startup validation.

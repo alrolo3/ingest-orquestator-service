@@ -105,13 +105,17 @@ class ProgressConfig(BaseModel):
 
 class DispatchConfig(BaseModel):
     parser_worker_count: int
+    dispatch_worker_count: int
+    queue_backend: str
+    rabbitmq_configured: bool
+    dramatiq_parser_queue_name: str
+    dramatiq_dispatch_queue_name: str
     queue_max_size: int
     queue_max_payload_bytes: int | None
     max_bulk_size: int
     idle_interval_seconds: float
     sink_mode: str
     max_retries: int
-    retry_backoff_seconds: float
     elastic_url: str | None
     elastic_username: str | None
     elastic_password_configured: bool
@@ -121,7 +125,6 @@ class DispatchConfig(BaseModel):
     elastic_verify_certs: bool
     elastic_request_timeout_seconds: float
     elastic_max_retries: int
-    elastic_include_local_paths: bool
 
 
 class EmbeddingQueueConfig(DispatchConfig):

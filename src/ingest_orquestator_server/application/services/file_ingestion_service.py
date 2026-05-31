@@ -33,6 +33,7 @@ from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
 
 if TYPE_CHECKING:
+    from ingest_orquestator_server.application.ports.job_queue import ParserJobQueue
     from ingest_orquestator_server.application.services.embedding_dispatch_service import (
         EmbeddingDispatchService,
     )
@@ -52,6 +53,7 @@ class FileIngestionService:
         upload_validator: UploadValidator,
         embedding_dispatch_service: EmbeddingDispatchService | None = None,
         parser_worker_service: ParserWorkerService | None = None,
+        parser_job_queue: ParserJobQueue | None = None,
         parser_request_validator: ParserRequestValidator | None = None,
     ) -> None:
         self._settings = settings
@@ -63,6 +65,7 @@ class FileIngestionService:
         )
         self._embedding_dispatch_service = embedding_dispatch_service
         self._parser_worker_service = parser_worker_service
+        self._parser_job_queue = parser_job_queue
         self._parse_coordinator = JobParseCoordinator(
             settings=settings,
             document_parse_service=document_parse_service,
@@ -140,8 +143,39 @@ class FileIngestionService:
             source_file_name=upload.filename,
             input_path=upload_path,
         )
-        if self._parser_worker_service is not None:
-            self._parser_worker_service.submit_job(job_id)
+        try:
+            if self._parser_job_queue is not None:
+                self._parser_job_queue.enqueue_parser_job(job_id)
+            elif self._parser_worker_service is not None:
+                self._parser_worker_service.submit_job(job_id)
+        except Exception as exc:
+            failed_job = job.model_copy(
+                update={
+                    "status": IngestionStatus.RETRYABLE_FAILURE,
+                    "metadata": job.metadata
+                    | build_error_metadata(error_type=type(exc).__name__, exc=exc),
+                    "error": str(exc),
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            self._job_repository.save(failed_job)
+            log_stage(
+                "parser.queue.failed",
+                job_id=job_id,
+                parser=parser_name,
+                pipeline=pipeline,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            return self._ingest_response(
+                job_id=job_id,
+                status=IngestionStatus.RETRYABLE_FAILURE,
+                parser=parser_name,
+                source_file_name=upload.filename,
+                input_path=upload_path,
+                metadata=failed_job.metadata,
+                error=str(exc),
+            )
         return self._ingest_response(
             job_id=job_id,
             status=IngestionStatus.PARSER_QUEUED,

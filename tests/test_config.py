@@ -19,7 +19,7 @@ def test_env_files_define_all_settings_keys() -> None:
                 for line in env_file
                 if line.strip().startswith("INGEST_") and "=" in line
             }
-        assert expected <= actual
+        assert actual == expected
 
 
 def test_settings_accept_cuda_device() -> None:
@@ -64,9 +64,14 @@ def test_env_example_loads() -> None:
     assert settings.docling_remote_llm_concurrency == 8
     assert settings.docling_vlm_max_new_tokens == 4096
     assert settings.docling_pdf_picture_description_max_new_tokens == 1024
-    assert settings.effective_docling_vlm_trust_remote_code is False
+    assert settings.docling_vlm_trust_remote_code is False
     assert settings.docling_remote_llm_page_batch_size == 8
+    assert settings.queue_backend == "local"
+    assert settings.rabbitmq_url == "amqp://guest:guest@localhost:5672//"
+    assert settings.dramatiq_parser_queue_name == "ingest_parser_jobs"
+    assert settings.dramatiq_dispatch_queue_name == "ingest_dispatch_jobs"
     assert settings.parser_worker_count == 2
+    assert settings.dispatch_worker_count == 2
     assert settings.dispatch_queue_max_payload_bytes is None
     assert settings.dispatch_max_bulk_size == 5
     assert settings.dispatch_sink_mode == "local"
@@ -103,7 +108,7 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_vlm_max_new_tokens == 4096
     assert settings.docling_pdf_picture_description_max_new_tokens == 1024
     assert settings.docling_remote_llm_page_batch_size == 8
-    assert settings.effective_docling_vlm_trust_remote_code is False
+    assert settings.docling_vlm_trust_remote_code is False
 
 
 def test_cpu_env_loads() -> None:
@@ -180,11 +185,13 @@ def test_settings_grouped_config_views() -> None:
     assert settings.chunking_config.embedding_output_enabled is True
     assert settings.confidence_config.output_enabled is True
     assert settings.dispatch_config.max_bulk_size == 5
+    assert settings.dispatch_config.dispatch_worker_count == 2
+    assert settings.dispatch_config.queue_backend == "local"
+    assert settings.dispatch_config.rabbitmq_configured is True
     assert settings.dispatch_config.queue_max_payload_bytes is None
     assert settings.dispatch_config.sink_mode == "local"
     assert settings.dispatch_config.elastic_mapping_version == "v1"
     assert settings.dispatch_config.elastic_password_configured is False
-    assert settings.dispatch_config.elastic_include_local_paths is False
 
 
 def test_settings_normalize_elastic_mapping_version_aliases() -> None:
@@ -198,6 +205,11 @@ def test_settings_normalize_elastic_mapping_version_aliases() -> None:
 def test_settings_reject_unknown_elastic_mapping_version() -> None:
     with pytest.raises(ValidationError):
         Settings(embedding_elastic_mapping_version="v3")
+
+
+def test_settings_reject_unknown_queue_backend() -> None:
+    with pytest.raises(ValidationError):
+        Settings(queue_backend="sqs")
 
 
 def test_settings_reject_dispatch_bulk_size_over_five() -> None:
@@ -218,20 +230,11 @@ def test_settings_embedding_queue_config_redacts_password() -> None:
     assert "secret" not in str(config)
 
 
-def test_settings_vlm_trust_remote_code_overrides_legacy_vllm_alias() -> None:
-    settings = Settings(
-        docling_vlm_trust_remote_code=True,
-        docling_vllm_trust_remote_code=False,
-    )
+def test_settings_vlm_trust_remote_code_controls_vlm_options() -> None:
+    settings = Settings(docling_vlm_trust_remote_code=True)
 
-    assert settings.effective_docling_vlm_trust_remote_code is True
+    assert settings.docling_vlm_trust_remote_code is True
     assert settings.docling_vlm_config.trust_remote_code is True
-
-
-def test_settings_legacy_vllm_trust_remote_code_still_works() -> None:
-    settings = Settings(docling_vllm_trust_remote_code=True)
-
-    assert settings.effective_docling_vlm_trust_remote_code is True
 
 
 def test_settings_reject_unknown_table_structure_backend() -> None:
@@ -244,14 +247,13 @@ def test_settings_reject_unknown_vlm_runtime() -> None:
         Settings(docling_vlm_runtime="unknown")
 
 
-def test_settings_maps_legacy_vllm_runtime_to_remote_llm() -> None:
-    settings = Settings(
-        docling_vlm_runtime="vllm",
-        docling_pdf_picture_description_runtime="vllm",
-    )
-
-    assert settings.docling_vlm_runtime == "remote_llm"
-    assert settings.docling_pdf_picture_description_runtime == "remote_llm"
+@pytest.mark.parametrize(
+    "field_name",
+    ["docling_vlm_runtime", "docling_pdf_picture_description_runtime"],
+)
+def test_settings_reject_legacy_vllm_runtime(field_name: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(**{field_name: "vllm"})
 
 
 def test_settings_reject_unknown_picture_description_runtime() -> None:

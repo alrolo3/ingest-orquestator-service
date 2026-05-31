@@ -42,6 +42,25 @@ class FakeEmbeddingDispatcher:
         )
 
 
+class RecordingDispatchQueue:
+    def __init__(self) -> None:
+        self.queue_ids: list[str] = []
+
+    def enqueue_dispatch_job(self, item: EmbeddingQueueItem) -> None:
+        self.queue_ids.append(item.queue_id)
+
+
+class RepositoryInspectingDispatchQueue:
+    def __init__(self, repository: SqliteIngestionJobRepository) -> None:
+        self._repository = repository
+        self.statuses_at_publish: list[IngestionStatus] = []
+
+    def enqueue_dispatch_job(self, item: EmbeddingQueueItem) -> None:
+        job = self._repository.get(item.job_id)
+        assert job is not None
+        self.statuses_at_publish.append(job.status)
+
+
 def test_embedding_dispatch_service_updates_job_handoff_states(tmp_path: Path) -> None:
     settings = Settings(
         storage_dir=tmp_path,
@@ -77,6 +96,70 @@ def test_embedding_dispatch_service_updates_job_handoff_states(tmp_path: Path) -
     result = service.run_once()
 
     assert result.submitted_document_count == 0
+
+
+def test_embedding_dispatch_service_publishes_dispatch_queue_item(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    job = _job(tmp_path, "job-1")
+    repository.save(job)
+    dispatch_queue = RecordingDispatchQueue()
+    service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=5),
+        dispatcher=FakeEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+        dispatch_job_queue=dispatch_queue,
+    )
+
+    queued = service.enqueue_parse_result(job, _parse_result(tmp_path, "job-1"))
+
+    assert queued.status == IngestionStatus.DISPATCH_QUEUED
+    assert dispatch_queue.queue_ids == queued.metadata["dispatch_handoff"]["queue_ids"]
+
+
+def test_embedding_dispatch_service_saves_job_before_publishing_dispatch(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    job = _job(tmp_path, "job-1")
+    repository.save(job)
+    dispatch_queue = RepositoryInspectingDispatchQueue(repository)
+    service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=5),
+        dispatcher=FakeEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+        dispatch_job_queue=dispatch_queue,
+    )
+
+    service.enqueue_parse_result(job, _parse_result(tmp_path, "job-1"))
+
+    assert dispatch_queue.statuses_at_publish == [IngestionStatus.DISPATCH_QUEUED]
+
+
+def test_embedding_dispatch_service_starts_configured_worker_pool(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, dispatch_worker_count=3)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    service = EmbeddingDispatchService(
+        settings=settings,
+        queue_service=EmbeddingQueueService(max_bulk_size=5),
+        dispatcher=FakeEmbeddingDispatcher(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
+
+    service.start()
+    try:
+        assert len(service._threads) == 3
+        assert all(thread.is_alive() for thread in service._threads)
+    finally:
+        service.stop()
+
+    assert service._threads == []
 
 
 def _job(tmp_path: Path, job_id: str) -> IngestionJob:

@@ -11,6 +11,7 @@ from ingest_orquestator_server.application.ports.embedding_dispatcher import (
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
 )
+from ingest_orquestator_server.application.ports.job_queue import DispatchJobQueue
 from ingest_orquestator_server.application.ports.parse_output_writer import ParseOutputWriter
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseResult,
@@ -41,36 +42,47 @@ class EmbeddingDispatchService:
         dispatcher: EmbeddingDispatcher,
         job_repository: IngestionJobRepository,
         output_writer: ParseOutputWriter,
+        dispatch_job_queue: DispatchJobQueue | None = None,
     ) -> None:
         self._settings = settings
         self._queue_service = queue_service
         self._dispatcher = dispatcher
         self._job_repository = job_repository
         self._output_writer = output_writer
+        self._dispatch_job_queue = dispatch_job_queue
         self._wake_event = Event()
         self._stop_event = Event()
-        self._thread: Thread | None = None
+        self._threads: list[Thread] = []
         self._thread_lock = Lock()
 
     def start(self) -> None:
         with self._thread_lock:
-            if self._thread is not None and self._thread.is_alive():
+            self._threads = [thread for thread in self._threads if thread.is_alive()]
+            if len(self._threads) >= self._settings.dispatch_worker_count:
                 return
             self._stop_event.clear()
-            self._thread = Thread(
-                target=self._run_loop,
-                name="ingest-dispatcher",
-                daemon=True,
+            while len(self._threads) < self._settings.dispatch_worker_count:
+                worker_number = len(self._threads) + 1
+                thread = Thread(
+                    target=self._run_loop,
+                    name=f"ingest-dispatcher-{worker_number}",
+                    daemon=True,
+                )
+                thread.start()
+                self._threads.append(thread)
+            log_stage(
+                "dispatch.worker.started",
+                worker_count=len(self._threads),
             )
-            self._thread.start()
-            log_stage("dispatch.worker.started")
 
     def stop(self) -> None:
         self._stop_event.set()
         self._wake_event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5)
-        log_stage("dispatch.worker.stopped")
+        for thread in self._threads:
+            thread.join(timeout=5)
+        stopped_count = len(self._threads)
+        self._threads = []
+        log_stage("dispatch.worker.stopped", worker_count=stopped_count)
 
     def notify(self) -> None:
         self.start()
@@ -92,7 +104,7 @@ class EmbeddingDispatchService:
     ) -> IngestionJob:
         try:
             item = self._queue_service.enqueue_parse_result(job, parse_result)
-        except EmbeddingQueueError as exc:
+        except Exception as exc:
             log_stage(
                 "dispatch.queue.failed",
                 job_id=job.job_id,
@@ -130,6 +142,36 @@ class EmbeddingDispatchService:
             }
         )
         self._job_repository.save(queued_job)
+
+        try:
+            if self._dispatch_job_queue is not None:
+                self._dispatch_job_queue.enqueue_dispatch_job(item)
+        except Exception as exc:
+            failed_job = queued_job.model_copy(
+                update={
+                    "status": IngestionStatus.RETRYABLE_FAILURE,
+                    "metadata": queued_job.metadata
+                    | self._dispatch_metadata(
+                        state=IngestionStatus.RETRYABLE_FAILURE.value,
+                        queue_items=[item],
+                        error=str(exc),
+                    ),
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            self._job_repository.save(failed_job)
+            log_stage(
+                "dispatch.queue.failed",
+                job_id=job.job_id,
+                document_id=item.document_id,
+                reason=str(exc),
+            )
+            logger.warning(
+                "dispatch.queue.failed",
+                extra={"job_id": job.job_id, "reason": str(exc)},
+            )
+            return failed_job
+
         log_stage(
             "dispatch.queue.enqueued",
             job_id=job.job_id,
@@ -164,7 +206,13 @@ class EmbeddingDispatchService:
         batch = self._queue_service.dequeue_batch(self._settings.dispatch_max_bulk_size)
         if not batch:
             return 0
+        return self._dispatch_batch(batch, update_queue=True)
 
+
+    def dispatch_item(self, item: EmbeddingQueueItem) -> int:
+        return self._dispatch_batch([item], update_queue=False)
+
+    def _dispatch_batch(self, batch: list[EmbeddingQueueItem], *, update_queue: bool) -> int:
         started = perf_counter()
         for item in batch:
             self._save_item_state(item, IngestionStatus.DISPATCHING)
@@ -183,10 +231,10 @@ class EmbeddingDispatchService:
             result = self._dispatcher.submit_batch(batch) if self._should_dispatch_elastic else None
         except Exception as exc:
             retry = any(item.attempts <= self._settings.dispatch_max_retries for item in batch)
-            updated_items = self._queue_service.mark_batch_failed(
-                batch,
-                error=str(exc),
-                retry=retry,
+            updated_items = (
+                self._queue_service.mark_batch_failed(batch, error=str(exc), retry=retry)
+                if update_queue
+                else batch
             )
             status = IngestionStatus.DISPATCH_QUEUED if retry else IngestionStatus.FAILED
             for item in updated_items:
@@ -201,7 +249,9 @@ class EmbeddingDispatchService:
                 retry=retry,
             )
             logger.exception("dispatch.failed")
-            return 0
+            if update_queue:
+                return 0
+            raise
 
         for item in batch:
             outputs = local_outputs.get(item.queue_id)
@@ -215,7 +265,7 @@ class EmbeddingDispatchService:
                 outputs=outputs,
                 raw_response=metadata,
             )
-        completed_items = self._queue_service.mark_completed(batch)
+        completed_items = self._queue_service.mark_completed(batch) if update_queue else batch
         log_stage(
             "dispatch.completed",
             queue_ids=[item.queue_id for item in completed_items],

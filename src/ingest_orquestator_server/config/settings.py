@@ -165,7 +165,7 @@ class Settings(BaseSettings):
     docling_vlm_torch_dtype: str | None = "bfloat16"
     docling_vlm_load_in_8bit: bool = False
     docling_vlm_max_new_tokens: int = Field(default=4096, ge=1)
-    docling_vlm_trust_remote_code: bool | None = None
+    docling_vlm_trust_remote_code: bool = False
     docling_remote_llm_url: str = "http://localhost:8000/v1/chat/completions"
     docling_remote_llm_model: str | None = None
     docling_remote_llm_api_key: str | None = None
@@ -179,29 +179,22 @@ class Settings(BaseSettings):
     docling_remote_llm_provider: str = "openai_compatible"
     docling_remote_llm_health_check_enabled: bool = False
     docling_remote_llm_health_check_timeout_seconds: float = Field(default=5.0, gt=0)
-    docling_vllm_tensor_parallel_size: int = Field(default=1, ge=1)
-    docling_vllm_gpu_memory_utilization: float = Field(default=0.9, gt=0, le=1)
-    docling_vllm_trust_remote_code: bool = False
-    docling_vllm_cudagraph_mode: str = "PIECEWISE"
-    docling_vllm_model_impl: str = "auto"
-    docling_vllm_enforce_eager: bool | None = None
-    docling_vllm_max_model_len: int | None = Field(default=None, ge=1)
-    docling_vllm_max_num_batched_tokens: int | None = Field(default=None, ge=1)
-    docling_vllm_fallback_runtime: str = "transformers"
-    docling_vllm_fallback_on_unsupported: bool = True
-    docling_vllm_allow_unverified_models: bool = False
     docling_xbrl_enable_local_fetch: bool = False
     docling_xbrl_enable_remote_fetch: bool = False
     docling_xbrl_taxonomy_path: Path | None = None
     embedding_output_enabled: bool = True
+    queue_backend: str = "local"
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5672//"
+    dramatiq_parser_queue_name: str = "ingest_parser_jobs"
+    dramatiq_dispatch_queue_name: str = "ingest_dispatch_jobs"
     parser_worker_count: int = Field(default=2, ge=1)
+    dispatch_worker_count: int = Field(default=2, ge=1)
     dispatch_queue_max_size: int = Field(default=100, ge=1)
     dispatch_queue_max_payload_bytes: int | None = Field(default=None, ge=1)
     dispatch_max_bulk_size: int = Field(default=5, ge=1, le=5)
     dispatch_idle_interval_seconds: float = Field(default=0.5, gt=0)
     dispatch_sink_mode: str = "local"
     dispatch_max_retries: int = Field(default=3, ge=0)
-    dispatch_retry_backoff_seconds: float = Field(default=1.0, ge=0)
     embedding_elastic_url: str | None = None
     embedding_elastic_username: str | None = None
     embedding_elastic_password: str | None = None
@@ -211,7 +204,6 @@ class Settings(BaseSettings):
     embedding_elastic_verify_certs: bool = True
     embedding_elastic_request_timeout_seconds: float = Field(default=30.0, gt=0)
     embedding_elastic_max_retries: int = Field(default=3, ge=0)
-    embedding_elastic_include_local_paths: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="INGEST_",
@@ -378,8 +370,6 @@ class Settings(BaseSettings):
     @classmethod
     def validate_docling_vlm_runtime(cls, value: str) -> str:
         normalized = value.strip().lower().replace("-", "_")
-        if normalized == "vllm":
-            return "remote_llm"
         if normalized in {"remote", "remote_llm", "api"}:
             return "remote_llm"
         if normalized in {"auto", "auto_inline", "transformers"}:
@@ -390,8 +380,6 @@ class Settings(BaseSettings):
     @classmethod
     def validate_docling_pdf_picture_description_runtime(cls, value: str) -> str:
         normalized = value.strip().lower().replace("-", "_")
-        if normalized == "vllm":
-            return "remote_llm"
         if normalized in {"remote", "remote_llm", "api"}:
             return "remote_llm"
         if normalized in {"auto", "auto_inline", "transformers"}:
@@ -415,30 +403,6 @@ class Settings(BaseSettings):
         if normalized in {"openai_compatible", "openai"}:
             return "openai_compatible"
         raise ValueError("must be openai_compatible")
-
-    @field_validator("docling_vllm_fallback_runtime")
-    @classmethod
-    def validate_docling_vllm_fallback_runtime(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized in {"auto_inline", "transformers"}:
-            return normalized
-        raise ValueError("must be one of auto_inline or transformers")
-
-    @field_validator("docling_vllm_cudagraph_mode")
-    @classmethod
-    def validate_docling_vllm_cudagraph_mode(cls, value: str) -> str:
-        normalized = value.strip().upper()
-        if normalized in {
-            "NONE",
-            "FULL",
-            "PIECEWISE",
-            "FULL_AND_PIECEWISE",
-            "FULL_DECODE_ONLY",
-        }:
-            return normalized
-        raise ValueError(
-            "must be one of NONE, FULL, PIECEWISE, FULL_AND_PIECEWISE, or FULL_DECODE_ONLY"
-        )
 
     @field_validator("allowed_upload_extensions", mode="before")
     @classmethod
@@ -511,6 +475,14 @@ class Settings(BaseSettings):
         if normalized in {"local", "elastic", "local_and_elastic"}:
             return normalized
         raise ValueError("must be one of local, elastic, or local_and_elastic")
+
+    @field_validator("queue_backend")
+    @classmethod
+    def validate_queue_backend(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {"local", "dramatiq"}:
+            return normalized
+        raise ValueError("must be one of local or dramatiq")
 
     @field_validator(
         "dispatch_queue_max_payload_bytes",
@@ -600,7 +572,7 @@ class Settings(BaseSettings):
             torch_dtype=self.docling_vlm_torch_dtype,
             load_in_8bit=self.docling_vlm_load_in_8bit,
             max_new_tokens=self.docling_vlm_max_new_tokens,
-            trust_remote_code=self.effective_docling_vlm_trust_remote_code,
+            trust_remote_code=self.docling_vlm_trust_remote_code,
             remote_llm_url=self.docling_remote_llm_url,
             remote_llm_model=self.docling_remote_llm_model,
             remote_llm_api_key_configured=self.docling_remote_llm_api_key is not None,
@@ -617,12 +589,6 @@ class Settings(BaseSettings):
                 self.docling_remote_llm_health_check_timeout_seconds
             ),
         )
-
-    @property
-    def effective_docling_vlm_trust_remote_code(self) -> bool:
-        if self.docling_vlm_trust_remote_code is not None:
-            return self.docling_vlm_trust_remote_code
-        return self.docling_vllm_trust_remote_code
 
     @property
     def docling_xbrl_config(self) -> DoclingXbrlConfig:
@@ -668,13 +634,17 @@ class Settings(BaseSettings):
     def dispatch_config(self) -> DispatchConfig:
         return DispatchConfig(
             parser_worker_count=self.parser_worker_count,
+            dispatch_worker_count=self.dispatch_worker_count,
+            queue_backend=self.queue_backend,
+            rabbitmq_configured=bool(self.rabbitmq_url),
+            dramatiq_parser_queue_name=self.dramatiq_parser_queue_name,
+            dramatiq_dispatch_queue_name=self.dramatiq_dispatch_queue_name,
             queue_max_size=self.dispatch_queue_max_size,
             queue_max_payload_bytes=self.dispatch_queue_max_payload_bytes,
             max_bulk_size=self.dispatch_max_bulk_size,
             idle_interval_seconds=self.dispatch_idle_interval_seconds,
             sink_mode=self.dispatch_sink_mode,
             max_retries=self.dispatch_max_retries,
-            retry_backoff_seconds=self.dispatch_retry_backoff_seconds,
             elastic_url=self.embedding_elastic_url,
             elastic_username=self.embedding_elastic_username,
             elastic_password_configured=self.embedding_elastic_password is not None,
@@ -684,7 +654,6 @@ class Settings(BaseSettings):
             elastic_verify_certs=self.embedding_elastic_verify_certs,
             elastic_request_timeout_seconds=self.embedding_elastic_request_timeout_seconds,
             elastic_max_retries=self.embedding_elastic_max_retries,
-            elastic_include_local_paths=self.embedding_elastic_include_local_paths,
         )
 
     @property

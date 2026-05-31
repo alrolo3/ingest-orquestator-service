@@ -99,7 +99,7 @@ PICTURE_DESCRIPTION_PRESETS: dict[str, dict[str, Any]] = {
     },
 }
 
-NON_VLLM_STAGE_RUNTIMES: dict[str, dict[str, Any]] = {
+STAGE_RUNTIMES: dict[str, dict[str, Any]] = {
     "layout": {
         "model": "docling-layout-heron-101",
         "runtime": "docling-ibm-models",
@@ -172,7 +172,6 @@ class RuntimeResolution:
     fallback_reason: str | None = None
     response_format: str | None = None
     mode: str = "inline"
-    legacy_vllm_alias: bool = False
 
     def to_metadata(self) -> dict[str, Any]:
         return asdict(self)
@@ -224,19 +223,18 @@ def docling_runtime_metadata(
                 "temperature": settings.docling_remote_llm_temperature,
                 "health_check_enabled": settings.docling_remote_llm_health_check_enabled,
             },
-            "legacy_vllm_env_compatibility": True,
         },
         "active_pipeline_stage": (vlm_resolution.to_metadata() if pipeline == "vlm" else None),
         "stages": {
             VLM_CONVERT_STAGE: vlm_resolution.to_metadata(),
             PICTURE_DESCRIPTION_STAGE: picture_resolution.to_metadata(),
-            "layout": NON_VLLM_STAGE_RUNTIMES["layout"]
+            "layout": STAGE_RUNTIMES["layout"]
             | {"model": settings.docling_pdf_layout_model},
-            "ocr": NON_VLLM_STAGE_RUNTIMES["ocr"] | {"model": settings.docling_pdf_ocr_engine},
+            "ocr": STAGE_RUNTIMES["ocr"] | {"model": settings.docling_pdf_ocr_engine},
             "table_structure": _table_structure_metadata(settings),
-            "picture_classifier": NON_VLLM_STAGE_RUNTIMES["picture_classifier"]
+            "picture_classifier": STAGE_RUNTIMES["picture_classifier"]
             | {"model": settings.docling_pdf_picture_classifier_preset},
-            "code_formula": NON_VLLM_STAGE_RUNTIMES["code_formula"]
+            "code_formula": STAGE_RUNTIMES["code_formula"]
             | {"model": settings.docling_pdf_code_formula_preset},
         },
     }
@@ -252,29 +250,22 @@ def _resolve_runtime(
     response_format: str,
 ) -> RuntimeResolution:
     original_runtime = requested_runtime.strip().lower().replace("-", "_")
-    legacy_vllm_alias = original_runtime == "vllm"
-    normalized_runtime = RUNTIME_REMOTE_LLM if original_runtime == "vllm" else original_runtime
     normalized_model = _normalize_model_key(model)
     preset = aliases.get(normalized_model)
     preset_metadata = presets.get(preset or "")
     remote_llm_supported = True
 
-    if normalized_runtime == RUNTIME_AUTO:
+    if original_runtime == RUNTIME_AUTO:
         resolved_runtime = RUNTIME_TRANSFORMERS
-    elif normalized_runtime == RUNTIME_AUTO_INLINE:
+    elif original_runtime == RUNTIME_AUTO_INLINE:
         resolved_runtime = RUNTIME_AUTO_INLINE
-    elif normalized_runtime == RUNTIME_REMOTE_LLM:
+    elif original_runtime == RUNTIME_REMOTE_LLM:
         resolved_runtime = RUNTIME_REMOTE_LLM
     else:
-        resolved_runtime = normalized_runtime
+        resolved_runtime = original_runtime
 
     fallback_reason = None
     effective_fallback_runtime = None
-    if legacy_vllm_alias:
-        fallback_reason = (
-            "`vllm` is a deprecated in-process runtime name. It is treated as "
-            "`remote_llm` and must point to an external OpenAI-compatible endpoint."
-        )
 
     return RuntimeResolution(
         stage=stage,
@@ -291,7 +282,6 @@ def _resolve_runtime(
             else response_format
         ),
         mode="remote" if resolved_runtime == RUNTIME_REMOTE_LLM else "inline",
-        legacy_vllm_alias=legacy_vllm_alias,
     )
 
 
@@ -306,6 +296,6 @@ def _table_structure_metadata(settings: Settings) -> dict[str, Any]:
                 "with Transformers in the standard pipeline."
             ),
         }
-    return NON_VLLM_STAGE_RUNTIMES["table_structure"] | {
+    return STAGE_RUNTIMES["table_structure"] | {
         "model": settings.docling_pdf_table_structure_backend,
     }

@@ -1,5 +1,6 @@
 docling[xbrl]>=2.30,<3
 arelle-release>=2.41,<3
+dramatiq[rabbitmq]>=1.17,<2
 elasticsearch>=9,<10
 fastapi>=0.115,<1
 # SuryaOCR currently fails with transformers 5.x; Qwen3-VL is available in 4.57+.
