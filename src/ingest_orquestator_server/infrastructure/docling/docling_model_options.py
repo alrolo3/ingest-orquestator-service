@@ -193,7 +193,7 @@ def build_vlm_convert_options(settings: Settings) -> Any:
             concurrency=settings.docling_remote_llm_concurrency,
             response_format=ResponseFormat(settings.docling_vlm_response_format),
         )
-    trust_remote_code = settings.effective_docling_vlm_trust_remote_code
+    trust_remote_code = settings.docling_vlm_trust_remote_code
     if resolution.preset is not None:
         return VlmConvertOptions.from_preset(
             resolution.preset,
@@ -227,7 +227,7 @@ def build_vlm_engine_options(resolution: RuntimeResolution, settings: Settings) 
     return TransformersVlmEngineOptions(
         torch_dtype=settings.docling_vlm_torch_dtype,
         load_in_8bit=settings.docling_vlm_load_in_8bit,
-        trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
+        trust_remote_code=settings.docling_vlm_trust_remote_code,
     )
 
 
@@ -250,7 +250,7 @@ def _build_qwen3_picture_description_options(
             default_repo_id=DOCLING_PICTURE_DESCRIPTION_MODEL,
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
-            trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
+            trust_remote_code=settings.docling_vlm_trust_remote_code,
             max_new_tokens=settings.docling_pdf_picture_description_max_new_tokens,
             supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={
@@ -298,7 +298,7 @@ def _build_custom_picture_description_options(
             default_repo_id=settings.docling_pdf_picture_description_model,
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
-            trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
+            trust_remote_code=settings.docling_vlm_trust_remote_code,
             max_new_tokens=settings.docling_pdf_picture_description_max_new_tokens,
             supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={

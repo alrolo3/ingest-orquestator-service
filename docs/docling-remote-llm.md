@@ -27,9 +27,6 @@ INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
 INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
 ```
 
-For backward compatibility, `INGEST_DOCLING_VLM_RUNTIME=vllm` is accepted and
-normalized to `remote_llm`. New deployments should use `remote_llm`.
-
 ## Start An External vLLM Server
 
 Run this in a separate inference-server environment on the GPU host:

@@ -1,0 +1,89 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  parser-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    image: ingest-orquestator-server:gpu-local
+    command:
+      - python
+      - -m
+      - dramatiq
+      - --processes
+      - "1"
+      - --threads
+      - "${INGEST_PARSER_WORKER_COUNT:-2}"
+      - --queues
+      - ingest_parser_jobs
+      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
+    env_file:
+      - .env
+    environment:
+      INGEST_QUEUE_BACKEND: dramatiq
+      INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      INGEST_STORAGE_DIR: .data
+      INGEST_DOCLING_ACCELERATOR_DEVICE: cuda
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ./.data:/app/.data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+
+  dispatch-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    image: ingest-orquestator-server:gpu-local
+    command:
+      - python
+      - -m
+      - dramatiq
+      - --processes
+      - "1"
+      - --threads
+      - "${INGEST_DISPATCH_WORKER_COUNT:-2}"
+      - --queues
+      - ingest_dispatch_jobs
+      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
+    env_file:
+      - .env
+    environment:
+      INGEST_QUEUE_BACKEND: dramatiq
+      INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      INGEST_STORAGE_DIR: .data
+    volumes:
+      - ./.data:/app/.data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq-data:

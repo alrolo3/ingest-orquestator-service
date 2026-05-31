@@ -104,9 +104,9 @@ cause.
 
 ## 6. Optional: Start A RemoteLLM Server
 
-The checked-in GPU environment defaults to Qwen3 through Transformers inside
-Docling. For higher VLM throughput, run vLLM as a separate OpenAI-compatible
-inference server and point the API service to that endpoint.
+The checked-in GPU environment defaults to RemoteLLM for Qwen3. For higher VLM
+throughput, run vLLM or another OpenAI-compatible inference server separately
+and point the API service to that endpoint.
 
 ```bash
 python3.12 -m venv .venv-vllm

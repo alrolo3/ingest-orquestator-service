@@ -15,6 +15,7 @@ authors = [
 dependencies = [
   "docling[xbrl]>=2.30,<3",
   "arelle-release>=2.41,<3",
+  "dramatiq[rabbitmq]>=1.17,<2",
   "elasticsearch>=9,<10",
   "fastapi>=0.115,<1",
   "transformers>=4.57,<5",

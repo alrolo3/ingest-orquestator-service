@@ -42,6 +42,7 @@ Use the tutorial that matches the machine:
 - [macOS CPU venv setup](docs/tutorials/macos-cpu-venv.md)
 - [Linux CPU venv setup](docs/tutorials/linux-cpu-venv.md)
 - [Linux NVIDIA GPU venv setup](docs/tutorials/linux-nvidia-gpu-venv.md)
+- [Linux GPU RabbitMQ/Dramatiq setup with terminal API](docs/tutorials/linux-gpu-rabbitmq-dramatiq-terminal-api.md)
 - [Docling ingestion format and pipeline guide](docs/docling-ingestion.md)
 - [Extension playbooks](docs/extension-playbooks.md)
 - [Environment configuration reference](docs/environment-config.md)
