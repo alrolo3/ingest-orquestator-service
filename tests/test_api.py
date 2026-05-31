@@ -60,6 +60,41 @@ def test_health() -> None:
     assert response.json() == {"service": "ingest-orquestator-server", "status": "ok"}
 
 
+def test_ingest_capabilities_exposes_ui_safe_options(tmp_path: Path) -> None:
+    settings = Settings(
+        storage_dir=tmp_path,
+        allowed_upload_extensions=[".pdf", ".md"],
+        docling_allowed_formats=["pdf", "md"],
+        docling_pipeline="standard",
+        chunking_enabled=True,
+        chunking_strategy="hybrid",
+        embedding_elastic_password="secret",
+    )
+    from ingest_orquestator_server.config.settings import get_settings
+
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    try:
+        client = TestClient(app)
+        response = client.get("/v1/ingest/capabilities")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["default_parser"] == "docling"
+        assert body["default_pipeline"] == "standard"
+        assert body["allowed_upload_extensions"] == [".md", ".pdf"]
+        assert body["chunking"]["default_strategy"] == "hybrid"
+        assert {item["value"] for item in body["pipelines"]} == {
+            "standard",
+            "vlm",
+            "auto",
+        }
+        assert body["runtime"]["ocr_engine"] == settings.docling_pdf_ocr_engine
+        assert "secret" not in response.text
+        assert "password" not in response.text.lower()
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
     settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)

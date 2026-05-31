@@ -16,6 +16,28 @@ Posts a minimal OpenAI-compatible chat completion request to the configured
 RemoteLLM endpoint and returns `ok`, `url`, `model`, `status_code`, and `error`.
 Use this before `pipeline=vlm` tests when `INGEST_DOCLING_VLM_RUNTIME=remote_llm`.
 
+## Ingestion Capabilities
+
+```http
+GET /v1/ingest/capabilities
+```
+
+Returns UI-safe ingestion option metadata:
+
+- allowed upload extensions and max upload size.
+- supported parsers and pipelines.
+- chunking defaults and supported chunking strategies.
+- runtime metadata such as sink mode, OCR engine, VLM model, and Elastic index.
+- output artifact types and job statuses.
+
+Secrets such as Elastic passwords and RemoteLLM API keys are never returned.
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/v1/ingest/capabilities" | python -m json.tool
+```
+
 ## Ingest File
 
 ```http
@@ -128,3 +150,8 @@ curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/chunks"
 curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/confidence"
 curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/normalized"
 ```
+
+## Frontend
+
+The browser app lives in `src/frontend`. See
+[`docs/frontend.md`](frontend.md) for install, development, and build commands.

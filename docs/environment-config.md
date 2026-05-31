@@ -131,6 +131,7 @@ loading, page completion, assembly, enrichment, and normalization stages.
 | `INGEST_PROGRESS_LOG_INTERVAL_SECONDS` | `30` | `30` | Float `>= 0`. | Heartbeat interval while Docling is busy but has not completed another page yet, such as during model loading or a long VLM call. Set `0` to disable heartbeat updates. |
 | `INGEST_PROGRESS_PAGE_INTERVAL` | `1` | `1` | Integer `>= 1`. | Minimum number of newly completed pages between page progress updates. Keep `1` for maximum visibility; increase for very large documents if SQLite/job metadata writes become too chatty. |
 | `INGEST_PROGRESS_HISTORY_LIMIT` | `50` | `50` | Integer `>= 1`. | Maximum number of recent progress events retained in `metadata.progress_history` for each job. The latest event is always available in `metadata.progress`. |
+| `INGEST_CORS_ALLOW_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated HTTP(S) origins. | Browser origins allowed to call the API. Add the frontend dev-server origin when testing from another host. |
 
 ## Docling Common Options
 

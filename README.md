@@ -48,6 +48,7 @@ Use the tutorial that matches the machine:
 - [Embedding handoff guide](docs/embedding-handoff.md)
 - [Docling RemoteLLM playbook](docs/docling-remote-llm.md)
 - [Docling model runtime matrix](docs/docling-model-runtime-matrix.md)
+- [Frontend app guide](docs/frontend.md)
 
 CPU tutorials install the base package directly and use [env-cpu](env-cpu).
 The NVIDIA tutorial installs the default GPU requirements and uses

@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     progress_log_interval_seconds: float = Field(default=30.0, ge=0)
     progress_page_interval: int = Field(default=1, ge=1)
     progress_history_limit: int = Field(default=50, ge=1)
+    cors_allow_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    )
     retention_days: int = Field(default=30, ge=1)
     docling_accelerator_device: str = Field(
         default="auto",
@@ -397,6 +403,18 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def parse_cors_allow_origins(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("cors_allow_origins")
+    @classmethod
+    def normalize_cors_allow_origins(cls, value: list[str]) -> list[str]:
+        return sorted({origin.strip().rstrip("/") for origin in value if origin.strip()})
 
     @field_validator("allowed_upload_extensions")
     @classmethod

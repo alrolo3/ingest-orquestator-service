@@ -4,8 +4,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from ingest_orquestator_server.api.dependencies import shutdown_background_services
+from ingest_orquestator_server.api.routes.capabilities import router as capabilities_router
 from ingest_orquestator_server.api.routes.health import router as health_router
 from ingest_orquestator_server.api.routes.ingestion import router as ingestion_router
 from ingest_orquestator_server.config.settings import get_settings
@@ -18,13 +20,22 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     _configure_logging()
+    settings = get_settings()
     app = FastAPI(
         title="Ingest Orquestator Server",
         version="0.1.0",
         description="Docling-based ingestion orchestration service.",
         lifespan=_lifespan,
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(health_router)
+    app.include_router(capabilities_router)
     app.include_router(ingestion_router)
     return app
 
