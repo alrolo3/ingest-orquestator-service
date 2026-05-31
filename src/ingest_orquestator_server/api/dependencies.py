@@ -30,6 +30,9 @@ from ingest_orquestator_server.application.services.parser_worker_service import
 from ingest_orquestator_server.application.services.storage_cleanup_service import (
     StorageCleanupService,
 )
+from ingest_orquestator_server.application.validation.parser_request_validator import (
+    ParserRequestValidator,
+)
 from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
 from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_engine import (
@@ -47,6 +50,9 @@ from ingest_orquestator_server.infrastructure.filesystem.local_upload_storage im
 )
 from ingest_orquestator_server.infrastructure.parser.parser_registry_factory import (
     build_parser_registry,
+)
+from ingest_orquestator_server.infrastructure.parser.parser_request_validator_factory import (
+    build_parser_request_validator,
 )
 from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_repository import (
     SqliteIngestionJobRepository,
@@ -114,6 +120,10 @@ def get_job_repository(
 
 def get_upload_validator(settings: SettingsDependency) -> UploadValidator:
     return UploadValidator(settings)
+
+
+def get_parser_request_validator(settings: SettingsDependency) -> ParserRequestValidator:
+    return build_parser_request_validator(settings)
 
 
 def get_document_parse_service(
@@ -216,6 +226,10 @@ def get_file_ingestion_service(
         Depends(get_job_repository),
     ],
     upload_validator: Annotated[UploadValidator, Depends(get_upload_validator)],
+    parser_request_validator: Annotated[
+        ParserRequestValidator,
+        Depends(get_parser_request_validator),
+    ],
     embedding_dispatch_service: Annotated[
         EmbeddingDispatchService,
         Depends(get_embedding_dispatch_service),
@@ -231,6 +245,7 @@ def get_file_ingestion_service(
         document_parse_service=document_parse_service,
         job_repository=job_repository,
         upload_validator=upload_validator,
+        parser_request_validator=parser_request_validator,
         embedding_dispatch_service=embedding_dispatch_service,
         parser_worker_service=parser_worker_service,
     )

@@ -75,12 +75,14 @@ class ParserWorkerService:
             self.submit_job(job.job_id)
 
     def process_job(self, job_id: str) -> None:
-        self._parse_coordinator.process_job(
-            job_id,
-            preserve_existing_started_at=True,
-            fail_missing_input_before_start=True,
-        )
-        self._release_job(job_id)
+        try:
+            self._parse_coordinator.process_job(
+                job_id,
+                preserve_existing_started_at=True,
+                fail_missing_input_before_start=True,
+            )
+        finally:
+            self._release_job(job_id)
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=False)

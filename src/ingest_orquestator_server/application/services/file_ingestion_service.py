@@ -5,11 +5,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from ingest_orquestator_server.application.exceptions import (
-    UnsupportedDocumentFormatError,
-    UnsupportedIngestionOptionError,
-    UnsupportedPipelineError,
-)
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
 )
@@ -18,10 +13,18 @@ from ingest_orquestator_server.application.ports.upload_storage import UploadSto
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
+from ingest_orquestator_server.application.services.ingestion_job_metadata import (
+    build_error_metadata,
+    build_request_metadata,
+)
 from ingest_orquestator_server.application.services.job_parse_coordinator import (
     JobParseCoordinator,
 )
 from ingest_orquestator_server.application.services.stage_logger import log_stage
+from ingest_orquestator_server.application.validation.parser_request_validator import (
+    ParserRequestValidator,
+    build_default_parser_request_validator,
+)
 from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.models.ingest_batch_response import IngestBatchResponse
@@ -49,11 +52,15 @@ class FileIngestionService:
         upload_validator: UploadValidator,
         embedding_dispatch_service: EmbeddingDispatchService | None = None,
         parser_worker_service: ParserWorkerService | None = None,
+        parser_request_validator: ParserRequestValidator | None = None,
     ) -> None:
         self._settings = settings
         self._upload_storage = upload_storage
         self._job_repository = job_repository
         self._upload_validator = upload_validator
+        self._parser_request_validator = (
+            parser_request_validator or build_default_parser_request_validator(settings)
+        )
         self._embedding_dispatch_service = embedding_dispatch_service
         self._parser_worker_service = parser_worker_service
         self._parse_coordinator = JobParseCoordinator(
@@ -92,7 +99,7 @@ class FileIngestionService:
         chunking_strategy: str | None = None,
     ) -> IngestResponse:
         self._upload_validator.validate_metadata(upload)
-        self._validate_parser_request(
+        self._parser_request_validator.validate(
             filename=upload.filename or "",
             parser_name=parser_name,
             pipeline=pipeline,
@@ -111,7 +118,7 @@ class FileIngestionService:
             self._settings.uploads_dir,
             job_id=job_id,
         )
-        metadata = self._request_metadata(
+        metadata = build_request_metadata(
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
@@ -206,18 +213,6 @@ class FileIngestionService:
             self._embedding_dispatch_service.drain()
             log_stage("dispatch.queue.drain.completed")
 
-    @staticmethod
-    def _error_metadata(exc: Exception) -> dict[str, str]:
-        metadata = {"error_type": type(exc).__name__}
-        if isinstance(
-            exc,
-            UnsupportedDocumentFormatError
-            | UnsupportedPipelineError
-            | UnsupportedIngestionOptionError,
-        ):
-            metadata["validation_error"] = "true"
-        return metadata
-
     def _save_rejected_batch_job(
         self,
         *,
@@ -230,13 +225,17 @@ class FileIngestionService:
     ) -> IngestionJob:
         job_id = str(uuid4())
         now = datetime.now(UTC)
-        metadata = self._request_metadata(
+        metadata = build_request_metadata(
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
         ) | {
             "source_file_name": upload.filename,
-            **self._error_metadata(error),
+            **build_error_metadata(
+                error_type=type(error).__name__,
+                exc=error,
+                include_validation_error=True,
+            ),
         }
         job = IngestionJob(
             job_id=job_id,
@@ -283,43 +282,3 @@ class FileIngestionService:
             status_url=f"/v1/ingest/jobs/{job_id}",
             outputs_url=f"/v1/ingest/jobs/{job_id}/outputs",
         )
-
-    @staticmethod
-    def _request_metadata(
-        *,
-        pipeline: str | None,
-        chunking_enabled: bool | None,
-        chunking_strategy: str | None,
-    ) -> dict[str, object]:
-        metadata: dict[str, object] = {}
-        if pipeline is not None:
-            metadata["requested_pipeline"] = pipeline
-        if chunking_enabled is not None:
-            metadata["requested_chunking_enabled"] = chunking_enabled
-        if chunking_strategy is not None:
-            metadata["requested_chunking_strategy"] = chunking_strategy
-        return metadata
-
-    def _validate_parser_request(
-        self,
-        *,
-        filename: str,
-        parser_name: str,
-        pipeline: str | None,
-        chunking_strategy: str | None = None,
-    ) -> None:
-        if parser_name != "docling":
-            return
-
-        from ingest_orquestator_server.config.chunking import validate_chunking_strategy
-        from ingest_orquestator_server.infrastructure.docling.docling_formats import (
-            detect_input_format,
-            resolve_pipeline_mode,
-            validate_allowed_format,
-        )
-
-        input_format = detect_input_format(Path(filename))
-        validate_allowed_format(input_format, self._settings.docling_allowed_formats)
-        resolve_pipeline_mode(pipeline or self._settings.docling_pipeline, input_format)
-        if chunking_strategy is not None:
-            validate_chunking_strategy(chunking_strategy)

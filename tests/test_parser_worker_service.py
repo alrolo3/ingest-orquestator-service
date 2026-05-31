@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from ingest_orquestator_server.application.parser_registry import ParserRegistry
 from ingest_orquestator_server.application.services.document_chunking_service import (
     DocumentChunkingService,
@@ -130,6 +132,24 @@ def test_parser_worker_marks_parse_exceptions_as_failed(tmp_path: Path) -> None:
     assert job.metadata["error_type"] == "ValueError"
 
 
+def test_parser_worker_releases_submitted_job_when_coordinator_raises(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    worker = _build_worker(settings, repository)
+    worker._submitted.add("job-1")
+    worker._parse_coordinator = RaisingParseCoordinator()
+
+    try:
+        with pytest.raises(RuntimeError, match="unexpected coordinator failure"):
+            worker.process_job("job-1")
+    finally:
+        worker.shutdown()
+
+    assert "job-1" not in worker._submitted
+
+
 def test_file_ingestion_manual_job_processor_preserves_legacy_dispatch_flow(
     tmp_path: Path,
 ) -> None:
@@ -173,6 +193,11 @@ def test_file_ingestion_manual_job_processor_preserves_legacy_dispatch_flow(
 class FailingDocumentParseService:
     def parse_file(self, **_kwargs):
         raise ValueError("parse failed")
+
+
+class RaisingParseCoordinator:
+    def process_job(self, *_args, **_kwargs) -> None:
+        raise RuntimeError("unexpected coordinator failure")
 
 
 class NoopEmbeddingDispatcher:

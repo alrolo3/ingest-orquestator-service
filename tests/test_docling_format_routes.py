@@ -1,3 +1,4 @@
+import pytest
 from docling.datamodel.base_models import InputFormat
 from docling.pipeline.simple_pipeline import SimplePipeline
 from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
@@ -8,6 +9,205 @@ from ingest_orquestator_server.infrastructure.docling.docling_format_routes impo
     build_format_options,
     route_metadata_for,
 )
+
+EXPECTED_STANDARD_ROUTE_METADATA = {
+    "pdf": {
+        "input_format": "pdf",
+        "selected_pipeline": "standard",
+        "format_option": "PdfFormatOption",
+        "pipeline_class": "IngestProgressStandardPdfPipeline",
+        "backend_class": "DoclingParseDocumentBackend",
+        "route_kind": "standard",
+        "supports_vlm": True,
+    },
+    "image": {
+        "input_format": "image",
+        "selected_pipeline": "standard",
+        "format_option": "ImageFormatOption",
+        "pipeline_class": "IngestProgressStandardPdfPipeline",
+        "backend_class": "ImageDocumentBackend",
+        "route_kind": "standard",
+        "supports_vlm": True,
+    },
+    "docx": {
+        "input_format": "docx",
+        "selected_pipeline": "standard",
+        "format_option": "WordFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "MsWordDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "pptx": {
+        "input_format": "pptx",
+        "selected_pipeline": "standard",
+        "format_option": "PowerpointFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "MsPowerpointDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "html": {
+        "input_format": "html",
+        "selected_pipeline": "standard",
+        "format_option": "HTMLFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "HTMLDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "md": {
+        "input_format": "md",
+        "selected_pipeline": "standard",
+        "format_option": "MarkdownFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "MarkdownDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "xlsx": {
+        "input_format": "xlsx",
+        "selected_pipeline": "standard",
+        "format_option": "ExcelFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "MsExcelDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "csv": {
+        "input_format": "csv",
+        "selected_pipeline": "standard",
+        "format_option": "CsvFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "CsvDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "json_docling": {
+        "input_format": "json_docling",
+        "selected_pipeline": "standard",
+        "format_option": "FormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "DoclingJSONBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "asciidoc": {
+        "input_format": "asciidoc",
+        "selected_pipeline": "standard",
+        "format_option": "AsciiDocFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "AsciiDocBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "latex": {
+        "input_format": "latex",
+        "selected_pipeline": "standard",
+        "format_option": "LatexFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "LatexDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "vtt": {
+        "input_format": "vtt",
+        "selected_pipeline": "standard",
+        "format_option": "FormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "WebVTTDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "xml_jats": {
+        "input_format": "xml_jats",
+        "selected_pipeline": "standard",
+        "format_option": "XMLJatsFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "JatsDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "xml_uspto": {
+        "input_format": "xml_uspto",
+        "selected_pipeline": "standard",
+        "format_option": "PatentUsptoFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "PatentUsptoDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "xml_xbrl": {
+        "input_format": "xml_xbrl",
+        "selected_pipeline": "standard",
+        "format_option": "XBRLFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "XBRLDocumentBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "mets_gbs": {
+        "input_format": "mets_gbs",
+        "selected_pipeline": "standard",
+        "format_option": "MetsGbsFormatOption",
+        "pipeline_class": "IngestProgressStandardPdfPipeline",
+        "backend_class": "MetsGbsDocumentBackend",
+        "route_kind": "standard",
+        "supports_vlm": False,
+    },
+    "audio": {
+        "input_format": "audio",
+        "selected_pipeline": "standard",
+        "format_option": "AudioFormatOption",
+        "pipeline_class": "AsrPipeline",
+        "backend_class": "NoOpBackend",
+        "route_kind": "asr",
+        "supports_vlm": False,
+    },
+}
+
+EXPECTED_VLM_ROUTE_METADATA = {
+    "pdf": {
+        "input_format": "pdf",
+        "selected_pipeline": "vlm",
+        "format_option": "PdfFormatOption",
+        "pipeline_class": "IngestProgressVlmPipeline",
+        "backend_class": "DoclingParseDocumentBackend",
+        "route_kind": "vlm",
+        "supports_vlm": True,
+    },
+    "image": {
+        "input_format": "image",
+        "selected_pipeline": "vlm",
+        "format_option": "ImageFormatOption",
+        "pipeline_class": "IngestProgressVlmPipeline",
+        "backend_class": "ImageDocumentBackend",
+        "route_kind": "vlm",
+        "supports_vlm": True,
+    },
+}
+
+EXPECTED_ROUTE_STANDARD_METADATA = {
+    **EXPECTED_STANDARD_ROUTE_METADATA,
+    "mets_gbs": {
+        "input_format": "mets_gbs",
+        "selected_pipeline": "standard",
+        "format_option": "DoclingDefaultFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "DoclingDefaultBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+    "audio": {
+        "input_format": "audio",
+        "selected_pipeline": "standard",
+        "format_option": "DoclingDefaultFormatOption",
+        "pipeline_class": "SimplePipeline",
+        "backend_class": "DoclingDefaultBackend",
+        "route_kind": "simple",
+        "supports_vlm": False,
+    },
+}
 
 
 def test_build_format_options_routes_default_formats_without_model_loading() -> None:
@@ -33,6 +233,34 @@ def test_build_format_options_routes_default_formats_without_model_loading() -> 
     assert routes["md"].route_kind == "simple"
 
 
+def test_build_format_options_routes_all_configurable_formats_without_model_loading() -> None:
+    settings = Settings(
+        docling_allowed_formats=list(EXPECTED_STANDARD_ROUTE_METADATA),
+        docling_pdf_ocr_engine="auto",
+    )
+
+    allowed_formats, format_options, routes = build_format_options(
+        settings,
+        pipeline="standard",
+        input_format=None,
+    )
+
+    assert {input_format.value for input_format in allowed_formats} == set(
+        EXPECTED_STANDARD_ROUTE_METADATA
+    )
+    assert {input_format.value for input_format in format_options} == set(
+        EXPECTED_STANDARD_ROUTE_METADATA
+    )
+    assert set(routes) == set(EXPECTED_STANDARD_ROUTE_METADATA)
+    for input_format, expected_route in EXPECTED_STANDARD_ROUTE_METADATA.items():
+        option = format_options[InputFormat(input_format)]
+
+        assert routes[input_format].to_metadata(selected_pipeline="standard") == expected_route
+        assert type(option).__name__ == expected_route["format_option"]
+        assert option.pipeline_cls.__name__ == expected_route["pipeline_class"]
+        assert option.backend.__name__ == expected_route["backend_class"]
+
+
 def test_build_format_options_routes_selected_vlm_format_only() -> None:
     settings = Settings(
         docling_allowed_formats=["docx", "image", "pdf"],
@@ -54,22 +282,35 @@ def test_build_format_options_routes_selected_vlm_format_only() -> None:
     assert routes["docx"].route_kind == "simple"
 
 
-def test_route_metadata_records_docling_converter_classes() -> None:
-    assert route_metadata_for(input_format="pdf", pipeline="vlm") == {
-        "input_format": "pdf",
-        "selected_pipeline": "vlm",
-        "format_option": "PdfFormatOption",
-        "pipeline_class": "IngestProgressVlmPipeline",
-        "backend_class": "DoclingParseDocumentBackend",
-        "route_kind": "vlm",
-        "supports_vlm": True,
-    }
-    assert route_metadata_for(input_format="docx", pipeline="standard") == {
-        "input_format": "docx",
+@pytest.mark.parametrize(
+    ("input_format", "expected_route"),
+    EXPECTED_ROUTE_STANDARD_METADATA.items(),
+)
+def test_route_metadata_records_standard_docling_converter_classes(
+    input_format: str,
+    expected_route: dict[str, object],
+) -> None:
+    assert route_metadata_for(input_format=input_format, pipeline="standard") == expected_route
+
+
+@pytest.mark.parametrize(
+    ("input_format", "expected_route"),
+    EXPECTED_VLM_ROUTE_METADATA.items(),
+)
+def test_route_metadata_records_vlm_docling_converter_classes(
+    input_format: str,
+    expected_route: dict[str, object],
+) -> None:
+    assert route_metadata_for(input_format=input_format, pipeline="vlm") == expected_route
+
+
+def test_route_metadata_preserves_unknown_format_default() -> None:
+    assert route_metadata_for(input_format="unknown", pipeline="standard") == {
+        "input_format": "unknown",
         "selected_pipeline": "standard",
-        "format_option": "WordFormatOption",
+        "format_option": "DoclingDefaultFormatOption",
         "pipeline_class": "SimplePipeline",
-        "backend_class": "MsWordDocumentBackend",
+        "backend_class": "DoclingDefaultBackend",
         "route_kind": "simple",
         "supports_vlm": False,
     }

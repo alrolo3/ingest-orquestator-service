@@ -4,11 +4,6 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from ingest_orquestator_server.application.exceptions import (
-    UnsupportedDocumentFormatError,
-    UnsupportedIngestionOptionError,
-    UnsupportedPipelineError,
-)
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
 )
@@ -17,6 +12,9 @@ from ingest_orquestator_server.application.services.document_parse_service impor
 )
 from ingest_orquestator_server.application.services.embedding_dispatch_service import (
     EmbeddingDispatchService,
+)
+from ingest_orquestator_server.application.services.ingestion_job_metadata import (
+    build_error_metadata,
 )
 from ingest_orquestator_server.application.services.job_progress_reporter import (
     JobProgressReporter,
@@ -191,7 +189,12 @@ class JobParseCoordinator:
             update={
                 "status": IngestionStatus.FAILED,
                 "error": error,
-                "metadata": job.metadata | self._error_metadata(error_type=error_type, exc=exc),
+                "metadata": job.metadata
+                | build_error_metadata(
+                    error_type=error_type,
+                    exc=exc,
+                    include_validation_error=self._include_validation_error_metadata,
+                ),
                 "updated_at": datetime.now(UTC),
                 "completed_at": datetime.now(UTC),
             }
@@ -205,22 +208,6 @@ class JobParseCoordinator:
         if log_parser:
             failed_fields["parser"] = job.parser
         log_stage("parser.worker.failed", **failed_fields)
-
-    def _error_metadata(
-        self,
-        *,
-        error_type: str,
-        exc: Exception | None,
-    ) -> dict[str, str]:
-        metadata = {"error_type": error_type}
-        if self._include_validation_error_metadata and isinstance(
-            exc,
-            UnsupportedDocumentFormatError
-            | UnsupportedPipelineError
-            | UnsupportedIngestionOptionError,
-        ):
-            metadata["validation_error"] = "true"
-        return metadata
 
     @staticmethod
     def _requested_parse_options(job: IngestionJob) -> RequestedParseOptions:
