@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,8 +18,8 @@ from ingest_orquestator_server.application.ports.upload_storage import UploadSto
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
-from ingest_orquestator_server.application.services.job_progress_reporter import (
-    JobProgressReporter,
+from ingest_orquestator_server.application.services.job_parse_coordinator import (
+    JobParseCoordinator,
 )
 from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
@@ -38,8 +37,6 @@ if TYPE_CHECKING:
         ParserWorkerService,
     )
 
-logger = logging.getLogger(__name__)
-
 
 class FileIngestionService:
     def __init__(
@@ -55,14 +52,16 @@ class FileIngestionService:
     ) -> None:
         self._settings = settings
         self._upload_storage = upload_storage
-        self._document_parse_service = document_parse_service
         self._job_repository = job_repository
         self._upload_validator = upload_validator
         self._embedding_dispatch_service = embedding_dispatch_service
         self._parser_worker_service = parser_worker_service
-        self._progress_reporter = JobProgressReporter(
+        self._parse_coordinator = JobParseCoordinator(
+            settings=settings,
+            document_parse_service=document_parse_service,
             job_repository=job_repository,
-            history_limit=settings.progress_history_limit,
+            dispatch_service=embedding_dispatch_service,
+            include_validation_error_metadata=True,
         )
 
     async def ingest_upload(
@@ -192,104 +191,13 @@ class FileIngestionService:
         if self._parser_worker_service is not None:
             self._parser_worker_service.process_job(job_id)
             return
-        job = self._job_repository.get(job_id)
-        if job is None:
-            return
-
-        pipeline = job.metadata.get("requested_pipeline")
-        chunking_enabled = job.metadata.get("requested_chunking_enabled")
-        chunking_strategy = job.metadata.get("requested_chunking_strategy")
-        running_job = job.model_copy(
-            update={
-                "status": IngestionStatus.PARSING,
-                "started_at": datetime.now(UTC),
-                "updated_at": datetime.now(UTC),
-            }
-        )
-        self._job_repository.save(running_job)
-        log_stage(
-            "parser.worker.started",
+        self._parse_coordinator.process_job(
             job_id=job_id,
-            parser=running_job.parser,
-            pipeline=pipeline,
-        )
-
-        try:
-            if running_job.input_path is None:
-                raise FileNotFoundError("Queued job has no input path.")
-            log_stage(
-                "parser.worker.parse.started",
-                job_id=job_id,
-                parser=running_job.parser,
-                pipeline=pipeline,
-                input_path=running_job.input_path,
-            )
-            parse_result = self._document_parse_service.parse_file(
-                file_path=running_job.input_path,
-                parser_name=running_job.parser,
-                output_root=None,
-                document_id=job_id,
-                pipeline=str(pipeline) if pipeline is not None else None,
-                chunking_enabled=bool(chunking_enabled) if chunking_enabled is not None else None,
-                chunking_strategy=str(chunking_strategy) if chunking_strategy is not None else None,
-                progress_callback=self._progress_reporter.callback_for(job_id),
-            )
-        except Exception as exc:
-            latest_job = self._job_repository.get(job_id) or running_job
-            failed_job = latest_job.model_copy(
-                update={
-                    "status": IngestionStatus.FAILED,
-                    "error": str(exc),
-                    "metadata": latest_job.metadata | self._error_metadata(exc),
-                    "updated_at": datetime.now(UTC),
-                    "completed_at": datetime.now(UTC),
-                }
-            )
-            self._job_repository.save(failed_job)
-            log_stage(
-                "parser.worker.failed",
-                job_id=job_id,
-                parser=running_job.parser,
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            logger.exception(
-                "parser.worker.failed",
-                extra={"job_id": job_id, "parser": running_job.parser},
-            )
-            return
-
-        latest_job = self._job_repository.get(job_id) or running_job
-        completed_metadata = latest_job.metadata | parse_result.diagnostics.metadata
-        completed_job = latest_job.model_copy(
-            update={
-                "status": IngestionStatus.PARSED,
-                "document_id": parse_result.parse_output.document.document_id,
-                "metadata": completed_metadata,
-                "updated_at": datetime.now(UTC),
-            }
-        )
-        self._job_repository.save(completed_job)
-        if self._embedding_dispatch_service is not None:
-            completed_job = self._embedding_dispatch_service.enqueue_parse_result(
-                completed_job,
-                parse_result,
-            )
-            self._job_repository.save(completed_job)
-            self._embedding_dispatch_service.notify()
-        log_stage(
-            "parser.worker.completed",
-            job_id=job_id,
-            document_id=parse_result.parse_output.document.document_id,
-            parser=running_job.parser,
-            pipeline=completed_job.metadata.get("pipeline") or pipeline,
-            input_format=completed_job.metadata.get("input_format"),
-            page_count=parse_result.parse_output.document.page_count,
-            element_count=len(parse_result.parse_output.document.elements),
-            chunk_count=len(parse_result.chunks),
-            embedding_record_count=len(parse_result.embedding_records),
-            duration_ms=parse_result.diagnostics.duration_ms,
-            status=completed_job.status,
+            preserve_existing_started_at=False,
+            log_parse_started=True,
+            log_started_input_path=False,
+            log_completed_context=True,
+            log_failed_parser=True,
         )
 
     def process_embedding_queue(self) -> None:
