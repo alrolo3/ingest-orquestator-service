@@ -6,6 +6,12 @@
       "index.default_pipeline": "open_rag_embeddings_v2_semantic_pipeline"
     },
     "mappings": {
+      "_source": {
+        "excludes": [
+          "content_semantic",
+          "title_semantic"
+        ]
+      },
       "dynamic": false,
       "_meta": {
         "description": "Semantic text mapping for one normalized RAG chunk per indexed document.",
@@ -58,10 +64,6 @@
             "strategy": "none"
           }
         },
-        "raw_text": {
-          "type": "text",
-          "index": false
-        },
         "record_id": {
           "type": "keyword"
         },
@@ -71,9 +73,6 @@
         "chunk_id": {
           "type": "keyword"
         },
-        "schema_version": {
-          "type": "keyword"
-        },
         "source_file_name": {
           "type": "keyword",
           "fields": {
@@ -81,9 +80,6 @@
               "type": "text"
             }
           }
-        },
-        "mime_type": {
-          "type": "keyword"
         },
         "input_format": {
           "type": "keyword"
@@ -97,29 +93,11 @@
         "chunker_strategy": {
           "type": "keyword"
         },
-        "vlm_model": {
-          "type": "keyword"
-        },
-        "vlm_runtime": {
-          "type": "keyword"
-        },
-        "picture_description_model": {
-          "type": "keyword"
-        },
-        "picture_description_runtime": {
-          "type": "keyword"
-        },
-        "contextualized": {
-          "type": "boolean"
-        },
         "page_start": {
           "type": "integer"
         },
         "page_end": {
           "type": "integer"
-        },
-        "element_ids": {
-          "type": "keyword"
         },
         "element_types": {
           "type": "keyword"
@@ -149,19 +127,8 @@
             },
             "low_grade": {
               "type": "keyword"
-            },
-            "page_count": {
-              "type": "integer"
             }
           }
-        },
-        "runtime": {
-          "type": "object",
-          "enabled": false
-        },
-        "metadata": {
-          "type": "object",
-          "enabled": false
         },
         "ingested_at": {
           "type": "date"

@@ -226,6 +226,9 @@ def _pdf_options(settings: Settings) -> dict[str, Any]:
         "picture_description_model": settings.docling_pdf_picture_description_model,
         "picture_description_runtime": settings.docling_pdf_picture_description_runtime,
         "picture_description_prompt": settings.docling_pdf_picture_description_prompt,
+        "picture_description_max_new_tokens": (
+            settings.docling_pdf_picture_description_max_new_tokens
+        ),
         "do_code_enrichment": settings.docling_pdf_do_code_enrichment,
         "do_formula_enrichment": settings.docling_pdf_do_formula_enrichment,
         "code_formula_preset": settings.docling_pdf_code_formula_preset,

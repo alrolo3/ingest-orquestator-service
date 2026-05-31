@@ -10,6 +10,10 @@ def test_open_rag_embedding_index_asset_maps_chunk_documents() -> None:
     inference = asset["pipeline"]["processors"][1]["inference"]
 
     assert asset["index_name"] == "open-rag-embeddings-v1"
+    assert asset["index"]["mappings"]["_source"]["excludes"] == [
+        "content_embedding",
+        "title_embedding",
+    ]
     assert properties["content_embedding"]["dims"] == 4096
     assert properties["content_embedding"]["index_options"]["type"] == "int8_hnsw"
     assert properties["title_embedding"]["dims"] == 4096
@@ -17,8 +21,20 @@ def test_open_rag_embedding_index_asset_maps_chunk_documents() -> None:
     assert properties["record_id"]["type"] == "keyword"
     assert properties["document_id"]["type"] == "keyword"
     assert properties["chunk_id"]["type"] == "keyword"
-    assert properties["metadata"]["enabled"] is False
     assert properties["confidence"]["properties"]["mean_score"]["type"] == "float"
+    for field_name in [
+        "raw_text",
+        "schema_version",
+        "metadata",
+        "runtime",
+        "element_ids",
+        "profile",
+        "vlm_model",
+        "vlm_runtime",
+        "picture_description_model",
+        "picture_description_runtime",
+    ]:
+        assert field_name not in properties
     assert inference["model_id"] == "qwen3-embedding-8b"
     assert inference["input_output"] == [
         {
@@ -44,6 +60,7 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
     assert asset["index_name"] == "open-rag-embeddings-v2"
     assert asset["pipeline_name"] == "open_rag_embeddings_v2_semantic_pipeline"
     assert settings["index.default_pipeline"] == "open_rag_embeddings_v2_semantic_pipeline"
+    assert mappings["_source"]["excludes"] == ["content_semantic", "title_semantic"]
     assert mappings["_meta"]["inference_id"] == "qwen3-embedding-8b"
     assert "content_embedding" not in properties
     assert "title_embedding" not in properties
@@ -64,8 +81,19 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
     assert properties["record_id"]["type"] == "keyword"
     assert properties["document_id"]["type"] == "keyword"
     assert properties["chunk_id"]["type"] == "keyword"
-    assert "profile" not in properties
-    assert properties["metadata"]["enabled"] is False
+    for field_name in [
+        "raw_text",
+        "schema_version",
+        "metadata",
+        "runtime",
+        "element_ids",
+        "profile",
+        "vlm_model",
+        "vlm_runtime",
+        "picture_description_model",
+        "picture_description_runtime",
+    ]:
+        assert field_name not in properties
     assert processors == [
         {
             "set": {

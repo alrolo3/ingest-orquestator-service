@@ -19,6 +19,18 @@ class ElasticEmbeddingDispatchError(RuntimeError):
 
 BulkHelper = Callable[..., tuple[int, int | list[dict[str, Any]]]]
 
+INDEXED_CONFIDENCE_FIELDS = (
+    "parse_score",
+    "layout_score",
+    "table_score",
+    "ocr_score",
+    "mean_score",
+    "low_score",
+    "mean_grade",
+    "low_grade",
+)
+REQUIRED_INDEX_FIELDS = {"record_id", "document_id", "chunk_id", "content", "title"}
+
 
 class ElasticEmbeddingDispatcher:
     def __init__(
@@ -61,8 +73,6 @@ class ElasticEmbeddingDispatcher:
             metadata = {}
         else:
             metadata = dict(metadata)
-            if not self._settings.embedding_elastic_include_local_paths:
-                metadata.pop("source_path", None)
 
         content = str(record.get("text") or "")
         document_id = str(record.get("document_id") or item.document_id)
@@ -71,38 +81,44 @@ class ElasticEmbeddingDispatcher:
         page_start = metadata.get("page_start")
         page_end = metadata.get("page_end")
         title = str(metadata.get("title") or item.source_file_name or document_id)
-        confidence = metadata.get("confidence")
-        if not isinstance(confidence, dict):
-            confidence = {}
+        confidence = self._indexable_confidence(metadata.get("confidence"))
 
         document = {
             "record_id": record_id,
             "document_id": document_id,
             "chunk_id": chunk_id,
-            "schema_version": record.get("schema_version"),
             "content": content,
-            "raw_text": record.get("raw_text"),
-            "contextualized": bool(record.get("contextualized")),
             "source_file_name": metadata.get("source_file_name") or item.source_file_name,
             "title": title,
-            "mime_type": metadata.get("mime_type"),
             "input_format": metadata.get("input_format") or item.metadata.get("input_format"),
             "parser": metadata.get("parser") or item.metadata.get("parser"),
             "pipeline": metadata.get("pipeline") or item.metadata.get("pipeline"),
-            "vlm_model": metadata.get("vlm_model"),
-            "vlm_runtime": metadata.get("vlm_runtime"),
-            "picture_description_model": metadata.get("picture_description_model"),
-            "picture_description_runtime": metadata.get("picture_description_runtime"),
             "chunker_strategy": metadata.get("chunker_strategy"),
             "page_start": page_start,
             "page_end": page_end,
-            "element_ids": metadata.get("element_ids", []),
             "element_types": metadata.get("element_types", []),
             "confidence": confidence,
-            "runtime": metadata.get("runtime"),
-            "metadata": metadata,
         }
-        return document
+        return self._drop_empty_optional_fields(document)
+
+    def _indexable_confidence(self, value: Any) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            return {}
+        return {
+            key: value[key]
+            for key in INDEXED_CONFIDENCE_FIELDS
+            if key in value and value[key] is not None
+        }
+
+    def _drop_empty_optional_fields(self, document: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in document.items()
+            if key in REQUIRED_INDEX_FIELDS or not self._is_empty_optional_value(value)
+        }
+
+    def _is_empty_optional_value(self, value: Any) -> bool:
+        return value is None or value == "" or value == [] or value == {}
 
     def _submit_bulk(
         self,

@@ -131,6 +131,7 @@ class Settings(BaseSettings):
     docling_pdf_picture_description_model: str = DOCLING_PICTURE_DESCRIPTION_MODEL
     docling_pdf_picture_description_runtime: str = "transformers"
     docling_pdf_picture_description_prompt: str = DOCLING_PICTURE_DESCRIPTION_PROMPT
+    docling_pdf_picture_description_max_new_tokens: int = Field(default=1024, ge=1)
     docling_pdf_do_code_enrichment: bool = True
     docling_pdf_do_formula_enrichment: bool = True
     docling_pdf_code_formula_preset: str = DOCLING_CODE_FORMULA_PRESET

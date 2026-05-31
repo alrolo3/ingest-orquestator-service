@@ -21,11 +21,12 @@ def test_build_pdf_pipeline_options_selects_standard_pipeline_models() -> None:
         == "docling-project/DocumentFigureClassifier-v2.5"
     )
     assert options.do_picture_description is True
-    assert (
-        options.picture_description_options.model_spec.default_repo_id
-        == "Qwen/Qwen3-VL-8B-Instruct"
-    )
-    assert options.picture_description_options.engine_options.engine_type.value == "transformers"
+    assert options.picture_description_options.kind == "vlm"
+    assert options.picture_description_options.repo_id == "Qwen/Qwen3-VL-8B-Instruct"
+    assert options.picture_description_options.generation_config == {
+        "max_new_tokens": 1024,
+        "do_sample": False,
+    }
     assert options.do_code_enrichment is True
     assert options.do_formula_enrichment is True
     assert (
@@ -57,6 +58,7 @@ def test_build_pdf_pipeline_options_can_select_vllm_picture_description() -> Non
         "ibm-granite/granite-vision-3.3-2b"
     )
     assert options.picture_description_options.engine_options.engine_type.value == "vllm"
+    assert options.picture_description_options.generation_config["max_new_tokens"] == 1024
 
 
 def test_build_pdf_pipeline_options_passes_remote_code_to_custom_picture_model() -> None:
@@ -71,6 +73,22 @@ def test_build_pdf_pipeline_options_passes_remote_code_to_custom_picture_model()
 
     assert options.picture_description_options.model_spec.default_repo_id == ("vendor/custom-vlm")
     assert options.picture_description_options.model_spec.trust_remote_code is True
+    assert options.picture_description_options.model_spec.max_new_tokens == 1024
+    assert options.picture_description_options.generation_config["max_new_tokens"] == 1024
+
+
+def test_build_pdf_pipeline_options_allows_picture_description_token_limit() -> None:
+    options = build_pdf_pipeline_options(
+        Settings(
+            docling_pdf_ocr_engine="auto",
+            docling_pdf_picture_description_max_new_tokens=1536,
+        )
+    )
+
+    assert options.picture_description_options.generation_config == {
+        "max_new_tokens": 1536,
+        "do_sample": False,
+    }
 
 
 def test_docling_options_metadata_records_runtime_decisions() -> None:

@@ -41,8 +41,13 @@ def test_elastic_dispatcher_uses_bulk_helper_for_bulk_submit(tmp_path: Path) -> 
     assert "content_semantic" not in actions[0]["_source"]
     assert "title_semantic" not in actions[0]["_source"]
     assert actions[0]["_source"]["input_format"] == "pdf"
-    assert actions[0]["_source"]["metadata"]["page_start"] == 1
-    assert "source_path" not in actions[0]["_source"]["metadata"]
+    assert actions[0]["_source"]["page_start"] == 1
+    assert actions[0]["_source"]["confidence"] == {"mean_score": 0.95}
+    assert "metadata" not in actions[0]["_source"]
+    assert "runtime" not in actions[0]["_source"]
+    assert "raw_text" not in actions[0]["_source"]
+    assert "element_ids" not in actions[0]["_source"]
+    assert "source_path" not in actions[0]["_source"]
     assert captured["kwargs"]["request_timeout"] == 30.0
 
 
@@ -76,6 +81,20 @@ def test_elastic_dispatcher_uses_semantic_text_v2_without_bulk_action_pipeline(
     assert "content_semantic" not in actions[0]["_source"]
     assert actions[0]["_source"]["title"] == "Quarterly Revenue"
     assert "title_semantic" not in actions[0]["_source"]
+    assert set(actions[0]["_source"]) == {
+        "record_id",
+        "document_id",
+        "chunk_id",
+        "content",
+        "source_file_name",
+        "title",
+        "input_format",
+        "pipeline",
+        "chunker_strategy",
+        "page_start",
+        "page_end",
+        "confidence",
+    }
 
 
 class FakeElasticsearchClient:
@@ -121,6 +140,7 @@ def _item(tmp_path: Path) -> EmbeddingQueueItem:
                     "title": "Quarterly Revenue",
                     "page_start": 1,
                     "page_end": 1,
+                    "chunker_strategy": "hybrid",
                     "confidence": {"mean_score": 0.95},
                 },
             )

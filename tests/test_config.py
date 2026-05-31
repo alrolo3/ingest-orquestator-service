@@ -53,6 +53,7 @@ def test_env_example_loads() -> None:
     assert settings.docling_vlm_runtime == "transformers"
     assert settings.docling_vllm_fallback_on_unsupported is True
     assert settings.docling_vlm_max_new_tokens == 4096
+    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
     assert settings.effective_docling_vlm_trust_remote_code is False
     assert settings.docling_vllm_max_model_len == 32768
     assert settings.parser_worker_count == 2
@@ -85,6 +86,7 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_vllm_tensor_parallel_size == 1
     assert settings.docling_vllm_gpu_memory_utilization > 0
     assert settings.docling_vlm_max_new_tokens == 4096
+    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
     assert settings.docling_vllm_max_model_len == 32768
     assert settings.effective_docling_vlm_trust_remote_code is False
 
@@ -97,6 +99,7 @@ def test_cpu_env_loads() -> None:
     assert settings.docling_pdf_ocr_use_gpu is False
     assert settings.docling_pdf_do_picture_classification is False
     assert settings.docling_pdf_do_picture_description is False
+    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
     assert settings.docling_pdf_do_code_enrichment is False
     assert settings.docling_pdf_do_formula_enrichment is False
     assert settings.docling_pdf_picture_description_runtime == "transformers"
@@ -121,6 +124,7 @@ def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     assert settings.docling_pdf_do_picture_description is True
     assert settings.docling_pdf_picture_description_model == "Qwen/Qwen3-VL-8B-Instruct"
     assert settings.docling_pdf_picture_description_runtime == "transformers"
+    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
     assert settings.docling_pdf_do_code_enrichment is True
     assert settings.docling_pdf_do_formula_enrichment is True
     assert settings.docling_pdf_code_formula_preset == "codeformulav2"

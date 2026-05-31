@@ -122,12 +122,19 @@ def build_picture_description_options(settings: Settings) -> Any:
     model_name = settings.docling_pdf_picture_description_model.strip()
     resolution = resolve_picture_description_runtime(settings)
     engine_options = build_vlm_engine_options(resolution, settings)
+    generation_config = _picture_description_generation_config(settings)
     if resolution.preset is not None:
         return PictureDescriptionVlmEngineOptions.from_preset(
             resolution.preset,
             engine_options=engine_options,
             prompt=settings.docling_pdf_picture_description_prompt,
+            generation_config=generation_config,
         )
+    if (
+        model_name == DOCLING_PICTURE_DESCRIPTION_MODEL
+        and resolution.resolved_runtime == RUNTIME_TRANSFORMERS
+    ):
+        return _build_qwen3_transformers_picture_description_options(settings)
     if model_name == DOCLING_PICTURE_DESCRIPTION_MODEL:
         return _build_qwen3_picture_description_options(settings, resolution)
     return _build_custom_picture_description_options(settings, resolution)
@@ -244,6 +251,7 @@ def _build_qwen3_picture_description_options(
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
             trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
+            max_new_tokens=settings.docling_pdf_picture_description_max_new_tokens,
             supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={
                 VlmEngineType.TRANSFORMERS: EngineModelConfig(
@@ -257,6 +265,17 @@ def _build_qwen3_picture_description_options(
             },
         ),
         prompt=settings.docling_pdf_picture_description_prompt,
+        generation_config=_picture_description_generation_config(settings),
+    )
+
+
+def _build_qwen3_transformers_picture_description_options(settings: Settings) -> Any:
+    from docling.datamodel.pipeline_options import PictureDescriptionVlmOptions
+
+    return PictureDescriptionVlmOptions(
+        repo_id=DOCLING_PICTURE_DESCRIPTION_MODEL,
+        prompt=settings.docling_pdf_picture_description_prompt,
+        generation_config=_picture_description_generation_config(settings),
     )
 
 
@@ -280,6 +299,7 @@ def _build_custom_picture_description_options(
             prompt=settings.docling_pdf_picture_description_prompt,
             response_format=ResponseFormat.PLAINTEXT,
             trust_remote_code=settings.effective_docling_vlm_trust_remote_code,
+            max_new_tokens=settings.docling_pdf_picture_description_max_new_tokens,
             supported_engines=_supported_picture_description_engines(resolution),
             engine_overrides={
                 VlmEngineType.TRANSFORMERS: EngineModelConfig(
@@ -292,7 +312,15 @@ def _build_custom_picture_description_options(
             },
         ),
         prompt=settings.docling_pdf_picture_description_prompt,
+        generation_config=_picture_description_generation_config(settings),
     )
+
+
+def _picture_description_generation_config(settings: Settings) -> dict[str, Any]:
+    return {
+        "max_new_tokens": settings.docling_pdf_picture_description_max_new_tokens,
+        "do_sample": False,
+    }
 
 
 def _supported_picture_description_engines(resolution: RuntimeResolution) -> set[Any]:
