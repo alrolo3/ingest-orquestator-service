@@ -1,12 +1,11 @@
-# CPU local development profile for macOS and Linux hosts.
-# Source this file before local CLI/API runs:
+# CPU local development environment for macOS and Linux hosts.
+# Source this file before local API runs:
 # set -a; source env-cpu; set +a
 
 INGEST_SERVICE_NAME=ingest-orquestator-server
 INGEST_STORAGE_DIR=.data
 INGEST_MAX_UPLOAD_SIZE_MB=100
 INGEST_ALLOWED_UPLOAD_EXTENSIONS=.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.md,.markdown,.txt,.html,.htm,.docx,.pptx,.xlsx,.csv,.json,.adoc,.asciidoc,.tex,.latex,.vtt,.jats,.nxml,.uspto,.xbrl
-INGEST_PROFILE=rag_ready
 INGEST_CHUNKING_ENABLED=true
 INGEST_CHUNKING_STRATEGY=hybrid
 INGEST_CHUNK_MAX_TOKENS=768

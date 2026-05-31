@@ -39,7 +39,6 @@ async def ingest_file(
     service: Annotated[FileIngestionService, Depends(get_file_ingestion_service)],
     parser: Annotated[str, Query()] = "docling",
     pipeline: Annotated[str | None, Query()] = None,
-    profile: Annotated[str | None, Query()] = None,
     chunking_enabled: Annotated[bool | None, Query()] = None,
     chunking_strategy: Annotated[str | None, Query()] = None,
     async_mode: Annotated[bool, Query()] = False,
@@ -51,7 +50,6 @@ async def ingest_file(
                 upload=file,
                 parser_name=parser,
                 pipeline=pipeline,
-                profile=profile,
                 chunking_enabled=chunking_enabled,
                 chunking_strategy=chunking_strategy,
             )
@@ -62,7 +60,6 @@ async def ingest_file(
             upload=file,
             parser_name=parser,
             pipeline=pipeline,
-            profile=profile,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
             include_document=include_document,

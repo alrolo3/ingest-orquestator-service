@@ -53,7 +53,6 @@ class DocumentParseService:
         output_root: Path,
         document_id: str | None = None,
         pipeline: str | None = None,
-        profile: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> DocumentParseResult:
@@ -64,14 +63,12 @@ class DocumentParseService:
             file_path,
             document_id=document_id,
             pipeline=pipeline,
-            profile=profile,
         )
         return self._persist_parse_output(
             parse_output,
             parser_name=parser_name,
             output_root=output_root,
             pipeline=pipeline,
-            profile=profile,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
             started_at=started_at,
@@ -85,7 +82,6 @@ class DocumentParseService:
         parser_name: str,
         output_root: Path,
         pipeline: str | None = None,
-        profile: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> list[DocumentParseResult]:
@@ -98,7 +94,6 @@ class DocumentParseService:
                     parser_name=parser_name,
                     output_root=output_root,
                     pipeline=pipeline,
-                    profile=profile,
                     chunking_enabled=chunking_enabled,
                     chunking_strategy=chunking_strategy,
                 )
@@ -110,7 +105,6 @@ class DocumentParseService:
         parse_outputs = parse_many(
             file_paths,
             pipeline=pipeline,
-            profile=profile,
         )
         return [
             self._persist_parse_output(
@@ -118,7 +112,6 @@ class DocumentParseService:
                 parser_name=parser_name,
                 output_root=output_root,
                 pipeline=pipeline,
-                profile=profile,
                 chunking_enabled=chunking_enabled,
                 chunking_strategy=chunking_strategy,
                 started_at=started_at,
@@ -134,24 +127,20 @@ class DocumentParseService:
         parser_name: str,
         output_root: Path,
         pipeline: str | None,
-        profile: str | None,
         chunking_enabled: bool | None,
         chunking_strategy: str | None,
         started_at: datetime,
         started: float,
     ) -> DocumentParseResult:
         chunking_is_enabled = self._chunking_service.is_enabled(
-            profile=profile,
             chunking_enabled=chunking_enabled,
         )
         requested_chunking_strategy = self._chunking_service.strategy(
-            profile=profile,
             chunking_strategy=chunking_strategy,
         )
         chunks = self._chunking_service.chunk(
             parse_output.document,
             docling_document=parse_output.docling_document,
-            profile=profile,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
         )
@@ -176,7 +165,6 @@ class DocumentParseService:
                 "page_count": parse_output.document.page_count,
                 "element_count": len(parse_output.document.elements),
                 "input_format": docling_metadata.get("input_format"),
-                "profile": docling_metadata.get("profile") or profile,
                 "pipeline": docling_metadata.get("pipeline") or pipeline,
                 "ocr_engine": docling_metadata.get("ocr_engine"),
                 "vlm_model": docling_metadata.get("vlm_model"),

@@ -4,24 +4,24 @@ The service reads configuration from environment variables with the `INGEST_`
 prefix. Pydantic also loads a local `.env` file automatically when the process
 starts.
 
-Use one of the checked-in profiles as a starting point:
+Use one of the checked-in environment files as a starting point:
 
 ```bash
 cp .env.example .env
 ```
 
-The checked-in profile files contain every `INGEST_` setting as an assignment,
-including optional settings. Values that are deployment-specific, especially
-Elastic passwords, are placeholders and must be changed in the untracked local
-`.env`.
+The checked-in environment files contain every `INGEST_` setting as an
+assignment, including optional settings. Values that are deployment-specific,
+especially Elastic passwords, are placeholders and must be changed in the
+untracked local `.env`.
 
-For shell-sourced profiles:
+For shell-sourced environments:
 
 ```bash
 set -a
-source env-cpu        # macOS/Linux CPU profile
+source env-cpu        # macOS/Linux CPU environment
 # or
-source env-cuda-gpu   # Linux NVIDIA GPU profile
+source env-cuda-gpu   # Linux NVIDIA GPU environment
 set +a
 ```
 
@@ -34,28 +34,27 @@ INGEST_DOCLING_VLM_PROMPT="Convert this page to markdown."
 Comma-separated environment values are decoded by the application for list
 settings such as upload extensions, Docling formats, and OCR languages.
 
-## Profile Files
+## Environment Files
 
 | File | Purpose |
 | --- | --- |
 | `.env.example` | Same source-safe configuration as `env-cuda-gpu`. Copy it to `.env` for GPU-oriented local development. |
-| `env-cpu` | Source-safe CPU profile for macOS and Linux. It avoids external Docling OCR plugins and disables GPU-heavy enrichments. |
-| `env-cuda-gpu` | Source-safe NVIDIA GPU profile tuned for an A100 80GB class machine. It enables CUDA, SuryaOCR, Qwen3 VLM stages through Transformers, higher batch sizes, and larger uploads. |
+| `env-cpu` | Source-safe CPU environment for macOS and Linux. It avoids external Docling OCR plugins and disables GPU-heavy enrichments. |
+| `env-cuda-gpu` | Source-safe NVIDIA GPU environment tuned for an A100 80GB class machine. It enables CUDA, SuryaOCR, Qwen3 VLM stages through Transformers, higher batch sizes, and larger uploads. |
 
 ## Service And Storage
 
 | Variable | Code Default | Example | Explanation |
 | --- | --- | --- | --- |
 | `INGEST_SERVICE_NAME` | `ingest-orquestator-server` | `ingest-orquestator-server` | Logical service name returned by health/config metadata and useful in logs or deployment labels. |
-| `INGEST_PROFILE` | `rag_ready` | `rag_ready` | Default ingestion profile when CLI/API calls do not pass `--profile` or `profile`. Valid values: `parse_only`, `rag_ready`, `ocr_only`, `standard_enriched`, `vlm`. Profiles apply grouped overrides for parsing, enrichment, chunking, embedding output, and confidence output. |
-| `INGEST_STORAGE_DIR` | `.data` | `.data` | Root directory for local runtime state. Uploads, outputs, benchmark results, and SQLite jobs are stored below this path. |
+| `INGEST_STORAGE_DIR` | `.data` | `.data` | Root directory for local runtime state. Uploads, outputs, and SQLite jobs are stored below this path. |
 | `INGEST_MAX_UPLOAD_SIZE_MB` | `100` | `2048` | Maximum accepted upload size in MiB for API ingestion. Increase for large PDFs or office documents. |
 | `INGEST_ALLOWED_UPLOAD_EXTENSIONS` | Multi-format list | `.pdf,.docx,.md` | Comma-separated file extensions accepted by upload validation and batch directory discovery. Extensions are normalized to lowercase and `.` is added if missing. |
-| `INGEST_RETENTION_DAYS` | `30` | `30` | Default retention window used by the cleanup command when `--older-than-days` is omitted. |
+| `INGEST_RETENTION_DAYS` | `30` | `30` | Default retention window for local runtime artifacts when cleanup is run by an operator or maintenance process. |
 
 ## Upload Extension Defaults
 
-The project profiles currently include:
+The checked-in environment files currently include:
 
 ```text
 .pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.md,.markdown,.txt,.html,.htm,.docx,.pptx,.xlsx,.csv,.json,.adoc,.asciidoc,.tex,.latex,.vtt,.jats,.nxml,.uspto,.xbrl
@@ -198,7 +197,7 @@ They do not control standard-pipeline picture descriptions, which use the
 
 | Variable | Code Default | Example | Explanation |
 | --- | --- | --- | --- |
-| `INGEST_DOCLING_XBRL_ENABLE_LOCAL_FETCH` | `false` | `true` | Allows Arelle/Docling XBRL processing to load local taxonomy/resources referenced by the document. GPU profile enables this for local sample files. |
+| `INGEST_DOCLING_XBRL_ENABLE_LOCAL_FETCH` | `false` | `true` | Allows Arelle/Docling XBRL processing to load local taxonomy/resources referenced by the document. The GPU environment enables this for local sample files. |
 | `INGEST_DOCLING_XBRL_ENABLE_REMOTE_FETCH` | `false` | `false` | Allows remote taxonomy/resource fetching. Keep disabled for reproducibility and network safety unless the ingestion environment is allowed to fetch taxonomies. |
 | `INGEST_DOCLING_XBRL_TAXONOMY_PATH` | unset | `/path/to/xbrl-taxonomy` | Optional local taxonomy path to use for XBRL processing. Prefer this over remote fetching for controlled deployments. |
 
@@ -217,12 +216,11 @@ These variables are used by `env-cuda-gpu` but are not part of the Pydantic
 
 ## Operational Notes
 
-- CLI flags override selected runtime choices for that invocation, such as
-  `--pipeline`, `--profile`, `--chunking`, and `--chunking-strategy`.
-- `profile=vlm` switches the default pipeline to `vlm`, but direct VLM mode is
-  supported only for PDF and image inputs in this service version.
-- `profile=ocr_only` keeps OCR enabled while disabling table, picture, code,
-  and formula enrichments.
-- `parse_only` disables chunking, embedding output, and confidence output.
+- API query parameters can override selected runtime choices for one request:
+  `pipeline`, `chunking_enabled`, and `chunking_strategy`.
+- Direct `pipeline=vlm` mode is supported only for PDF and image inputs in this
+  service version.
+- Set `INGEST_CHUNKING_ENABLED=false` or pass `chunking_enabled=false` when the
+  downstream embedding store owns chunking.
 - CPU hosts should normally use `INGEST_DOCLING_PDF_OCR_ENGINE=auto` unless the
   selected OCR plugin is installed and compatible with the platform.

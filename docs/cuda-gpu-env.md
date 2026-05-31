@@ -1,10 +1,10 @@
-# CUDA GPU Environment Profile
+# CUDA GPU Environment
 
-`env-cuda-gpu` is a checked-in environment profile for high-throughput parsing on
+`env-cuda-gpu` is a checked-in environment file for high-throughput parsing on
 an NVIDIA A100 80GB host with a CUDA 13 PyTorch runtime.
 
 It is intentionally separate from `.env`. Keep `.env` local for machine-specific
-overrides and copy from this profile when needed.
+overrides and copy from this file when needed.
 
 ## Use Locally
 
@@ -42,8 +42,8 @@ The default GPU install path includes SuryaOCR. FlashAttention-2 is optional and
 is not installed by default because it often requires a long source build.
 SuryaOCR requires `transformers>=4.57,<5`; this keeps Qwen3-VL support while
 avoiding a SuryaOCR runtime failure with Transformers 5.x.
-`requirements-vllm.txt` is optional for CPU hosts, but required when the GPU
-profile is set to resolve supported VLM stages through vLLM.
+`requirements-vllm.txt` is optional for CPU hosts, but required when this GPU
+environment is changed to resolve supported VLM stages through vLLM.
 
 To enable FlashAttention-2, install it explicitly after confirming that `nvcc`
 matches `torch.version.cuda`:
@@ -64,7 +64,7 @@ Then set this in `.env`:
 INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true
 ```
 
-Load the profile and run the API:
+Load the environment and run the API:
 
 ```bash
 set -a
@@ -74,14 +74,11 @@ set +a
 python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
 ```
 
-Or run the CLI:
+Submit a document through the API:
 
 ```bash
-set -a
-source env-cuda-gpu
-set +a
-
-python -m ingest_orquestator_server.cli parse /path/to/document.pdf --output-dir .data/outputs
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@/path/to/document.pdf"
 ```
 
 ## Verify The Runtime
@@ -117,14 +114,13 @@ INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
 
 That falls back to PyTorch SDPA while keeping CUDA enabled.
 
-## Profile Defaults
+## Environment Defaults
 
-The profile chooses:
+The environment chooses:
 
 - `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda`
 - `INGEST_DOCLING_NUM_THREADS=32`
 - `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false`
-- `INGEST_PROFILE=rag_ready`
 - Docling HybridChunker enabled with `INGEST_CHUNK_MAX_TOKENS=1024`
 - confidence output enabled
 - local XBRL taxonomy fetch enabled, remote XBRL fetch disabled
@@ -144,7 +140,7 @@ sizes from `32` to `16`.
 
 ## vLLM
 
-The profile keeps Transformers as the default backend:
+The environment keeps Transformers as the default backend:
 
 ```text
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
@@ -188,7 +184,7 @@ from this service's configuration.
 The GPU Dockerfile already uses the CUDA 13.2 PyTorch image and installs the
 default GPU requirements from `requirements.txt`.
 
-Then run the GPU compose profile:
+Then run the GPU compose overlay:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build

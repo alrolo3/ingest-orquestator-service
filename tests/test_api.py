@@ -1,3 +1,5 @@
+import json
+import logging
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -156,7 +158,7 @@ def test_ingest_rejects_vlm_pipeline_for_markdown(tmp_path: Path) -> None:
         app.dependency_overrides.clear()
 
 
-def test_ingest_accepts_profile_and_chunking_controls(tmp_path: Path) -> None:
+def test_ingest_accepts_chunking_controls(tmp_path: Path) -> None:
     settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)
     validator = UploadValidator(settings)
@@ -186,12 +188,11 @@ def test_ingest_accepts_profile_and_chunking_controls(tmp_path: Path) -> None:
     try:
         client = TestClient(app)
         response = client.post(
-            "/v1/ingest/file?profile=parse_only&chunking_enabled=false",
+            "/v1/ingest/file?chunking_enabled=false",
             files={"file": ("example.md", b"# Example", "text/markdown")},
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["metadata"]["profile"] == "parse_only"
         assert body["metadata"]["chunking_enabled"] is False
         assert body["outputs"]["chunks_json"] is None
     finally:
@@ -243,7 +244,10 @@ def test_async_ingest_queues_and_processes_job(tmp_path: Path) -> None:
         app.dependency_overrides.clear()
 
 
-def test_ingest_file_enqueues_embedding_handoff_internally(tmp_path: Path) -> None:
+def test_ingest_file_enqueues_embedding_handoff_internally(
+    tmp_path: Path,
+    caplog,
+) -> None:
     settings = Settings(
         storage_dir=tmp_path,
         allowed_upload_extensions=[".md"],
@@ -281,13 +285,17 @@ def test_ingest_file_enqueues_embedding_handoff_internally(tmp_path: Path) -> No
 
     app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
     app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+    app.dependency_overrides[get_output_retrieval_service] = lambda: OutputRetrievalService(
+        repository
+    )
 
     try:
         client = TestClient(app)
-        response = client.post(
-            "/v1/ingest/file?include_document=false&pipeline=standard",
-            files={"file": ("example.md", b"# Example", "text/markdown")},
-        )
+        with caplog.at_level(logging.INFO, logger="ingest_orquestator_server.stage"):
+            response = client.post(
+                "/v1/ingest/file?include_document=false&pipeline=standard",
+                files={"file": ("example.md", b"# Example", "text/markdown")},
+            )
         assert response.status_code == 200
         assert response.json()["status"] == "embedding_queued"
         job_id = response.json()["job_id"]
@@ -296,6 +304,27 @@ def test_ingest_file_enqueues_embedding_handoff_internally(tmp_path: Path) -> No
         assert job_response.status_code == 200
         assert job_response.json()["status"] == "embedding_completed"
         assert job_response.json()["metadata"]["embedding_handoff"]["task_id"] == "task-1"
+
+        outputs_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs")
+        assert outputs_response.status_code == 200
+        assert outputs_response.json()["embedding_input_jsonl"].endswith("embedding_input.jsonl")
+
+        embedding_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs/embedding")
+        assert embedding_response.status_code == 200
+        assert '"chunk_id"' in embedding_response.text
+
+        events = [
+            json.loads(record.message)["event"]
+            for record in caplog.records
+            if record.name == "ingest_orquestator_server.stage"
+        ]
+        assert "ingestion.upload.received" in events
+        assert "ingestion.parse.started" in events
+        assert "ingestion.parse.completed" in events
+        assert "embedding.queue.enqueued" in events
+        assert "embedding.dispatch.started" in events
+        assert "embedding.dispatch.accepted" in events
+        assert "embedding.task.completed" in events
     finally:
         app.dependency_overrides.clear()
 

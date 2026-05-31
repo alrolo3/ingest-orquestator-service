@@ -35,7 +35,6 @@ class EmbeddingRecordService:
                         "input_format": document_metadata.get("input_format"),
                         "parser": document_metadata.get("parser", "docling"),
                         "pipeline": document_metadata.get("pipeline"),
-                        "profile": document_metadata.get("profile"),
                         "runtime": document_metadata.get("runtime"),
                         "vlm_model": document_metadata.get("vlm_model"),
                         "vlm_runtime": document_metadata.get("vlm_runtime"),

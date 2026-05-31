@@ -25,7 +25,6 @@ class UploadConfig(BaseModel):
 class DoclingCommonConfig(BaseModel):
     allowed_formats: list[str]
     pipeline: str
-    profile: str
     accelerator_device: str
     num_threads: int
     cuda_use_flash_attention2: bool

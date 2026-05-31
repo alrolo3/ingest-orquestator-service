@@ -27,6 +27,5 @@ def test_parser_adds_docling_accelerator_metadata(tmp_path: Path) -> None:
     assert options["runtime"]["stages"]["picture_description"]["resolved_runtime"]
     assert output.document.metadata["docling"]["input_format"] == "md"
     assert output.document.metadata["docling"]["pipeline"] == "standard"
-    assert output.document.metadata["docling"]["profile"] == "rag_ready"
     assert "runtime" in output.document.metadata["docling"]
     assert output.document.metadata["docling_result"]["status"] is None

@@ -22,10 +22,8 @@ Query parameters:
 
 - `parser`: parser backend to use. The default is `docling`.
 - `pipeline`: optional Docling pipeline override. Supported values are
-  `standard`, `vlm`, and `auto`. When omitted, the configured profile/default
-  pipeline is used.
-- `profile`: optional ingestion profile. Supported values are `rag_ready`,
-  `parse_only`, `ocr_only`, `standard_enriched`, and `vlm`.
+  `standard`, `vlm`, and `auto`. When omitted, the configured default pipeline
+  is used.
 - `chunking_enabled`: optional request-level chunking override.
 - `chunking_strategy`: optional request-level strategy override. Supported
   values are `hybrid`, `line_based`, and `legacy_char`.
@@ -60,8 +58,8 @@ Successful responses include:
 `pipeline=vlm` is supported directly for PDF and image inputs. Other
 Docling formats use `pipeline=standard`.
 
-Use `profile=parse_only&chunking_enabled=false` when a downstream embedding
-store will do its own chunking.
+Use `chunking_enabled=false` when a downstream embedding store will do its own
+chunking.
 
 When `INGEST_EMBEDDING_QUEUE_ENABLED=true`, a successful parse with
 `embedding_input.jsonl` is enqueued for embedding handoff. Job statuses can then

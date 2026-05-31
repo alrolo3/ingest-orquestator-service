@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from ingest_orquestator_server.config.profiles import resolve_profile_settings
 from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_converter_factory import (
     DoclingConverterFactory,
@@ -55,9 +54,8 @@ class DoclingDocumentParser:
         *,
         document_id: str | None = None,
         pipeline: str | None = None,
-        profile: str | None = None,
     ) -> ParseOutput:
-        settings = resolve_profile_settings(self._settings, profile=profile)
+        settings = self._settings
         source_path = file_path.expanduser().resolve()
         if not source_path.is_file():
             raise FileNotFoundError(f"Input file does not exist: {source_path}")
@@ -89,9 +87,8 @@ class DoclingDocumentParser:
         file_paths: Iterable[Path],
         *,
         pipeline: str | None = None,
-        profile: str | None = None,
     ) -> list[ParseOutput]:
-        settings = resolve_profile_settings(self._settings, profile=profile)
+        settings = self._settings
         source_paths = [path.expanduser().resolve() for path in file_paths]
         for source_path in source_paths:
             if not source_path.is_file():
@@ -169,7 +166,6 @@ class DoclingDocumentParser:
         )
         normalized.metadata["docling"] = {
             "parser": self.name,
-            "profile": settings.profile,
             "input_format": input_format,
             "pipeline": resolved_pipeline,
             "ocr_engine": settings.docling_pdf_ocr_engine,

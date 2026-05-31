@@ -19,6 +19,7 @@ from ingest_orquestator_server.application.ports.upload_storage import UploadSto
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
+from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.models.ingest_response import IngestResponse
@@ -58,7 +59,6 @@ class FileIngestionService:
         parser_name: str,
         include_document: bool,
         pipeline: str | None = None,
-        profile: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> IngestResponse:
@@ -67,24 +67,28 @@ class FileIngestionService:
             filename=upload.filename or "",
             parser_name=parser_name,
             pipeline=pipeline,
-            profile=profile,
             chunking_strategy=chunking_strategy,
         )
         job_id = str(uuid4())
-        logger.info(
+        log_stage(
             "ingestion.upload.received",
-            extra={
-                "job_id": job_id,
-                "parser": parser_name,
-                "pipeline": pipeline,
-                "profile": profile,
-                "filename": upload.filename,
-            },
+            job_id=job_id,
+            parser=parser_name,
+            pipeline=pipeline,
+            filename=upload.filename,
         )
         upload_path = await self._upload_storage.save(
             upload,
             self._settings.uploads_dir,
             job_id=job_id,
+        )
+        log_stage(
+            "ingestion.upload.stored",
+            job_id=job_id,
+            parser=parser_name,
+            pipeline=pipeline,
+            source_file_name=upload.filename,
+            input_path=upload_path,
         )
 
         job = IngestionJob(
@@ -95,18 +99,26 @@ class FileIngestionService:
             input_path=upload_path,
             metadata=self._request_metadata(
                 pipeline=pipeline,
-                profile=profile,
                 chunking_enabled=chunking_enabled,
                 chunking_strategy=chunking_strategy,
             ),
             started_at=datetime.now(UTC),
         )
         self._job_repository.save(job)
+        log_stage(
+            "ingestion.job.running",
+            job_id=job_id,
+            parser=parser_name,
+            pipeline=pipeline,
+        )
 
         try:
-            logger.info(
+            log_stage(
                 "ingestion.parse.started",
-                extra={"job_id": job_id, "parser": parser_name, "pipeline": pipeline},
+                job_id=job_id,
+                parser=parser_name,
+                pipeline=pipeline,
+                input_path=upload_path,
             )
             parse_result = self._document_parse_service.parse_file(
                 file_path=upload_path,
@@ -114,7 +126,6 @@ class FileIngestionService:
                 output_root=self._settings.outputs_dir,
                 document_id=job_id,
                 pipeline=pipeline,
-                profile=profile,
                 chunking_enabled=chunking_enabled,
                 chunking_strategy=chunking_strategy,
             )
@@ -129,6 +140,13 @@ class FileIngestionService:
                 }
             )
             self._job_repository.save(failed_job)
+            log_stage(
+                "ingestion.parse.failed",
+                job_id=job_id,
+                parser=parser_name,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
             logger.exception(
                 "ingestion.parse.failed",
                 extra={"job_id": job_id, "parser": parser_name},
@@ -148,14 +166,20 @@ class FileIngestionService:
         )
         self._job_repository.save(completed_job)
         completed_job = self._maybe_enqueue_for_embedding(completed_job)
-        logger.info(
+        log_stage(
             "ingestion.parse.completed",
-            extra={
-                "job_id": job_id,
-                "parser": parser_name,
-                "duration_ms": parse_result.diagnostics.duration_ms,
-                "output_dir": str(parse_result.outputs.output_dir),
-            },
+            job_id=job_id,
+            document_id=parse_result.parse_output.document.document_id,
+            parser=parser_name,
+            pipeline=completed_job.metadata.get("pipeline") or pipeline,
+            input_format=completed_job.metadata.get("input_format"),
+            page_count=parse_result.parse_output.document.page_count,
+            element_count=len(parse_result.parse_output.document.elements),
+            chunk_count=len(parse_result.chunks),
+            embedding_record_count=len(parse_result.embedding_records),
+            duration_ms=parse_result.diagnostics.duration_ms,
+            output_dir=parse_result.outputs.output_dir,
+            status=completed_job.status,
         )
 
         return IngestResponse(
@@ -176,7 +200,6 @@ class FileIngestionService:
         upload: UploadFileLike,
         parser_name: str,
         pipeline: str | None = None,
-        profile: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> IngestResponse:
@@ -185,19 +208,15 @@ class FileIngestionService:
             filename=upload.filename or "",
             parser_name=parser_name,
             pipeline=pipeline,
-            profile=profile,
             chunking_strategy=chunking_strategy,
         )
         job_id = str(uuid4())
-        logger.info(
+        log_stage(
             "ingestion.upload.queued",
-            extra={
-                "job_id": job_id,
-                "parser": parser_name,
-                "pipeline": pipeline,
-                "profile": profile,
-                "filename": upload.filename,
-            },
+            job_id=job_id,
+            parser=parser_name,
+            pipeline=pipeline,
+            filename=upload.filename,
         )
         upload_path = await self._upload_storage.save(
             upload,
@@ -206,7 +225,6 @@ class FileIngestionService:
         )
         metadata = self._request_metadata(
             pipeline=pipeline,
-            profile=profile,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
         )
@@ -219,6 +237,14 @@ class FileIngestionService:
             metadata=metadata,
         )
         self._job_repository.save(job)
+        log_stage(
+            "ingestion.upload.stored",
+            job_id=job_id,
+            parser=parser_name,
+            pipeline=pipeline,
+            source_file_name=upload.filename,
+            input_path=upload_path,
+        )
         return IngestResponse(
             job_id=job_id,
             status=IngestionStatus.QUEUED,
@@ -233,7 +259,6 @@ class FileIngestionService:
             return
 
         pipeline = job.metadata.get("requested_pipeline")
-        profile = job.metadata.get("requested_profile")
         chunking_enabled = job.metadata.get("requested_chunking_enabled")
         chunking_strategy = job.metadata.get("requested_chunking_strategy")
         running_job = job.model_copy(
@@ -244,13 +269,23 @@ class FileIngestionService:
             }
         )
         self._job_repository.save(running_job)
+        log_stage(
+            "ingestion.job.running",
+            job_id=job_id,
+            parser=running_job.parser,
+            pipeline=pipeline,
+            async_mode=True,
+        )
 
         try:
             if running_job.input_path is None:
                 raise FileNotFoundError("Queued job has no input path.")
-            logger.info(
+            log_stage(
                 "ingestion.background.parse.started",
-                extra={"job_id": job_id, "parser": running_job.parser, "pipeline": pipeline},
+                job_id=job_id,
+                parser=running_job.parser,
+                pipeline=pipeline,
+                input_path=running_job.input_path,
             )
             parse_result = self._document_parse_service.parse_file(
                 file_path=running_job.input_path,
@@ -258,7 +293,6 @@ class FileIngestionService:
                 output_root=self._settings.outputs_dir,
                 document_id=job_id,
                 pipeline=str(pipeline) if pipeline is not None else None,
-                profile=str(profile) if profile is not None else None,
                 chunking_enabled=bool(chunking_enabled) if chunking_enabled is not None else None,
                 chunking_strategy=str(chunking_strategy) if chunking_strategy is not None else None,
             )
@@ -273,6 +307,13 @@ class FileIngestionService:
                 }
             )
             self._job_repository.save(failed_job)
+            log_stage(
+                "ingestion.background.parse.failed",
+                job_id=job_id,
+                parser=running_job.parser,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
             logger.exception(
                 "ingestion.background.parse.failed",
                 extra={"job_id": job_id, "parser": running_job.parser},
@@ -291,20 +332,28 @@ class FileIngestionService:
             }
         )
         self._job_repository.save(completed_job)
-        self._maybe_enqueue_for_embedding(completed_job)
-        logger.info(
+        completed_job = self._maybe_enqueue_for_embedding(completed_job)
+        log_stage(
             "ingestion.background.parse.completed",
-            extra={
-                "job_id": job_id,
-                "parser": running_job.parser,
-                "duration_ms": parse_result.diagnostics.duration_ms,
-                "output_dir": str(parse_result.outputs.output_dir),
-            },
+            job_id=job_id,
+            document_id=parse_result.parse_output.document.document_id,
+            parser=running_job.parser,
+            pipeline=completed_job.metadata.get("pipeline") or pipeline,
+            input_format=completed_job.metadata.get("input_format"),
+            page_count=parse_result.parse_output.document.page_count,
+            element_count=len(parse_result.parse_output.document.elements),
+            chunk_count=len(parse_result.chunks),
+            embedding_record_count=len(parse_result.embedding_records),
+            duration_ms=parse_result.diagnostics.duration_ms,
+            output_dir=parse_result.outputs.output_dir,
+            status=completed_job.status,
         )
 
     def process_embedding_queue(self) -> None:
         if self._embedding_dispatch_service is not None:
+            log_stage("embedding.queue.drain.started")
             self._embedding_dispatch_service.drain()
+            log_stage("embedding.queue.drain.completed")
 
     @staticmethod
     def _error_metadata(exc: Exception) -> dict[str, str]:
@@ -322,15 +371,12 @@ class FileIngestionService:
     def _request_metadata(
         *,
         pipeline: str | None,
-        profile: str | None,
         chunking_enabled: bool | None,
         chunking_strategy: str | None,
     ) -> dict[str, object]:
         metadata: dict[str, object] = {}
         if pipeline is not None:
             metadata["requested_pipeline"] = pipeline
-        if profile is not None:
-            metadata["requested_profile"] = profile
         if chunking_enabled is not None:
             metadata["requested_chunking_enabled"] = chunking_enabled
         if chunking_strategy is not None:
@@ -351,17 +397,12 @@ class FileIngestionService:
         filename: str,
         parser_name: str,
         pipeline: str | None,
-        profile: str | None = None,
         chunking_strategy: str | None = None,
     ) -> None:
         if parser_name != "docling":
             return
 
-        from ingest_orquestator_server.config.profiles import (
-            resolve_profile_settings,
-            validate_chunking_strategy,
-            validate_profile_name,
-        )
+        from ingest_orquestator_server.config.chunking import validate_chunking_strategy
         from ingest_orquestator_server.infrastructure.docling.docling_formats import (
             detect_input_format,
             resolve_pipeline_mode,
@@ -370,11 +411,6 @@ class FileIngestionService:
 
         input_format = detect_input_format(Path(filename))
         validate_allowed_format(input_format, self._settings.docling_allowed_formats)
-        request_settings = self._settings
-        if profile is not None:
-            request_settings = resolve_profile_settings(self._settings, profile=profile)
-        resolve_pipeline_mode(pipeline or request_settings.docling_pipeline, input_format)
-        if profile is not None:
-            validate_profile_name(profile)
+        resolve_pipeline_mode(pipeline or self._settings.docling_pipeline, input_format)
         if chunking_strategy is not None:
             validate_chunking_strategy(chunking_strategy)

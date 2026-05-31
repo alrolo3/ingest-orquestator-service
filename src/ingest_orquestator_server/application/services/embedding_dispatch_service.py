@@ -14,6 +14,7 @@ from ingest_orquestator_server.application.services.embedding_queue_service impo
     EmbeddingQueueError,
     EmbeddingQueueService,
 )
+from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.models.embedding_queue import (
     EmbeddingDispatchRunResult,
@@ -42,10 +43,22 @@ class EmbeddingDispatchService:
 
     def enqueue_job(self, job: IngestionJob) -> IngestionJob:
         if not self._settings.embedding_queue_enabled:
+            log_stage(
+                "embedding.queue.skipped",
+                job_id=job.job_id,
+                document_id=job.document_id,
+                reason="embedding queue disabled",
+            )
             return job
         try:
             item = self._queue_service.enqueue_job(job)
         except EmbeddingQueueError as exc:
+            log_stage(
+                "embedding.queue.skipped",
+                job_id=job.job_id,
+                document_id=job.document_id,
+                reason=str(exc),
+            )
             logger.warning(
                 "embedding.queue.skipped",
                 extra={"job_id": job.job_id, "reason": str(exc)},
@@ -76,6 +89,15 @@ class EmbeddingDispatchService:
             }
         )
         self._job_repository.save(queued_job)
+        log_stage(
+            "embedding.queue.enqueued",
+            job_id=job.job_id,
+            document_id=item.document_id,
+            queue_id=item.queue_id,
+            source_file_name=item.source_file_name,
+            record_count=item.record_count,
+            output_dir=item.output_dir,
+        )
         return queued_job
 
     def run_once(self) -> EmbeddingDispatchRunResult:
@@ -123,6 +145,14 @@ class EmbeddingDispatchService:
 
         for item in batch:
             self._save_item_state(item, IngestionStatus.EMBEDDING_TASK_RUNNING)
+        log_stage(
+            "embedding.dispatch.started",
+            queue_ids=[item.queue_id for item in batch],
+            job_ids=[item.job_id for item in batch],
+            document_ids=[item.document_id for item in batch],
+            document_bulk_size=len(batch),
+            record_count=sum(item.record_count for item in batch),
+        )
 
         try:
             result = self._dispatcher.submit_batch(batch)
@@ -138,6 +168,15 @@ class EmbeddingDispatchService:
             status = IngestionStatus.EMBEDDING_QUEUED if retry else IngestionStatus.EMBEDDING_FAILED
             for item in updated_items:
                 self._save_item_state(item, status, error=str(exc))
+            log_stage(
+                "embedding.dispatch.failed",
+                queue_ids=[item.queue_id for item in batch],
+                job_ids=[item.job_id for item in batch],
+                document_ids=[item.document_id for item in batch],
+                error_type=type(exc).__name__,
+                error=str(exc),
+                retry=retry,
+            )
             logger.exception("embedding.dispatch.failed")
             return None
 
@@ -150,6 +189,14 @@ class EmbeddingDispatchService:
                 task_id=result.task_id,
                 raw_response=result.raw_response,
             )
+        log_stage(
+            "embedding.dispatch.accepted",
+            task_id=result.task_id,
+            queue_ids=[item.queue_id for item in sent_items],
+            job_ids=[item.job_id for item in sent_items],
+            document_ids=[item.document_id for item in sent_items],
+            accepted_document_count=result.accepted_document_count,
+        )
         return result.task_id
 
     def queue_status(self):
@@ -169,6 +216,14 @@ class EmbeddingDispatchService:
                     error=status.error,
                     raw_response=status.raw_response,
                 )
+            log_stage(
+                "embedding.task.failed",
+                task_id=status.task_id,
+                queue_ids=[item.queue_id for item in items],
+                job_ids=[item.job_id for item in items],
+                document_ids=[item.document_id for item in items],
+                error=status.error,
+            )
             return
 
         items = self._queue_service.mark_task_completed(status.task_id)
@@ -179,6 +234,13 @@ class EmbeddingDispatchService:
                 task_id=status.task_id,
                 raw_response=status.raw_response,
             )
+        log_stage(
+            "embedding.task.completed",
+            task_id=status.task_id,
+            queue_ids=[item.queue_id for item in items],
+            job_ids=[item.job_id for item in items],
+            document_ids=[item.document_id for item in items],
+        )
 
     def _save_item_state(
         self,

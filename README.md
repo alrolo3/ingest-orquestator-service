@@ -11,7 +11,6 @@ It does not include vector storage or RAG query APIs yet.
 ## What It Provides
 
 - FastAPI service with synchronous and background file ingestion.
-- CLI command for local parser-only runs.
 - Parser interface with a Docling implementation.
 - Multi-format Docling `DocumentConverter` support.
 - Java-style module layout with separate model, service, adapter, and route files.
@@ -45,7 +44,6 @@ Use the tutorial that matches the machine:
 - [Docling ingestion format and pipeline guide](docs/docling-ingestion.md)
 - [Extension playbooks](docs/extension-playbooks.md)
 - [Environment configuration reference](docs/environment-config.md)
-- [CLI usage reference](docs/cli-usage.md)
 - [Embedding handoff guide](docs/embedding-handoff.md)
 - [Docling vLLM migration playbook](docs/docling-vllm-migration.md)
 - [Docling model runtime matrix](docs/docling-model-runtime-matrix.md)
@@ -86,25 +84,6 @@ curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/normalized"
 curl "http://127.0.0.1:8000/v1/ingest/jobs/{job_id}/outputs/markdown"
 ```
 
-## CLI Usage
-
-```bash
-python -m ingest_orquestator_server.cli parse /path/to/document.pdf \
-  --parser docling \
-  --pipeline standard \
-  --profile rag_ready \
-  --output-dir .data/outputs
-```
-
-Batch parse files or directories with Docling `convert_all`:
-
-```bash
-python -m ingest_orquestator_server.cli batch sample-inputs \
-  --parser docling \
-  --pipeline standard \
-  --output-dir .data/outputs
-```
-
 Each parse creates a document-specific output directory containing:
 
 - `raw_docling.json`
@@ -116,19 +95,6 @@ Each parse creates a document-specific output directory containing:
 - `embedding_input.jsonl`
 - `confidence.json`, when confidence output is enabled and Docling reports scores
 - `manifest.json`
-
-Benchmark configured pipelines:
-
-```bash
-python -m ingest_orquestator_server.cli benchmark /path/to/document.pdf --pipelines standard,vlm
-```
-
-Clean old local artifacts:
-
-```bash
-python -m ingest_orquestator_server.cli cleanup --older-than-days 30 --dry-run
-python -m ingest_orquestator_server.cli cleanup --older-than-days 30 --delete
-```
 
 ## Development Setup
 
@@ -156,7 +122,6 @@ INGEST_SERVICE_NAME=ingest-orquestator-server
 INGEST_STORAGE_DIR=.data
 INGEST_MAX_UPLOAD_SIZE_MB=100
 INGEST_ALLOWED_UPLOAD_EXTENSIONS=.pdf,.md,.markdown,.txt,.html,.htm,.docx,.pptx
-INGEST_PROFILE=rag_ready
 INGEST_CHUNKING_ENABLED=true
 INGEST_CHUNKING_STRATEGY=hybrid
 INGEST_CHUNK_MAX_TOKENS=768
@@ -202,7 +167,7 @@ INGEST_DOCLING_ACCELERATOR_DEVICE=cuda
 ```
 
 See [docs/gpu.md](docs/gpu.md) for Docker Compose GPU usage and batch-size tuning.
-For the A100 80GB CUDA 13 performance profile, use
+For the A100 80GB CUDA 13 performance environment, use
 [env-cuda-gpu](env-cuda-gpu) with [docs/cuda-gpu-env.md](docs/cuda-gpu-env.md).
 
 ## Docker

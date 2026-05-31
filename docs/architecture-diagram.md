@@ -6,11 +6,9 @@ This page describes the service architecture with Mermaid diagrams.
 
 ```mermaid
 flowchart LR
-    User["Client / CLI user"] --> API["FastAPI API<br/>POST /v1/ingest/file"]
-    User --> CLI["Typer CLI<br/>parse / batch / benchmark"]
+    User["API client"] --> API["FastAPI API<br/>POST /v1/ingest/file"]
 
     API --> App["Application services"]
-    CLI --> App
 
     App --> Docling["Docling DocumentConverter"]
     App --> Storage["Local filesystem storage"]
@@ -28,9 +26,6 @@ flowchart LR
 flowchart TB
     subgraph Entrypoints["Entrypoints"]
         FastAPI["api/routes/ingestion.py"]
-        CLIParse["cli/commands/parse_command.py"]
-        CLIBatch["cli/commands/batch_command.py"]
-        CLIBenchmark["cli/commands/benchmark_command.py"]
     end
 
     subgraph Application["Application Layer"]
@@ -66,14 +61,10 @@ flowchart TB
 
     subgraph Config["Configuration"]
         Settings["Settings"]
-        Profiles["Ingestion profiles"]
         EnvFiles[".env.example / env-cpu / env-cuda-gpu"]
     end
 
     FastAPI --> FileIngestion
-    CLIParse --> ParseService
-    CLIBatch --> ParseService
-    CLIBenchmark --> ParseService
 
     FileIngestion --> UploadPort
     FileIngestion --> JobRepoPort
@@ -100,7 +91,6 @@ flowchart TB
     DoclingParser --> Normalizer
     ConverterFactory --> DoclingOptions
 
-    Settings --> Profiles
     EnvFiles --> Settings
     Settings --> FileIngestion
     Settings --> ParseService
@@ -111,8 +101,8 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-    participant Client as "Client or CLI"
-    participant Route as "API route / CLI command"
+    participant Client as "API client"
+    participant Route as "API route"
     participant Ingestion as "FileIngestionService"
     participant Parser as "DoclingDocumentParser"
     participant Converter as "Docling DocumentConverter"
@@ -126,8 +116,8 @@ sequenceDiagram
     Client->>Route: "Submit file and options"
     Route->>Ingestion: "ingest_upload or enqueue_upload"
     Ingestion->>Jobs: "Create queued/running job"
-    Ingestion->>Parser: "parse(file, pipeline, profile)"
-    Parser->>Converter: "convert or convert_all"
+    Ingestion->>Parser: "parse(file, pipeline)"
+    Parser->>Converter: "convert"
     Converter-->>Parser: "ConversionResult"
     Parser->>Normalizer: "Normalize Docling document"
     Normalizer-->>Parser: "ParsedDocument"
@@ -215,7 +205,6 @@ flowchart TB
     subgraph Host["Local host or GPU server"]
         Venv["Python venv"]
         APIProcess["uvicorn process"]
-        CLIProcess["python -m ingest_orquestator_server.cli"]
         DataDir[".data directory"]
         ModelsCache["Model cache"]
     end
@@ -227,13 +216,9 @@ flowchart TB
     end
 
     Venv --> APIProcess
-    Venv --> CLIProcess
     APIProcess --> DataDir
-    CLIProcess --> DataDir
     APIProcess --> ModelsCache
-    CLIProcess --> ModelsCache
     APIProcess --> CUDA
-    CLIProcess --> CUDA
     CUDA --> Surya
     CUDA --> Qwen
 ```

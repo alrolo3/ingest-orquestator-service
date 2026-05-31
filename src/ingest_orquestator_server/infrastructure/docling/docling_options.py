@@ -155,7 +155,6 @@ def _common_options(
 ) -> dict[str, Any]:
     return {
         "parser": "docling",
-        "profile": settings.profile,
         "input_format": input_format,
         "pipeline": pipeline,
         "allowed_formats": settings.docling_allowed_formats,

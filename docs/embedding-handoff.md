@@ -101,7 +101,7 @@ of truth. Each indexed chunk document contains:
   `content_embedding`.
 - `title`, sent to the embedding inference processor as `title_embedding`.
 - Filterable metadata fields such as `source_file_name`, `input_format`,
-  `parser`, `pipeline`, `profile`, `chunker_strategy`, page span, element ids,
+  `parser`, `pipeline`, `chunker_strategy`, page span, element ids,
   element types, VLM/picture-description runtime fields, and confidence scores.
 - The original per-record `metadata` object for traceability.
 
@@ -142,8 +142,7 @@ use `cosine` similarity or normalize vectors before indexing.
 
 ## Public API Contract
 
-The queue is internal to ingestion. There are no public queue API endpoints and
-no queue CLI commands in v1.4.
+The queue is internal to ingestion. There are no public queue API endpoints.
 
 The external flow remains:
 
@@ -165,3 +164,8 @@ When ingestion runs through the API and the queue is enabled, the API schedules
 an in-process background drain loop after the parse finishes. The drain loop
 polls an active task first. When no active task is running, it submits the next
 batch of up to `INGEST_EMBEDDING_QUEUE_MAX_BULK_SIZE` documents.
+
+Local storage remains the canonical per-document artifact store. Elasticsearch
+receives one indexed document per RAG chunk, but the original upload,
+`normalized.json`, `chunks.json`, `embedding_input.jsonl`, and related artifacts
+remain available through the job output API until local retention removes them.

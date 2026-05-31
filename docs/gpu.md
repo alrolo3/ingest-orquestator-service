@@ -17,9 +17,9 @@ python -m pip install -r requirements.txt
 python -m pip install -r requirements-vllm.txt
 python -m pip install --no-deps -e .
 
-INGEST_DOCLING_ACCELERATOR_DEVICE=cuda \
-INGEST_DOCLING_NUM_THREADS=8 \
-python -m ingest_orquestator_server.cli parse /path/to/document.pdf --output-dir .data/outputs
+python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@/path/to/document.pdf"
 ```
 
 The default GPU dependency set includes SuryaOCR on supported Linux hosts.
@@ -43,7 +43,7 @@ python -m pip install --no-deps -e .
 This is the fix for SuryaOCR failures like
 `AttributeError: 'SuryaDecoderConfig' object has no attribute 'pad_token_id'`.
 
-For an A100 80GB CUDA 13 profile, use the checked-in
+For an A100 80GB CUDA 13 environment, use the checked-in
 [`env-cuda-gpu`](../env-cuda-gpu) file and see
 [`docs/cuda-gpu-env.md`](cuda-gpu-env.md).
 
@@ -129,14 +129,14 @@ INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=100
 
 Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let Docling choose.
 
-Use `--pipeline vlm` or `pipeline=vlm` only for PDF and image inputs in v1.2.
+Use `pipeline=vlm` only for PDF and image inputs.
 For details, see [`docs/docling-ingestion.md`](docling-ingestion.md).
 For vLLM runtime details, see
 [`docs/docling-vllm-migration.md`](docling-vllm-migration.md).
 
 `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=true` should only be enabled when the
 environment has a compatible `flash-attn` installation and the GPU architecture
-supports it. The checked-in GPU profile keeps it disabled by default.
+supports it. The checked-in GPU environment keeps it disabled by default.
 
 The default table structure backend remains TableFormer accurate mode with cell
 matching. To test Docling's standard-pipeline Granite Vision table backend:

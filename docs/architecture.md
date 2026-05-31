@@ -5,7 +5,7 @@ The MVP mirrors the ingestion side of a RAG pipeline without taking on retrieval
 For a Mermaid diagram view, see [Architecture Diagram](architecture-diagram.md).
 
 ```text
-FastAPI or CLI
+FastAPI
 -> application service
 -> parser/output/storage ports
 -> Docling and filesystem adapters
@@ -24,7 +24,6 @@ FastAPI or CLI
 - `infrastructure/filesystem/` stores uploads and writes parser artifacts.
 - `infrastructure/sqlite/` persists ingestion job state.
 - `infrastructure/elastic/` submits embedding handoff batches and polls remote task status.
-- `cli/` contains the Typer app and command modules.
 - `main.py` only exposes the ASGI `app` for Uvicorn.
 
 ## Project Shape
@@ -38,8 +37,6 @@ src/ingest_orquestator_server/
 ├── application/
 │   ├── ports/
 │   └── services/
-├── cli/
-│   └── commands/
 ├── config/
 ├── infrastructure/
 │   ├── docling/
@@ -89,5 +86,4 @@ all configured formats; direct `vlm` mode is supported for PDF and image inputs.
 
 The parser keeps Docling `ConversionResult` metadata, including status, errors,
 timings, and confidence reports, then the application service builds chunks and
-embedding records. Batch CLI ingestion uses the same output path but calls
-Docling `DocumentConverter.convert_all`.
+embedding records. The public runtime interface is the FastAPI server.

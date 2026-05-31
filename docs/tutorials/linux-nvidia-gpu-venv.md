@@ -1,7 +1,8 @@
 # Linux NVIDIA GPU Venv Setup
 
 Use this path for Linux hosts with an NVIDIA GPU. The checked-in
-`env-cuda-gpu` profile is tuned for an A100 80GB with a CUDA 13 PyTorch runtime.
+`env-cuda-gpu` environment is tuned for an A100 80GB with a CUDA 13 PyTorch
+runtime.
 
 ## 1. Verify The Host GPU
 
@@ -10,7 +11,7 @@ nvidia-smi
 ```
 
 Expected result: the NVIDIA driver reports the GPU and CUDA driver capability.
-For strict single-GPU placement, the profile uses:
+For strict single-GPU placement, the environment uses:
 
 ```text
 CUDA_VISIBLE_DEVICES=0
@@ -104,7 +105,7 @@ cause.
 
 ## 6. Verify vLLM
 
-The checked-in GPU profile defaults to Qwen3 through Transformers. vLLM remains
+The checked-in GPU environment defaults to Qwen3 through Transformers. vLLM remains
 available for explicit experiments with supported presets or unverified custom
 models.
 
@@ -174,9 +175,9 @@ print(flash_attn.__version__)
 PY
 ```
 
-## 8. Use The A100 CUDA Profile
+## 8. Use The A100 CUDA Environment
 
-Create a local `.env` from the checked-in GPU profile:
+Create a local `.env` from the checked-in GPU environment:
 
 ```bash
 cp env-cuda-gpu .env
@@ -213,17 +214,19 @@ Check health:
 curl http://127.0.0.1:8000/health
 ```
 
-## 11. Run A CLI Smoke Test
+## 11. Run An API Smoke Test
 
 ```bash
 printf "# GPU smoke test\n\nHello from NVIDIA.\n" > /tmp/ingest-smoke.md
-python -m ingest_orquestator_server.cli parse /tmp/ingest-smoke.md --parser docling --output-dir .data/outputs
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@/tmp/ingest-smoke.md"
 ```
 
 For a real PDF parse:
 
 ```bash
-python -m ingest_orquestator_server.cli parse /path/to/document.pdf --parser docling --output-dir .data/outputs
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@/path/to/document.pdf"
 ```
 
 ## FlashAttention Notes
@@ -234,5 +237,5 @@ The service exposes Docling's current FlashAttention switch through:
 INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
 ```
 
-The checked-in GPU profile keeps this disabled by default. Set it to `true` only
-after `requirements-flash-attn.txt` installs successfully.
+The checked-in GPU environment keeps this disabled by default. Set it to `true`
+only after `requirements-flash-attn.txt` installs successfully.

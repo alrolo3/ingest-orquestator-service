@@ -44,7 +44,6 @@ def test_env_example_loads() -> None:
 
     assert settings.docling_pdf_ocr_engine == "suryaocr"
     assert settings.docling_pdf_ocr_languages == ["en"]
-    assert settings.profile == "rag_ready"
     assert settings.chunking_enabled is True
     assert settings.chunking_strategy == "hybrid"
     assert settings.confidence_output_enabled is True
@@ -143,7 +142,6 @@ def test_settings_grouped_config_views() -> None:
     settings = Settings(docling_pipeline="vlm", docling_vlm_runtime="transformers")
 
     assert settings.docling_common_config.pipeline == "vlm"
-    assert settings.docling_common_config.profile == "rag_ready"
     assert settings.docling_vlm_config.runtime == "transformers"
     assert settings.docling_vlm_config.vllm_fallback_runtime == "transformers"
     assert settings.docling_vlm_config.max_new_tokens == 4096

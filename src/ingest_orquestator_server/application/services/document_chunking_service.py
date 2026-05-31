@@ -6,10 +6,7 @@ from typing import Any
 
 from docling_core.transforms.chunker.tokenizer.base import BaseTokenizer
 
-from ingest_orquestator_server.config.profiles import (
-    resolve_profile_settings,
-    validate_chunking_strategy,
-)
+from ingest_orquestator_server.config.chunking import validate_chunking_strategy
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
 from ingest_orquestator_server.models.document_element import DocumentElement
@@ -26,42 +23,36 @@ class DocumentChunkingService:
     def is_enabled(
         self,
         *,
-        profile: str | None = None,
         chunking_enabled: bool | None = None,
     ) -> bool:
-        settings = resolve_profile_settings(self._settings, profile=profile)
-        return settings.chunking_enabled if chunking_enabled is None else chunking_enabled
+        return self._settings.chunking_enabled if chunking_enabled is None else chunking_enabled
 
     def strategy(
         self,
         *,
-        profile: str | None = None,
         chunking_strategy: str | None = None,
     ) -> str:
-        settings = resolve_profile_settings(self._settings, profile=profile)
-        return validate_chunking_strategy(chunking_strategy or settings.chunking_strategy)
+        return validate_chunking_strategy(chunking_strategy or self._settings.chunking_strategy)
 
     def chunk(
         self,
         document: ParsedDocument,
         *,
         docling_document: Any | None = None,
-        profile: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> list[DocumentChunk]:
-        settings = resolve_profile_settings(self._settings, profile=profile)
-        if not self.is_enabled(profile=profile, chunking_enabled=chunking_enabled):
+        if not self.is_enabled(chunking_enabled=chunking_enabled):
             return []
 
-        strategy = self.strategy(profile=profile, chunking_strategy=chunking_strategy)
+        strategy = self.strategy(chunking_strategy=chunking_strategy)
         if strategy in {"hybrid", "line_based"} and docling_document is not None:
             try:
                 return self._docling_chunks(
                     document,
                     docling_document=docling_document,
                     strategy=strategy,
-                    settings=settings,
+                    settings=self._settings,
                 )
             except Exception:
                 if strategy != "legacy_char":

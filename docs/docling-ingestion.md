@@ -8,7 +8,7 @@ Implementation should follow the official API reference:
 ## Supported Formats
 
 `INGEST_DOCLING_ALLOWED_FORMATS` controls the Docling `InputFormat` values that
-the service allows. The default profile enables:
+the service allows. The default configuration enables:
 
 ```text
 pdf,image,docx,pptx,html,md,xlsx,csv,json_docling,asciidoc,latex,vtt,xml_jats,xml_uspto,xml_xbrl
@@ -42,19 +42,11 @@ taxonomy resources from the network.
 `pipeline=auto` resolves to `standard`. Pre-rendering Office or HTML
 documents to force VLM mode is deferred to a later milestone.
 
-## Profiles And Options
+## Options
 
-`INGEST_PROFILE` selects a preset before Docling options are built:
-
-- `rag_ready`: default. Standard parsing, Docling chunking, embedding JSONL, and
-  confidence output.
-- `parse_only`: normalized parse artifacts only. Chunking, embedding JSONL, and
-  confidence output are disabled.
-- `ocr_only`: standard pipeline with OCR enabled and expensive enrichment stages
-  disabled.
-- `standard_enriched`: standard pipeline with OCR, tables, picture
-  classification, picture descriptions, and code/formula enrichment enabled.
-- `vlm`: full-page VLM pipeline. Use only with PDF or image inputs.
+The service is RAG-first. Standard parsing writes normalized artifacts,
+Docling chunks, embedding JSONL, and confidence output unless those options are
+explicitly disabled by environment or API query parameter.
 
 The manifest records a compact `docling_options` object with common settings,
 the active format/pipeline options, and configured PDF, VLM, chunking, and
@@ -85,8 +77,8 @@ format, page span, and element ids/types.
 
 ## Chunking
 
-Chunking is enabled by default because the default `rag_ready` profile is meant
-to produce embedding-ready artifacts.
+Chunking is enabled by default because the service produces embedding-ready RAG
+artifacts.
 
 ```text
 INGEST_CHUNKING_ENABLED=true
@@ -100,9 +92,8 @@ Supported strategies:
 - `line_based`: Docling `LineBasedTokenChunker`.
 - `legacy_char`: service-local character chunker retained as a fallback.
 
-Set `INGEST_CHUNKING_ENABLED=false`, use `profile=parse_only`, or pass
-`chunking_enabled=false` when the embedding database will split the parsed
-document itself.
+Set `INGEST_CHUNKING_ENABLED=false` or pass `chunking_enabled=false` when the
+embedding database will split the parsed document itself.
 
 ## Confidence Scores
 
@@ -117,14 +108,7 @@ Set `INGEST_CONFIDENCE_MIN_DOCUMENT_SCORE=0.8` to emit a warning when Docling's
 mean score is below the threshold. Set `INGEST_CONFIDENCE_WARN_ONLY=false` to
 fail ingestion on that validation warning.
 
-## Batch Conversion
+## Interface
 
-Use the batch CLI when you want Docling `DocumentConverter.convert_all` across
-multiple files:
-
-```bash
-python -m ingest_orquestator_server.cli batch sample-inputs \
-  --pipeline standard \
-  --profile rag_ready \
-  --output-dir .data/outputs
-```
+The supported runtime interface is the FastAPI server. Submit documents with
+`POST /v1/ingest/file` and retrieve local artifacts through the job output API.

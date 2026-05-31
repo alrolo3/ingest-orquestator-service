@@ -28,15 +28,15 @@ Do not use `requirements.txt` for this macOS CPU setup. The requirements file is
 the default deploy dependency set and contains Linux-only GPU packages behind
 environment markers.
 
-## 3. Use The CPU Profile
+## 3. Use The CPU Environment
 
-Create a local `.env` from the checked-in CPU profile:
+Create a local `.env` from the checked-in CPU environment:
 
 ```bash
 cp env-cpu .env
 ```
 
-The CPU profile selects:
+The CPU environment selects:
 
 - `INGEST_DOCLING_ACCELERATOR_DEVICE=cpu`
 - `INGEST_DOCLING_PDF_OCR_ENGINE=auto`
@@ -64,14 +64,15 @@ Check health:
 curl http://127.0.0.1:8000/health
 ```
 
-## 5. Run A CLI Smoke Test
+## 5. Run An API Smoke Test
 
 In another terminal:
 
 ```bash
 source .venv/bin/activate
 printf "# CPU smoke test\n\nHello from macOS.\n" > /tmp/ingest-smoke.md
-python -m ingest_orquestator_server.cli parse /tmp/ingest-smoke.md --parser docling --output-dir .data/outputs
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@/tmp/ingest-smoke.md"
 ```
 
 Expected result: a new output directory under `.data/outputs` containing

@@ -2,7 +2,7 @@
 
 Use this path for Linux hosts without NVIDIA GPU acceleration. This tutorial
 installs only the base project dependencies and uses the CPU-safe environment
-profile.
+file.
 
 ## 1. Install Python Venv Support
 
@@ -38,16 +38,16 @@ Do not use `requirements.txt` for CPU-only Linux. The default requirements file
 includes SuryaOCR on supported Linux hosts. That is intended for GPU
 deployments.
 
-## 4. Use The CPU Profile
+## 4. Use The CPU Environment
 
-Create a local `.env` from the checked-in CPU profile:
+Create a local `.env` from the checked-in CPU environment:
 
 ```bash
 cp env-cpu .env
 ```
 
-The CPU profile disables GPU-heavy enrichment stages and uses Docling's automatic
-OCR selection:
+The CPU environment disables GPU-heavy enrichment stages and uses Docling's
+automatic OCR selection:
 
 ```text
 INGEST_DOCLING_ACCELERATOR_DEVICE=cpu
@@ -69,11 +69,12 @@ Check health:
 curl http://127.0.0.1:8000/health
 ```
 
-## 6. Run A CLI Smoke Test
+## 6. Run An API Smoke Test
 
 ```bash
 printf "# CPU smoke test\n\nHello from Linux.\n" > /tmp/ingest-smoke.md
-python -m ingest_orquestator_server.cli parse /tmp/ingest-smoke.md --parser docling --output-dir .data/outputs
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@/tmp/ingest-smoke.md"
 ```
 
 Expected result: a new output directory under `.data/outputs` containing the

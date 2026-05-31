@@ -58,7 +58,6 @@ class EmbeddingQueueService:
                     "parser": job.parser,
                     "input_format": job.metadata.get("input_format"),
                     "pipeline": job.metadata.get("pipeline"),
-                    "profile": job.metadata.get("profile"),
                     "source_file_name": job.source_file_name,
                 },
             )

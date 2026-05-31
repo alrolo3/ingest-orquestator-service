@@ -121,7 +121,6 @@ class ElasticEmbeddingDispatcher:
             "input_format": metadata.get("input_format") or item.metadata.get("input_format"),
             "parser": metadata.get("parser") or item.metadata.get("parser"),
             "pipeline": metadata.get("pipeline") or item.metadata.get("pipeline"),
-            "profile": metadata.get("profile") or item.metadata.get("profile"),
             "vlm_model": metadata.get("vlm_model"),
             "vlm_runtime": metadata.get("vlm_runtime"),
             "picture_description_model": metadata.get("picture_description_model"),

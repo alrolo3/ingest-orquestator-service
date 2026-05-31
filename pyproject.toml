@@ -21,7 +21,6 @@ dependencies = [
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.8,<3",
   "python-multipart>=0.0.20,<1",
-  "typer>=0.15,<1",
   "uvicorn[standard]>=0.34,<1",
 ]
 
@@ -46,9 +45,6 @@ surya = [
 vllm = [
   "vllm>=0.22,<1; python_version >= '3.12' and platform_system == 'Linux' and platform_machine == 'x86_64'",
 ]
-
-[project.scripts]
-ingest-orquestator = "ingest_orquestator_server.cli.app:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ingest_orquestator_server"]

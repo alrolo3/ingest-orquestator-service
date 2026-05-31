@@ -35,7 +35,6 @@ from ingest_orquestator_server.config.docling_defaults import (
 
 class Settings(BaseSettings):
     service_name: str = "ingest-orquestator-server"
-    profile: str = "rag_ready"
     storage_dir: Path = Path(".data")
     max_upload_size_mb: int = Field(default=100, ge=1)
     allowed_upload_extensions: list[str] = Field(
@@ -196,22 +195,6 @@ class Settings(BaseSettings):
         if re.fullmatch(r"cuda:\d+", normalized):
             return normalized
         raise ValueError("must be one of auto, cpu, cuda, cuda:N, mps, or xpu")
-
-    @field_validator("profile")
-    @classmethod
-    def validate_profile(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized in {
-            "parse_only",
-            "rag_ready",
-            "ocr_only",
-            "standard_enriched",
-            "vlm",
-        }:
-            return normalized
-        raise ValueError(
-            "must be one of parse_only, rag_ready, ocr_only, standard_enriched, or vlm"
-        )
 
     @field_validator("docling_pdf_ocr_engine")
     @classmethod
@@ -463,7 +446,6 @@ class Settings(BaseSettings):
         return DoclingCommonConfig(
             allowed_formats=self.docling_allowed_formats,
             pipeline=self.docling_pipeline,
-            profile=self.profile,
             accelerator_device=self.docling_accelerator_device,
             num_threads=self.docling_num_threads,
             cuda_use_flash_attention2=self.docling_cuda_use_flash_attention2,

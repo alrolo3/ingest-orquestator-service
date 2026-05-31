@@ -58,9 +58,9 @@ print("vllm:", vllm.__version__)
 PY
 ```
 
-## GPU Profile
+## GPU Environment
 
-The checked-in `env-cuda-gpu` profile defaults to Qwen3 through Transformers:
+The checked-in `env-cuda-gpu` environment defaults to Qwen3 through Transformers:
 
 ```bash
 set -a
@@ -142,19 +142,15 @@ INGEST_DOCLING_VLM_TRUST_REMOTE_CODE=true
 Full-page VLM with vLLM:
 
 ```bash
-python -m ingest_orquestator_server.cli parse sample-inputs/sample.pdf \
-  --pipeline vlm \
-  --profile vlm \
-  --output-dir .data/outputs
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=vlm" \
+  -F "file=@sample-inputs/sample.pdf"
 ```
 
 Standard pipeline with vLLM picture descriptions:
 
 ```bash
-python -m ingest_orquestator_server.cli parse sample-inputs/qwen3-picture-description-smoke.pdf \
-  --pipeline standard \
-  --profile standard_enriched \
-  --output-dir .data/outputs
+curl -X POST "http://127.0.0.1:8000/v1/ingest/file?include_document=false&pipeline=standard" \
+  -F "file=@sample-inputs/qwen3-picture-description-smoke.pdf"
 ```
 
 Inspect runtime metadata:
@@ -170,21 +166,6 @@ print(json.dumps(manifest["diagnostics"]["metadata"]["runtime"], indent=2))
 PY
 ```
 
-## Benchmark
-
-Compare standard and VLM paths:
-
-```bash
-python -m ingest_orquestator_server.cli benchmark \
-  sample-inputs/qwen3-picture-description-smoke.pdf \
-  --pipelines standard,vlm \
-  --profile standard_enriched \
-  --output-dir .data/benchmarks
-```
-
-The benchmark output records runtime metadata, counts, warnings, confidence
-summary, and output paths.
-
 ## Metadata
 
 Runtime resolution is written into:
@@ -192,8 +173,7 @@ Runtime resolution is written into:
 - `manifest.json` diagnostics metadata.
 - `normalized.json` document metadata.
 - `embedding_input.jsonl` record metadata.
-- CLI/API response metadata.
-- Benchmark result metadata.
+- API response metadata.
 
 Key fields:
 
