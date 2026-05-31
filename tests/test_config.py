@@ -57,6 +57,9 @@ def test_env_example_loads() -> None:
     assert settings.docling_vllm_max_model_len == 32768
     assert settings.embedding_queue_enabled is False
     assert settings.embedding_queue_max_bulk_size == 5
+    assert settings.embedding_elastic_mapping_version == "v2"
+    assert settings.embedding_elastic_index == "open-rag-embeddings-v2"
+    assert settings.embedding_elastic_pipeline is None
 
 
 def test_cuda_gpu_env_loads() -> None:
@@ -149,8 +152,22 @@ def test_settings_grouped_config_views() -> None:
     assert settings.chunking_config.embedding_output_enabled is True
     assert settings.confidence_config.output_enabled is True
     assert settings.embedding_queue_config.max_bulk_size == 5
+    assert settings.embedding_queue_config.elastic_mapping_version == "v1"
     assert settings.embedding_queue_config.elastic_password_configured is False
     assert settings.embedding_queue_config.elastic_include_local_paths is False
+
+
+def test_settings_normalize_elastic_mapping_version_aliases() -> None:
+    semantic_settings = Settings(embedding_elastic_mapping_version="semantic-text-v2")
+    dense_vector_settings = Settings(embedding_elastic_mapping_version="dense_vector_v1")
+
+    assert semantic_settings.embedding_elastic_mapping_version == "v2"
+    assert dense_vector_settings.embedding_elastic_mapping_version == "v1"
+
+
+def test_settings_reject_unknown_elastic_mapping_version() -> None:
+    with pytest.raises(ValidationError):
+        Settings(embedding_elastic_mapping_version="v3")
 
 
 def test_settings_reject_embedding_bulk_size_over_five() -> None:

@@ -52,6 +52,7 @@ class ElasticEmbeddingDispatcher:
                     "chunk_count": len(documents),
                     "source": "ingest-orquestator-service",
                     "client": "elasticsearch",
+                    "mapping_version": self._settings.embedding_elastic_mapping_version,
                 },
             },
         )
@@ -90,8 +91,7 @@ class ElasticEmbeddingDispatcher:
         )
         return [self._chunk_document(item, record) for record in records]
 
-    @staticmethod
-    def _chunk_document(item: EmbeddingQueueItem, record: dict[str, Any]) -> dict[str, Any]:
+    def _chunk_document(self, item: EmbeddingQueueItem, record: dict[str, Any]) -> dict[str, Any]:
         metadata = record.get("metadata")
         if not isinstance(metadata, dict):
             metadata = {}
@@ -107,18 +107,16 @@ class ElasticEmbeddingDispatcher:
         if not isinstance(confidence, dict):
             confidence = {}
 
-        return {
+        document = {
             "record_id": record_id,
             "document_id": document_id,
             "chunk_id": chunk_id,
             "schema_version": record.get("schema_version"),
             "content": content,
-            "content_semantic": content,
             "raw_text": record.get("raw_text"),
             "contextualized": bool(record.get("contextualized")),
             "source_file_name": metadata.get("source_file_name") or item.source_file_name,
             "title": title,
-            "title_semantic": title,
             "mime_type": metadata.get("mime_type"),
             "input_format": metadata.get("input_format") or item.metadata.get("input_format"),
             "parser": metadata.get("parser") or item.metadata.get("parser"),
@@ -136,6 +134,10 @@ class ElasticEmbeddingDispatcher:
             "runtime": metadata.get("runtime"),
             "metadata": metadata,
         }
+        if self._uses_semantic_text_mapping:
+            document["content_semantic"] = content
+            document["title_semantic"] = title
+        return document
 
     def _submit_bulk(self, documents: list[dict[str, Any]]) -> EmbeddingDispatchResult:
         actions = [self._bulk_action(document) for document in documents]
@@ -167,6 +169,7 @@ class ElasticEmbeddingDispatcher:
             raw_response={
                 "client": "elasticsearch",
                 "mode": "bulk",
+                "mapping_version": self._settings.embedding_elastic_mapping_version,
                 "successful": int(successful),
                 "errors": [],
             },
@@ -179,9 +182,13 @@ class ElasticEmbeddingDispatcher:
             "_id": document["record_id"],
             "_source": document,
         }
-        if self._settings.embedding_elastic_pipeline:
+        if self._settings.embedding_elastic_pipeline and not self._uses_semantic_text_mapping:
             action["pipeline"] = self._settings.embedding_elastic_pipeline
         return action
+
+    @property
+    def _uses_semantic_text_mapping(self) -> bool:
+        return self._settings.embedding_elastic_mapping_version == "v2"
 
     def _get_remote_task_status(self, task_id: str) -> dict[str, Any]:
         if self._settings.embedding_elastic_task_status_path_template == "/_tasks/{task_id}":

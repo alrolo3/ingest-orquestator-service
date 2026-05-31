@@ -94,6 +94,7 @@ class EmbeddingQueueConfig(BaseModel):
     elastic_username: str | None
     elastic_password_configured: bool
     elastic_index: str
+    elastic_mapping_version: str
     elastic_pipeline: str | None
     elastic_submit_method: str
     elastic_submit_path: str

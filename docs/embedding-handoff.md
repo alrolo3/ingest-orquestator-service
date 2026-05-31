@@ -53,7 +53,9 @@ export INGEST_EMBEDDING_QUEUE_MAX_BULK_SIZE=5
 export INGEST_EMBEDDING_ELASTIC_URL="https://your-elastic-endpoint:9200"
 export INGEST_EMBEDDING_ELASTIC_USERNAME="your-user"
 export INGEST_EMBEDDING_ELASTIC_PASSWORD="your-password"
-export INGEST_EMBEDDING_ELASTIC_PIPELINE="your-embedding-pipeline"
+export INGEST_EMBEDDING_ELASTIC_INDEX="open-rag-embeddings-v2"
+export INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION="v2"
+export INGEST_EMBEDDING_ELASTIC_PIPELINE=
 export INGEST_EMBEDDING_ELASTIC_SUBMIT_PATH="/_bulk"
 export INGEST_EMBEDDING_ELASTIC_TASK_ID_FIELD="task"
 export INGEST_EMBEDDING_ELASTIC_TASK_STATUS_PATH_TEMPLATE="/_tasks/{task_id}"
@@ -97,9 +99,14 @@ The remote payload uses the existing `embedding_input.jsonl` records as source
 of truth. Each indexed chunk document contains:
 
 - `record_id`, `document_id`, and `chunk_id` for deterministic identity.
-- `content`, the text sent to the embedding inference processor as
-  `content_embedding`.
-- `title`, sent to the embedding inference processor as `title_embedding`.
+- `content` and `title` as normal text fields.
+- For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v1`, `content` and `title` are
+  sent through the configured ingest pipeline to populate `content_embedding`
+  and `title_embedding`.
+- For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v2`, `content_semantic` and
+  `title_semantic` are also populated for the `semantic_text` fields. The
+  dispatcher does not attach an ingest pipeline in this mode because inference
+  is configured by the field mapping.
 - Filterable metadata fields such as `source_file_name`, `input_format`,
   `parser`, `pipeline`, `chunker_strategy`, page span, element ids,
   element types, VLM/picture-description runtime fields, and confidence scores.
@@ -110,14 +117,44 @@ filesystem paths are not sent outside the service. Set
 `INGEST_EMBEDDING_ELASTIC_INCLUDE_LOCAL_PATHS=true` only when the remote system
 explicitly needs those paths.
 
-## Elasticsearch Index and Pipeline
+## Elasticsearch Index Assets
 
-The repository includes a ready-to-apply Elasticsearch 9.x asset at
-`elastic/open-rag-embeddings-v1.json`. It defines the
-`open-rag-embeddings-v1` index and the `qwen3_embeddings_pipeline` ingest
-pipeline.
+The repository includes two ready-to-apply Elasticsearch 9.x assets:
 
-Apply it with:
+- `elastic/open-rag-embeddings-v1.json`: dense-vector fields plus
+  `qwen3_embeddings_pipeline`.
+- `elastic/open-rag-embeddings-v2.json`: `semantic_text` fields
+  `content_semantic` and `title_semantic`, with automatic chunking disabled
+  because this service already sends one pre-chunked RAG record per indexed
+  document.
+
+Use v2 with:
+
+```bash
+export INGEST_EMBEDDING_ELASTIC_INDEX=open-rag-embeddings-v2
+export INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v2
+export INGEST_EMBEDDING_ELASTIC_PIPELINE=
+```
+
+Apply the v2 mapping with:
+
+```bash
+jq '.index' elastic/open-rag-embeddings-v2.json \
+  | curl -k -u "$INGEST_EMBEDDING_ELASTIC_USERNAME:$INGEST_EMBEDDING_ELASTIC_PASSWORD" \
+      -H 'Content-Type: application/json' \
+      -X PUT "$INGEST_EMBEDDING_ELASTIC_URL/open-rag-embeddings-v2" \
+      -d @-
+```
+
+Use v1 with:
+
+```bash
+export INGEST_EMBEDDING_ELASTIC_INDEX=open-rag-embeddings-v1
+export INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v1
+export INGEST_EMBEDDING_ELASTIC_PIPELINE=qwen3_embeddings_pipeline
+```
+
+Apply the v1 mapping and pipeline with:
 
 ```bash
 jq '.index' elastic/open-rag-embeddings-v1.json \

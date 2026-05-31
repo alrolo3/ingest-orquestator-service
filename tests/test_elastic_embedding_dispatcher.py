@@ -29,9 +29,9 @@ def test_elastic_dispatcher_uses_client_for_custom_async_endpoint(tmp_path: Path
     assert body["documents"][0]["document_id"] == "doc"
     assert body["documents"][0]["chunk_id"] == "c1"
     assert body["documents"][0]["content"] == "one"
-    assert body["documents"][0]["content_semantic"] == "one"
     assert body["documents"][0]["title"] == "Quarterly Revenue"
-    assert body["documents"][0]["title_semantic"] == "Quarterly Revenue"
+    assert "content_semantic" not in body["documents"][0]
+    assert "title_semantic" not in body["documents"][0]
     assert body["documents"][0]["input_format"] == "pdf"
     assert body["documents"][0]["pipeline"] == "standard"
     assert body["documents"][0]["page_start"] == 1
@@ -68,13 +68,44 @@ def test_elastic_dispatcher_uses_bulk_helper_for_bulk_submit(tmp_path: Path) -> 
     assert actions[0]["_id"] == "1"
     assert actions[0]["pipeline"] == "embedding-pipeline"
     assert actions[0]["_source"]["content"] == "one"
-    assert actions[0]["_source"]["content_semantic"] == "one"
     assert actions[0]["_source"]["title"] == "Quarterly Revenue"
-    assert actions[0]["_source"]["title_semantic"] == "Quarterly Revenue"
+    assert "content_semantic" not in actions[0]["_source"]
+    assert "title_semantic" not in actions[0]["_source"]
     assert actions[0]["_source"]["input_format"] == "pdf"
     assert actions[0]["_source"]["metadata"]["page_start"] == 1
     assert "source_path" not in actions[0]["_source"]["metadata"]
     assert captured["kwargs"]["request_timeout"] == 30.0
+
+
+def test_elastic_dispatcher_uses_semantic_text_v2_without_pipeline(tmp_path: Path) -> None:
+    settings = Settings(
+        embedding_elastic_url="https://elastic.example:9200",
+        embedding_elastic_index="open-rag-embeddings-v2",
+        embedding_elastic_mapping_version="semantic_text_v2",
+        embedding_elastic_submit_path="/_bulk",
+        embedding_elastic_pipeline="qwen3_embeddings_pipeline",
+    )
+    client = FakeElasticsearchClient({})
+    captured: dict[str, object] = {}
+
+    def fake_bulk(client_arg, actions, **kwargs):
+        captured["client"] = client_arg
+        captured["actions"] = list(actions)
+        captured["kwargs"] = kwargs
+        return 1, []
+
+    dispatcher = ElasticEmbeddingDispatcher(settings, client=client, bulk_helper=fake_bulk)
+
+    result = dispatcher.submit_batch([_item(tmp_path)])
+
+    actions = captured["actions"]
+    assert result.raw_response["mapping_version"] == "v2"
+    assert actions[0]["_index"] == "open-rag-embeddings-v2"
+    assert "pipeline" not in actions[0]
+    assert actions[0]["_source"]["content"] == "one"
+    assert actions[0]["_source"]["content_semantic"] == "one"
+    assert actions[0]["_source"]["title"] == "Quarterly Revenue"
+    assert actions[0]["_source"]["title_semantic"] == "Quarterly Revenue"
 
 
 class FakeElasticsearchClient:

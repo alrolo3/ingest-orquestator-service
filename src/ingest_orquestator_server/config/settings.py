@@ -167,6 +167,7 @@ class Settings(BaseSettings):
     embedding_elastic_username: str | None = None
     embedding_elastic_password: str | None = None
     embedding_elastic_index: str = "ingest-embedding-input"
+    embedding_elastic_mapping_version: str = "v1"
     embedding_elastic_pipeline: str | None = None
     embedding_elastic_submit_method: str = "POST"
     embedding_elastic_submit_path: str = "/_bulk"
@@ -396,6 +397,16 @@ class Settings(BaseSettings):
             raise ValueError("must not be empty")
         return cleaned
 
+    @field_validator("embedding_elastic_mapping_version")
+    @classmethod
+    def validate_embedding_elastic_mapping_version(cls, value: str) -> str:
+        normalized = value.strip().lower().replace("-", "_")
+        if normalized in {"v1", "dense_vector", "dense_vector_v1"}:
+            return "v1"
+        if normalized in {"v2", "semantic_text", "semantic_text_v2"}:
+            return "v2"
+        raise ValueError("must be one of v1, dense_vector_v1, v2, or semantic_text_v2")
+
     @field_validator("embedding_elastic_submit_method")
     @classmethod
     def validate_embedding_elastic_submit_method(cls, value: str) -> str:
@@ -533,6 +544,7 @@ class Settings(BaseSettings):
             elastic_username=self.embedding_elastic_username,
             elastic_password_configured=self.embedding_elastic_password is not None,
             elastic_index=self.embedding_elastic_index,
+            elastic_mapping_version=self.embedding_elastic_mapping_version,
             elastic_pipeline=self.embedding_elastic_pipeline,
             elastic_submit_method=self.embedding_elastic_submit_method,
             elastic_submit_path=self.embedding_elastic_submit_path,
