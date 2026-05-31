@@ -61,7 +61,7 @@ def test_env_example_loads() -> None:
     assert settings.dispatch_sink_mode == "local"
     assert settings.embedding_elastic_mapping_version == "v2"
     assert settings.embedding_elastic_index == "open-rag-embeddings-v2"
-    assert settings.embedding_elastic_pipeline == "open_rag_embeddings_v2_semantic_pipeline"
+    assert settings.embedding_elastic_pipeline is None
 
 
 def test_cuda_gpu_env_loads() -> None:

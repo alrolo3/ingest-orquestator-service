@@ -2,6 +2,9 @@
   "index_name": "open-rag-embeddings-v2",
   "pipeline_name": "open_rag_embeddings_v2_semantic_pipeline",
   "index": {
+    "settings": {
+      "index.default_pipeline": "open_rag_embeddings_v2_semantic_pipeline"
+    },
     "mappings": {
       "dynamic": false,
       "_meta": {

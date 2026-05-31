@@ -69,7 +69,7 @@ export INGEST_EMBEDDING_ELASTIC_USERNAME="your-user"
 export INGEST_EMBEDDING_ELASTIC_PASSWORD="your-password"
 export INGEST_EMBEDDING_ELASTIC_INDEX="open-rag-embeddings-v2"
 export INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION="v2"
-export INGEST_EMBEDDING_ELASTIC_PIPELINE="open_rag_embeddings_v2_semantic_pipeline"
+export INGEST_EMBEDDING_ELASTIC_PIPELINE=
 ```
 
 `INGEST_DISPATCH_SINK_MODE` accepts:
@@ -99,14 +99,17 @@ For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v1`, the dispatcher sends
 `content` and `title` through the configured ingest pipeline to populate
 `content_embedding` and `title_embedding`.
 
-For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v2`, the dispatcher sends
-`content` and `title` and attaches the configured ingest pipeline. The default
-v2 pipeline copies `content` into `content_semantic` and `title` into
-`title_semantic`; those `semantic_text` fields run inference through their field
-mapping.
+For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v2`, the dispatcher sends only
+`content` and `title`. The v2 index sets
+`index.default_pipeline=open_rag_embeddings_v2_semantic_pipeline`, so
+Elasticsearch automatically runs the pipeline for normal bulk indexing
+requests. That pipeline copies `content` into `content_semantic` and `title`
+into `title_semantic`; those `semantic_text` fields run inference through their
+field mapping.
 
-The v2 asset at `elastic/open-rag-embeddings-v2.json` contains both the index
-mapping and the ingest pipeline. Create the pipeline before indexing documents:
+The v2 asset at `elastic/open-rag-embeddings-v2.json` contains the index
+mapping, the index default-pipeline setting, and the ingest pipeline. Create the
+pipeline before the index:
 
 ```bash
 python - <<'PY'

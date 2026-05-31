@@ -102,9 +102,6 @@ class ElasticEmbeddingDispatcher:
             "runtime": metadata.get("runtime"),
             "metadata": metadata,
         }
-        if self._uses_semantic_text_mapping and not self._uses_ingest_pipeline:
-            document["content_semantic"] = content
-            document["title_semantic"] = title
         return document
 
     def _submit_bulk(
@@ -165,7 +162,10 @@ class ElasticEmbeddingDispatcher:
 
     @property
     def _uses_ingest_pipeline(self) -> bool:
-        return self._settings.embedding_elastic_pipeline is not None
+        return (
+            self._settings.embedding_elastic_pipeline is not None
+            and not self._uses_semantic_text_mapping
+        )
 
     def _elastic_client(self) -> Elasticsearch:
         if self._client is not None:

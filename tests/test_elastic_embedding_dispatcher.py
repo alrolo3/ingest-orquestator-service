@@ -46,7 +46,9 @@ def test_elastic_dispatcher_uses_bulk_helper_for_bulk_submit(tmp_path: Path) -> 
     assert captured["kwargs"]["request_timeout"] == 30.0
 
 
-def test_elastic_dispatcher_uses_semantic_text_v2_pipeline(tmp_path: Path) -> None:
+def test_elastic_dispatcher_uses_semantic_text_v2_without_bulk_action_pipeline(
+    tmp_path: Path,
+) -> None:
     settings = Settings(
         embedding_elastic_url="https://elastic.example:9200",
         embedding_elastic_index="open-rag-embeddings-v2",
@@ -69,7 +71,7 @@ def test_elastic_dispatcher_uses_semantic_text_v2_pipeline(tmp_path: Path) -> No
     actions = captured["actions"]
     assert result.raw_response["mapping_version"] == "v2"
     assert actions[0]["_index"] == "open-rag-embeddings-v2"
-    assert actions[0]["pipeline"] == "open_rag_embeddings_v2_semantic_pipeline"
+    assert "pipeline" not in actions[0]
     assert actions[0]["_source"]["content"] == "one"
     assert "content_semantic" not in actions[0]["_source"]
     assert actions[0]["_source"]["title"] == "Quarterly Revenue"
