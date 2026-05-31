@@ -180,6 +180,7 @@ class DocumentParseService:
                     "picture_description_runtime_requested"
                 ),
                 "runtime": docling_metadata.get("runtime"),
+                "engine": docling_metadata.get("engine"),
                 "chunking_enabled": chunking_is_enabled,
                 "chunking_strategy": chunks[0].metadata.get("chunker_strategy")
                 if chunks

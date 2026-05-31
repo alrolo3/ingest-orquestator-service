@@ -127,13 +127,15 @@ The environment chooses:
 - `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false`
 - Docling HybridChunker enabled with `INGEST_CHUNK_MAX_TOKENS=1024`
 - confidence output enabled
+- Docling engine cache enabled, no idle eviction, and compatible conversion
+  batching up to 5 documents
 - local XBRL taxonomy fetch enabled, remote XBRL fetch disabled
 - SuryaOCR on GPU
-- full-page VLM conversion defaults to `Qwen/Qwen3-VL-8B-Instruct` with Transformers
+- full-page VLM conversion defaults to `Qwen/Qwen3-VL-8B-Instruct` through RemoteLLM
 - standard pipeline layout model `docling-layout-heron-101`
 - TableFormer accurate mode with cell matching
 - picture classification and picture description enabled
-- picture description defaults to `Qwen/Qwen3-VL-8B-Instruct` with Transformers
+- picture description defaults to `Qwen/Qwen3-VL-8B-Instruct` through RemoteLLM
 - code and formula enrichment enabled
 - OCR/layout/table batch sizes set to `32`
 - queue size set to `512`
@@ -144,17 +146,18 @@ sizes from `32` to `16`.
 
 ## RemoteLLM
 
-The environment keeps Transformers as the default backend:
+The GPU environment uses RemoteLLM as the default backend for Qwen3 so the
+model is hosted by one external inference server instead of being loaded inside
+each API worker:
 
 ```text
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_VLM_RUNTIME=remote_llm
 INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=transformers
+INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=remote_llm
 ```
 
-To offload full-page VLM conversion or picture descriptions to an external
-inference server, switch the relevant runtime to `remote_llm`:
+Configure the external inference server endpoint with:
 
 ```text
 INGEST_DOCLING_VLM_RUNTIME=remote_llm
@@ -167,7 +170,9 @@ INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED=true
 ```
 
 See [Docling RemoteLLM playbook](docling-remote-llm.md) and
-[Docling model runtime matrix](docling-model-runtime-matrix.md).
+[Docling model runtime matrix](docling-model-runtime-matrix.md). For API-side
+engine caching and batching, see
+[Docling engine lifecycle](docling-engine-lifecycle.md).
 
 ## FlashAttention 3/4
 

@@ -32,6 +32,10 @@ from ingest_orquestator_server.application.services.storage_cleanup_service impo
 )
 from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
 from ingest_orquestator_server.config.settings import Settings, get_settings
+from ingest_orquestator_server.infrastructure.docling.docling_engine import (
+    DoclingConversionScheduler,
+    DoclingEngineRegistry,
+)
 from ingest_orquestator_server.infrastructure.elastic.elastic_embedding_dispatcher import (
     ElasticEmbeddingDispatcher,
 )
@@ -56,10 +60,50 @@ _embedding_dispatch_service: EmbeddingDispatchService | None = None
 _embedding_dispatch_key: tuple[str, int, int, int | None] | None = None
 _parser_worker_service: ParserWorkerService | None = None
 _parser_worker_key: tuple[int] | None = None
+_docling_engine_registry: DoclingEngineRegistry | None = None
+_docling_engine_registry_key: str | None = None
+_docling_conversion_scheduler: DoclingConversionScheduler | None = None
+_docling_conversion_scheduler_key: str | None = None
 
 
-def get_parser_registry(settings: SettingsDependency) -> ParserRegistry:
-    return build_parser_registry(settings)
+def get_docling_engine_registry(
+    settings: SettingsDependency,
+) -> DoclingEngineRegistry:
+    global _docling_engine_registry, _docling_engine_registry_key
+    key = _settings_dependency_key(settings)
+    if _docling_engine_registry is None or _docling_engine_registry_key != key:
+        _docling_engine_registry = DoclingEngineRegistry(settings=settings)
+        _docling_engine_registry_key = key
+    return _docling_engine_registry
+
+
+def get_docling_conversion_scheduler(
+    registry: Annotated[
+        DoclingEngineRegistry,
+        Depends(get_docling_engine_registry),
+    ],
+) -> DoclingConversionScheduler:
+    global _docling_conversion_scheduler, _docling_conversion_scheduler_key
+    scheduler_key = str(id(registry))
+    if _docling_conversion_scheduler is None or _docling_conversion_scheduler_key != scheduler_key:
+        _docling_conversion_scheduler = DoclingConversionScheduler(
+            engine_registry=registry,
+        )
+        _docling_conversion_scheduler_key = scheduler_key
+    return _docling_conversion_scheduler
+
+
+def get_parser_registry(
+    settings: SettingsDependency,
+    docling_conversion_scheduler: Annotated[
+        DoclingConversionScheduler,
+        Depends(get_docling_conversion_scheduler),
+    ],
+) -> ParserRegistry:
+    return build_parser_registry(
+        settings,
+        docling_conversion_scheduler=docling_conversion_scheduler,
+    )
 
 
 def get_job_repository(
@@ -216,3 +260,15 @@ def shutdown_background_services() -> None:
         _parser_worker_service.shutdown()
     if _embedding_dispatch_service is not None:
         _embedding_dispatch_service.stop()
+
+
+def warmup_docling_engines(settings: Settings | None = None) -> None:
+    resolved_settings = settings or get_settings()
+    if not resolved_settings.docling_engine_warmup_enabled:
+        return
+    registry = get_docling_engine_registry(resolved_settings)
+    registry.warmup()
+
+
+def _settings_dependency_key(settings: Settings) -> str:
+    return settings.model_dump_json()

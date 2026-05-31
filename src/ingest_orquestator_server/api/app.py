@@ -6,7 +6,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from ingest_orquestator_server.api.dependencies import shutdown_background_services
+from ingest_orquestator_server.api.dependencies import (
+    shutdown_background_services,
+    warmup_docling_engines,
+)
 from ingest_orquestator_server.api.routes.capabilities import router as capabilities_router
 from ingest_orquestator_server.api.routes.health import router as health_router
 from ingest_orquestator_server.api.routes.ingestion import router as ingestion_router
@@ -43,6 +46,7 @@ def create_app() -> FastAPI:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     _validate_remote_llm_on_startup()
+    _warmup_docling_engines_on_startup()
     yield
     shutdown_background_services()
 
@@ -81,3 +85,15 @@ def _validate_remote_llm_on_startup() -> None:
         result.error,
     )
     raise RuntimeError(f"RemoteLLM health check failed: {result.error}")
+
+
+def _warmup_docling_engines_on_startup() -> None:
+    settings = get_settings()
+    if not settings.docling_engine_warmup_enabled:
+        return
+    logger.info(
+        "docling.engine.warmup.requested formats=%s pipeline=%s",
+        settings.docling_engine_warmup_formats,
+        settings.docling_pipeline,
+    )
+    warmup_docling_engines(settings)

@@ -21,6 +21,7 @@ import {
   outputUrl,
   uploadFiles,
 } from "./api";
+import { createLocalId } from "./id";
 import {
   formatBytes,
   isTerminalStatus,
@@ -197,7 +198,7 @@ function App() {
 
     const submittedFiles = [...files];
     const pendingJobs = submittedFiles.map((file) => ({
-      local_id: crypto.randomUUID(),
+      local_id: createLocalId(),
       file_name: file.name,
       file_size: file.size,
       retained_file: file,

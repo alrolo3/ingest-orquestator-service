@@ -47,6 +47,7 @@ Use the tutorial that matches the machine:
 - [Environment configuration reference](docs/environment-config.md)
 - [Embedding handoff guide](docs/embedding-handoff.md)
 - [Docling RemoteLLM playbook](docs/docling-remote-llm.md)
+- [Docling engine lifecycle and GPU reuse](docs/docling-engine-lifecycle.md)
 - [Docling model runtime matrix](docs/docling-model-runtime-matrix.md)
 - [Frontend app guide](docs/frontend.md)
 
@@ -144,11 +145,14 @@ INGEST_RETENTION_DAYS=30
 INGEST_DOCLING_ACCELERATOR_DEVICE=auto
 INGEST_DOCLING_NUM_THREADS=4
 INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS=true
+INGEST_DOCLING_ENGINE_CACHE_ENABLED=true
+INGEST_DOCLING_GPU_ENGINE_CONCURRENCY=1
+INGEST_DOCLING_GPU_BATCH_MAX_DOCUMENTS=5
 INGEST_DOCLING_ALLOWED_FORMATS=pdf,image,docx,pptx,html,md,xlsx,csv,json_docling,asciidoc,latex,vtt,xml_jats,xml_uspto,xml_xbrl
 INGEST_DOCLING_PIPELINE=standard
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
-INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_VLM_RUNTIME=remote_llm
 INGEST_DOCLING_REMOTE_LLM_URL=http://localhost:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=1

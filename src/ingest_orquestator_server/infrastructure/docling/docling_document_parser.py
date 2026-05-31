@@ -10,6 +10,9 @@ from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_converter_factory import (
     DoclingConverterFactory,
 )
+from ingest_orquestator_server.infrastructure.docling.docling_engine import (
+    DoclingConversionScheduler,
+)
 from ingest_orquestator_server.infrastructure.docling.docling_format_routes import (
     route_metadata_for,
 )
@@ -51,11 +54,13 @@ class DoclingDocumentParser:
         *,
         converter: Any | None = None,
         converter_factory: DoclingConverterFactory | None = None,
+        conversion_scheduler: DoclingConversionScheduler | None = None,
         normalizer: DoclingDocumentNormalizer | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._converter = converter
         self._converter_factory = converter_factory or DoclingConverterFactory()
+        self._conversion_scheduler = conversion_scheduler
         self._normalizer = normalizer or DoclingDocumentNormalizer()
         self._settings = settings or get_settings()
 
@@ -109,27 +114,19 @@ class DoclingDocumentParser:
                     "picture_description_model": settings.docling_pdf_picture_description_model
                     if settings.docling_pdf_do_picture_description
                     else None,
-                    "vlm_model": settings.docling_vlm_model
-                    if resolved_pipeline == "vlm"
-                    else None,
+                    "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
                     "remote_llm_url": settings.docling_remote_llm_url
-                    if resolved_pipeline == "vlm"
-                    and settings.docling_vlm_runtime == "remote_llm"
+                    if resolved_pipeline == "vlm" and settings.docling_vlm_runtime == "remote_llm"
                     else None,
                     "remote_llm_concurrency": settings.docling_remote_llm_concurrency
-                    if resolved_pipeline == "vlm"
-                    and settings.docling_vlm_runtime == "remote_llm"
+                    if resolved_pipeline == "vlm" and settings.docling_vlm_runtime == "remote_llm"
                     else None,
                     "accelerator_device": settings.docling_accelerator_device,
                 },
             ),
         )
 
-        converter = self._converter or self._converter_factory.create(
-            settings,
-            pipeline=resolved_pipeline,
-            input_format=input_format,
-        )
+        engine_metadata: dict[str, Any] | None = None
         with docling_progress_context(
             callback=progress_callback,
             input_format=input_format,
@@ -144,7 +141,12 @@ class DoclingDocumentParser:
                     message="Docling conversion started.",
                     pages_completed=0 if estimated_page_count is not None else None,
                 )
-            result = converter.convert(source_path)
+            result, engine_metadata = self._convert_one(
+                source_path,
+                settings=settings,
+                input_format=input_format,
+                pipeline=resolved_pipeline,
+            )
             if progress is not None:
                 progress.report(
                     stage="docling.convert.completed",
@@ -163,6 +165,7 @@ class DoclingDocumentParser:
             document_id=document_id,
             input_format=input_format,
             resolved_pipeline=resolved_pipeline,
+            engine_metadata=engine_metadata,
             progress_callback=progress_callback,
         )
 
@@ -193,28 +196,33 @@ class DoclingDocumentParser:
             )
         resolved_pipeline = resolved_pipelines[0] if resolved_pipelines else "standard"
 
-        converter = self._converter or self._converter_factory.create(
-            settings,
-            pipeline=resolved_pipeline,
-            input_format=None,
-        )
-        results = converter.convert_all(source_paths, raises_on_error=False)
-        return [
-            self._parse_conversion_result(
-                result,
-                source_path=self._source_path_from_result(result, fallback_path),
+        indexed_outputs: list[ParseOutput | None] = [None] * len(source_paths)
+        grouped: dict[tuple[str, str], list[tuple[int, Path]]] = {}
+        for index, (source_path, input_format, resolved_pipeline) in enumerate(
+            zip(source_paths, input_formats, resolved_pipelines, strict=True)
+        ):
+            grouped.setdefault((input_format, resolved_pipeline), []).append((index, source_path))
+
+        for (input_format, group_pipeline), group_items in grouped.items():
+            group_paths = [source_path for _index, source_path in group_items]
+            results, engine_metadata = self._convert_many(
+                group_paths,
                 settings=settings,
-                document_id=None,
                 input_format=input_format,
-                resolved_pipeline=resolved_pipeline,
+                pipeline=group_pipeline,
             )
-            for fallback_path, input_format, result in zip(
-                source_paths,
-                input_formats,
-                results,
-                strict=False,
-            )
-        ]
+            for (index, fallback_path), result in zip(group_items, results, strict=False):
+                indexed_outputs[index] = self._parse_conversion_result(
+                    result,
+                    source_path=self._source_path_from_result(result, fallback_path),
+                    settings=settings,
+                    document_id=None,
+                    input_format=input_format,
+                    resolved_pipeline=group_pipeline,
+                    engine_metadata=engine_metadata,
+                )
+
+        return [output for output in indexed_outputs if output is not None]
 
     def _parse_conversion_result(
         self,
@@ -225,6 +233,7 @@ class DoclingDocumentParser:
         document_id: str | None,
         input_format: str,
         resolved_pipeline: str,
+        engine_metadata: dict[str, Any] | None = None,
         progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
         document = result.document
@@ -285,6 +294,7 @@ class DoclingDocumentParser:
                 else None
             ),
             "runtime": runtime_metadata,
+            "engine": engine_metadata,
         }
         normalized.metadata["docling_options"] = docling_options_metadata(
             settings,
@@ -323,6 +333,55 @@ class DoclingDocumentParser:
             confidence_summary=result_metadata.get("confidence_summary") or {},
             warnings=result_metadata.get("warnings") or [],
         )
+
+    def _convert_one(
+        self,
+        source_path: Path,
+        *,
+        settings: Settings,
+        input_format: str,
+        pipeline: str,
+    ) -> tuple[Any, dict[str, Any] | None]:
+        if self._converter is not None:
+            return self._converter.convert(source_path), None
+        if self._conversion_scheduler is not None:
+            return self._conversion_scheduler.convert(
+                source_path,
+                input_format=input_format,
+                pipeline=pipeline,
+            )
+        converter = self._converter_factory.create(
+            settings,
+            pipeline=pipeline,
+            input_format=input_format,
+        )
+        return converter.convert(source_path), None
+
+    def _convert_many(
+        self,
+        source_paths: list[Path],
+        *,
+        settings: Settings,
+        input_format: str,
+        pipeline: str,
+    ) -> tuple[list[Any], dict[str, Any] | None]:
+        if self._converter is not None:
+            return (
+                list(self._converter.convert_all(source_paths, raises_on_error=False)),
+                None,
+            )
+        if self._conversion_scheduler is not None:
+            return self._conversion_scheduler.convert_all(
+                source_paths,
+                input_format=input_format,
+                pipeline=pipeline,
+            )
+        converter = self._converter_factory.create(
+            settings,
+            pipeline=pipeline,
+            input_format=input_format,
+        )
+        return list(converter.convert_all(source_paths, raises_on_error=False)), None
 
     @staticmethod
     def _source_path_from_result(result: Any, fallback: Path) -> Path:

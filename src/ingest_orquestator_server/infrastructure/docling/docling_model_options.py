@@ -130,7 +130,10 @@ def build_picture_description_options(settings: Settings) -> Any:
             headers=remote_llm_headers(settings),
             params=remote_llm_params(
                 settings,
-                model=settings.docling_pdf_picture_description_model,
+                model=(
+                    settings.docling_remote_llm_model
+                    or settings.docling_pdf_picture_description_model
+                ),
                 max_tokens=settings.docling_pdf_picture_description_max_new_tokens,
             ),
             timeout=settings.docling_remote_llm_timeout_seconds,

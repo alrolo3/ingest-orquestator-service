@@ -103,6 +103,14 @@ class Settings(BaseSettings):
         default=True,
         description="Allow Docling external plugins. Required for the SuryaOCR plugin.",
     )
+    docling_engine_cache_enabled: bool = True
+    docling_engine_warmup_enabled: bool = False
+    docling_engine_warmup_formats: list[str] = Field(default_factory=lambda: ["pdf"])
+    docling_gpu_engine_concurrency: int = Field(default=1, ge=1)
+    docling_gpu_batch_max_documents: int = Field(default=5, ge=1, le=32)
+    docling_gpu_batch_wait_ms: int = Field(default=250, ge=0)
+    docling_engine_idle_ttl_seconds: int = Field(default=0, ge=0)
+    docling_perf_page_batch_size: int | None = Field(default=None, ge=1)
     docling_allowed_formats: list[str] = Field(
         default_factory=lambda: [
             "pdf",
@@ -279,6 +287,41 @@ class Settings(BaseSettings):
         unknown = sorted(set(normalized) - valid_formats)
         if unknown:
             raise ValueError(f"unknown Docling input format(s): {', '.join(unknown)}")
+        return normalized
+
+    @field_validator("docling_engine_warmup_formats", mode="before")
+    @classmethod
+    def parse_docling_engine_warmup_formats(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("docling_engine_warmup_formats")
+    @classmethod
+    def normalize_docling_engine_warmup_formats(cls, value: list[str]) -> list[str]:
+        valid_formats = {
+            "pdf",
+            "image",
+            "docx",
+            "pptx",
+            "html",
+            "md",
+            "xlsx",
+            "csv",
+            "json_docling",
+            "asciidoc",
+            "latex",
+            "vtt",
+            "xml_jats",
+            "xml_uspto",
+            "xml_xbrl",
+            "mets_gbs",
+            "audio",
+        }
+        normalized = sorted({item.strip().lower() for item in value if item.strip()})
+        unknown = sorted(set(normalized) - valid_formats)
+        if unknown:
+            raise ValueError(f"unknown Docling warmup format(s): {', '.join(unknown)}")
         return normalized
 
     @field_validator("docling_pdf_ocr_languages", mode="before")
@@ -469,7 +512,11 @@ class Settings(BaseSettings):
             return normalized
         raise ValueError("must be one of local, elastic, or local_and_elastic")
 
-    @field_validator("dispatch_queue_max_payload_bytes", mode="before")
+    @field_validator(
+        "dispatch_queue_max_payload_bytes",
+        "docling_perf_page_batch_size",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_int(cls, value: object) -> object:
         if isinstance(value, str):
@@ -523,6 +570,14 @@ class Settings(BaseSettings):
             num_threads=self.docling_num_threads,
             cuda_use_flash_attention2=self.docling_cuda_use_flash_attention2,
             allow_external_plugins=self.docling_allow_external_plugins,
+            engine_cache_enabled=self.docling_engine_cache_enabled,
+            engine_warmup_enabled=self.docling_engine_warmup_enabled,
+            engine_warmup_formats=self.docling_engine_warmup_formats,
+            gpu_engine_concurrency=self.docling_gpu_engine_concurrency,
+            gpu_batch_max_documents=self.docling_gpu_batch_max_documents,
+            gpu_batch_wait_ms=self.docling_gpu_batch_wait_ms,
+            engine_idle_ttl_seconds=self.docling_engine_idle_ttl_seconds,
+            perf_page_batch_size=self.docling_perf_page_batch_size,
         )
 
     @property

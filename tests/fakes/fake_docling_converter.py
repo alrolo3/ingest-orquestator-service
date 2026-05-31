@@ -2,7 +2,18 @@ from pathlib import Path
 
 
 class FakeDoclingConverter:
+    def __init__(self) -> None:
+        self.initialize_count = 0
+        self.convert_count = 0
+        self.convert_all_count = 0
+        self.initialized_formats: list[str] = []
+
+    def initialize_pipeline(self, input_format: object) -> None:
+        self.initialize_count += 1
+        self.initialized_formats.append(getattr(input_format, "value", str(input_format)))
+
     def convert(self, source_path: Path) -> object:
+        self.convert_count += 1
         return FakeDoclingConversionResult(source_path)
 
     def convert_all(
@@ -12,6 +23,8 @@ class FakeDoclingConverter:
         raises_on_error: bool = True,
     ) -> object:
         _ = raises_on_error
+        self.convert_all_count += 1
+        self.convert_count += len(source_paths)
         return (FakeDoclingConversionResult(source_path) for source_path in source_paths)
 
 

@@ -29,6 +29,14 @@ class DoclingCommonConfig(BaseModel):
     num_threads: int
     cuda_use_flash_attention2: bool
     allow_external_plugins: bool
+    engine_cache_enabled: bool
+    engine_warmup_enabled: bool
+    engine_warmup_formats: list[str]
+    gpu_engine_concurrency: int
+    gpu_batch_max_documents: int
+    gpu_batch_wait_ms: int
+    engine_idle_ttl_seconds: int
+    perf_page_batch_size: int | None
 
 
 class DoclingOcrConfig(BaseModel):

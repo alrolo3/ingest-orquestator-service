@@ -68,12 +68,13 @@ Full-page VLM conversion is configured separately from picture description:
 ```text
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
-INGEST_DOCLING_VLM_RUNTIME=transformers
+INGEST_DOCLING_VLM_RUNTIME=remote_llm
 ```
 
-Set `INGEST_DOCLING_VLM_RUNTIME=remote_llm` to call an external
-OpenAI-compatible inference endpoint instead of loading the model inside the API
-server. See [Docling RemoteLLM playbook](docling-remote-llm.md).
+Set `INGEST_DOCLING_VLM_RUNTIME=transformers` only when the API process should
+load the VLM directly. For GPU servers, prefer `remote_llm` so Qwen3 lives in a
+single OpenAI-compatible inference endpoint. See
+[Docling RemoteLLM playbook](docling-remote-llm.md).
 
 Picture description still uses the standard PDF pipeline enrichment settings,
 for example `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL`.

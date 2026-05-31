@@ -29,12 +29,16 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
             "`python -m pip install -e .` inside the project virtual environment."
         ) from exc
 
+    _configure_docling_perf_page_batch_size(settings)
     pdf_pipeline_options = PdfPipelineOptions()
     pdf_pipeline_options.accelerator_options = build_accelerator_options(settings)
-    pdf_pipeline_options.enable_remote_services = (
+    picture_description_uses_remote_llm = (
         settings.docling_pdf_do_picture_description
         and resolve_picture_description_runtime(settings).resolved_runtime == RUNTIME_REMOTE_LLM
     )
+    if picture_description_uses_remote_llm:
+        _configure_remote_llm_docling_batch_size(settings)
+    pdf_pipeline_options.enable_remote_services = picture_description_uses_remote_llm
     pdf_pipeline_options.allow_external_plugins = settings.docling_allow_external_plugins
     pdf_pipeline_options.do_ocr = settings.docling_pdf_do_ocr
     pdf_pipeline_options.ocr_options = build_ocr_options(settings)
@@ -66,6 +70,7 @@ def build_vlm_pipeline_options(settings: Settings) -> Any:
             "`python -m pip install -e .` inside the project virtual environment."
         ) from exc
 
+    _configure_docling_perf_page_batch_size(settings)
     resolution = resolve_vlm_convert_runtime(settings)
     if resolution.resolved_runtime == RUNTIME_REMOTE_LLM:
         _configure_remote_llm_docling_batch_size(settings)
@@ -90,6 +95,14 @@ def _configure_remote_llm_docling_batch_size(settings: Settings) -> None:
         docling_settings.perf.page_batch_size = page_batch_size
 
 
+def _configure_docling_perf_page_batch_size(settings: Settings) -> None:
+    if settings.docling_perf_page_batch_size is None:
+        return
+    from docling.datamodel.settings import settings as docling_settings
+
+    docling_settings.perf.page_batch_size = settings.docling_perf_page_batch_size
+
+
 def build_convert_pipeline_options(settings: Settings) -> Any:
     try:
         from docling.datamodel.pipeline_options import ConvertPipelineOptions
@@ -99,6 +112,7 @@ def build_convert_pipeline_options(settings: Settings) -> Any:
             "`python -m pip install -e .` inside the project virtual environment."
         ) from exc
 
+    _configure_docling_perf_page_batch_size(settings)
     return ConvertPipelineOptions(
         accelerator_options=build_accelerator_options(settings),
         allow_external_plugins=settings.docling_allow_external_plugins,
@@ -187,6 +201,14 @@ def _common_options(
         "remote_llm_provider": settings.docling_remote_llm_provider,
         "remote_llm_url": settings.docling_remote_llm_url,
         "remote_llm_api_key_configured": settings.docling_remote_llm_api_key is not None,
+        "engine_cache_enabled": settings.docling_engine_cache_enabled,
+        "engine_warmup_enabled": settings.docling_engine_warmup_enabled,
+        "engine_warmup_formats": settings.docling_engine_warmup_formats,
+        "gpu_engine_concurrency": settings.docling_gpu_engine_concurrency,
+        "gpu_batch_max_documents": settings.docling_gpu_batch_max_documents,
+        "gpu_batch_wait_ms": settings.docling_gpu_batch_wait_ms,
+        "engine_idle_ttl_seconds": settings.docling_engine_idle_ttl_seconds,
+        "perf_page_batch_size": settings.docling_perf_page_batch_size,
     }
 
 
@@ -259,6 +281,7 @@ def _pdf_options(settings: Settings) -> dict[str, Any]:
         "layout_batch_size": settings.docling_pdf_layout_batch_size,
         "table_batch_size": settings.docling_pdf_table_batch_size,
         "queue_max_size": settings.docling_pdf_queue_max_size,
+        "perf_page_batch_size": settings.docling_perf_page_batch_size,
     }
 
 
