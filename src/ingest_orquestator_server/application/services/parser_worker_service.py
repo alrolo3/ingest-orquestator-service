@@ -14,6 +14,9 @@ from ingest_orquestator_server.application.services.document_parse_service impor
 from ingest_orquestator_server.application.services.embedding_dispatch_service import (
     EmbeddingDispatchService,
 )
+from ingest_orquestator_server.application.services.job_progress_reporter import (
+    JobProgressReporter,
+)
 from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
@@ -36,6 +39,10 @@ class ParserWorkerService:
         self._document_parse_service = document_parse_service
         self._job_repository = job_repository
         self._dispatch_service = dispatch_service
+        self._progress_reporter = JobProgressReporter(
+            job_repository=job_repository,
+            history_limit=settings.progress_history_limit,
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=settings.parser_worker_count,
             thread_name_prefix="ingest-parser",
@@ -110,6 +117,7 @@ class ParserWorkerService:
                 pipeline=str(pipeline) if pipeline is not None else None,
                 chunking_enabled=bool(chunking_enabled) if chunking_enabled is not None else None,
                 chunking_strategy=str(chunking_strategy) if chunking_strategy is not None else None,
+                progress_callback=self._progress_reporter.callback_for(job_id),
             )
         except Exception as exc:
             self._fail_job(job_id, str(exc), error_type=type(exc).__name__)
@@ -117,11 +125,12 @@ class ParserWorkerService:
             self._release_job(job_id)
             return
 
-        parsed_job = running_job.model_copy(
+        latest_job = self._job_repository.get(job_id) or running_job
+        parsed_job = latest_job.model_copy(
             update={
                 "status": IngestionStatus.PARSED,
                 "document_id": parse_result.parse_output.document.document_id,
-                "metadata": running_job.metadata | parse_result.diagnostics.metadata,
+                "metadata": latest_job.metadata | parse_result.diagnostics.metadata,
                 "updated_at": datetime.now(UTC),
             }
         )

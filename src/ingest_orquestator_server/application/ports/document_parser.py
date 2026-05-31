@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ingest_orquestator_server.models.parse_output import ParseOutput
+from ingest_orquestator_server.models.parse_progress import ParseProgressCallback
 
 
 class DocumentParser(Protocol):
@@ -15,5 +16,6 @@ class DocumentParser(Protocol):
         *,
         document_id: str | None = None,
         pipeline: str | None = None,
+        progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
         """Parse a source file into raw and normalized output."""

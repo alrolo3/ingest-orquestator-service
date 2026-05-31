@@ -18,6 +18,10 @@ from ingest_orquestator_server.infrastructure.docling.docling_formats import (
 from ingest_orquestator_server.infrastructure.docling.docling_options import (
     docling_options_metadata,
 )
+from ingest_orquestator_server.infrastructure.docling.docling_progress import (
+    docling_progress_context,
+    estimate_source_page_count,
+)
 from ingest_orquestator_server.infrastructure.docling.docling_result_metadata import (
     conversion_result_metadata,
 )
@@ -27,6 +31,10 @@ from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabiliti
     resolve_vlm_convert_runtime,
 )
 from ingest_orquestator_server.models.parse_output import ParseOutput
+from ingest_orquestator_server.models.parse_progress import (
+    ParseProgressCallback,
+    ParseProgressUpdate,
+)
 from ingest_orquestator_server.normalizers.docling.docling_document_normalizer import (
     DoclingDocumentNormalizer,
 )
@@ -54,6 +62,7 @@ class DoclingDocumentParser:
         *,
         document_id: str | None = None,
         pipeline: str | None = None,
+        progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
         settings = self._settings
         source_path = file_path.expanduser().resolve()
@@ -61,10 +70,48 @@ class DoclingDocumentParser:
             raise FileNotFoundError(f"Input file does not exist: {source_path}")
 
         input_format = detect_input_format(source_path)
+        self._report_progress(
+            progress_callback,
+            ParseProgressUpdate(
+                component="docling",
+                stage="docling.input.detected",
+                message="Docling input format detected.",
+                input_format=input_format,
+                pipeline=pipeline or settings.docling_pipeline,
+                details={"source_file_name": source_path.name},
+            ),
+        )
         validate_allowed_format(input_format, settings.docling_allowed_formats)
         resolved_pipeline = resolve_pipeline_mode(
             pipeline or settings.docling_pipeline,
             input_format,
+        )
+        estimated_page_count = estimate_source_page_count(source_path, input_format)
+        self._report_progress(
+            progress_callback,
+            ParseProgressUpdate(
+                component="docling",
+                stage="docling.pipeline.resolved",
+                message="Docling pipeline resolved.",
+                input_format=input_format,
+                pipeline=resolved_pipeline,
+                page_count=estimated_page_count,
+                pages_completed=0 if estimated_page_count is not None else None,
+                details={
+                    "ocr_enabled": settings.docling_pdf_do_ocr,
+                    "ocr_engine": settings.docling_pdf_ocr_engine
+                    if settings.docling_pdf_do_ocr
+                    else None,
+                    "picture_description_enabled": settings.docling_pdf_do_picture_description,
+                    "picture_description_model": settings.docling_pdf_picture_description_model
+                    if settings.docling_pdf_do_picture_description
+                    else None,
+                    "vlm_model": settings.docling_vlm_model
+                    if resolved_pipeline == "vlm"
+                    else None,
+                    "accelerator_device": settings.docling_accelerator_device,
+                },
+            ),
         )
 
         converter = self._converter or self._converter_factory.create(
@@ -72,7 +119,32 @@ class DoclingDocumentParser:
             pipeline=resolved_pipeline,
             input_format=input_format,
         )
-        result = converter.convert(source_path)
+        with docling_progress_context(
+            callback=progress_callback,
+            input_format=input_format,
+            pipeline=resolved_pipeline,
+            page_count=estimated_page_count,
+            heartbeat_interval_seconds=settings.progress_log_interval_seconds,
+            page_log_interval=settings.progress_page_interval,
+        ) as progress:
+            if progress is not None:
+                progress.report(
+                    stage="docling.convert.started",
+                    message="Docling conversion started.",
+                    pages_completed=0 if estimated_page_count is not None else None,
+                )
+            result = converter.convert(source_path)
+            if progress is not None:
+                progress.report(
+                    stage="docling.convert.completed",
+                    message="Docling conversion completed.",
+                    page_count=getattr(getattr(result, "input", None), "page_count", None)
+                    or estimated_page_count,
+                    pages_completed=(
+                        getattr(getattr(result, "input", None), "page_count", None)
+                        or progress.pages_completed
+                    ),
+                )
         return self._parse_conversion_result(
             result,
             source_path=source_path,
@@ -80,6 +152,7 @@ class DoclingDocumentParser:
             document_id=document_id,
             input_format=input_format,
             resolved_pipeline=resolved_pipeline,
+            progress_callback=progress_callback,
         )
 
     def parse_many(
@@ -141,8 +214,19 @@ class DoclingDocumentParser:
         document_id: str | None,
         input_format: str,
         resolved_pipeline: str,
+        progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
         document = result.document
+        self._report_progress(
+            progress_callback,
+            ParseProgressUpdate(
+                component="docling",
+                stage="docling.normalize.started",
+                message="Normalizing Docling output.",
+                input_format=input_format,
+                pipeline=resolved_pipeline,
+            ),
+        )
         result_metadata = conversion_result_metadata(result, settings)
         if result_metadata.get("warnings") and not settings.confidence_warn_only:
             raise ValueError(f"Docling confidence validation failed: {result_metadata['warnings']}")
@@ -193,6 +277,22 @@ class DoclingDocumentParser:
             pipeline=resolved_pipeline,
         )
         normalized.metadata["docling_result"] = result_metadata
+        self._report_progress(
+            progress_callback,
+            ParseProgressUpdate(
+                component="docling",
+                stage="docling.normalize.completed",
+                message="Docling output normalized.",
+                input_format=input_format,
+                pipeline=resolved_pipeline,
+                page_count=normalized.page_count,
+                pages_completed=normalized.page_count,
+                details={
+                    "element_count": len(normalized.elements),
+                    "conversion_status": result_metadata.get("status"),
+                },
+            ),
+        )
 
         return ParseOutput(
             document=normalized,
@@ -225,3 +325,12 @@ class DoclingDocumentParser:
             return export_to_html()
         except Exception:
             return None
+
+    @staticmethod
+    def _report_progress(
+        callback: ParseProgressCallback | None,
+        update: ParseProgressUpdate,
+    ) -> None:
+        if callback is None:
+            return
+        callback(update)

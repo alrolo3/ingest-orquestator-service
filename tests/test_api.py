@@ -416,6 +416,8 @@ def test_ingest_file_enqueues_embedding_handoff_internally(
         job_response = client.get(f"/v1/ingest/jobs/{job_id}")
         assert job_response.status_code == 200
         assert job_response.json()["status"] == "completed"
+        assert job_response.json()["metadata"]["progress"]["stage"] == "docling.normalize.completed"
+        assert job_response.json()["metadata"]["progress_history"]
         assert (
             job_response.json()["metadata"]["dispatch_handoff"]["last_response"][
                 "elastic_response"
@@ -437,6 +439,7 @@ def test_ingest_file_enqueues_embedding_handoff_internally(
             if record.name == "ingest_orquestator_server.stage"
         ]
         assert "ingestion.upload.queued" in events
+        assert "ingestion.progress" in events
         assert "parser.worker.started" in events
         assert "parser.worker.completed" in events
         assert "dispatch.queue.enqueued" in events

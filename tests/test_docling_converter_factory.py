@@ -26,7 +26,7 @@ def test_converter_factory_uses_vlm_pipeline_for_pdf() -> None:
         pipeline="vlm",
     )
 
-    assert converter.format_to_options[InputFormat.PDF].pipeline_cls == VlmPipeline
+    assert issubclass(converter.format_to_options[InputFormat.PDF].pipeline_cls, VlmPipeline)
     assert (
         converter.format_to_options[InputFormat.PDF].pipeline_options.vlm_options.repo_id
         == "Qwen/Qwen3-VL-8B-Instruct"
@@ -85,7 +85,7 @@ def test_converter_factory_uses_vlm_pipeline_for_image() -> None:
         pipeline="vlm",
     )
 
-    assert converter.format_to_options[InputFormat.IMAGE].pipeline_cls == VlmPipeline
+    assert issubclass(converter.format_to_options[InputFormat.IMAGE].pipeline_cls, VlmPipeline)
 
 
 def test_converter_factory_uses_standard_options_for_image() -> None:
@@ -100,7 +100,7 @@ def test_converter_factory_uses_standard_options_for_image() -> None:
     )
 
     image_options = converter.format_to_options[InputFormat.IMAGE]
-    assert image_options.pipeline_cls == StandardPdfPipeline
+    assert issubclass(image_options.pipeline_cls, StandardPdfPipeline)
     assert image_options.pipeline_options.allow_external_plugins is True
     assert image_options.pipeline_options.ocr_options.kind == "auto"
 

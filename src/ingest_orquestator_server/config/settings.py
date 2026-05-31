@@ -14,6 +14,7 @@ from ingest_orquestator_server.config.config_groups import (
     DoclingVlmConfig,
     DoclingXbrlConfig,
     EmbeddingQueueConfig,
+    ProgressConfig,
     ServiceConfig,
     StorageConfig,
     UploadConfig,
@@ -82,6 +83,9 @@ class Settings(BaseSettings):
     confidence_output_enabled: bool = True
     confidence_min_document_score: float | None = Field(default=None, ge=0, le=1)
     confidence_warn_only: bool = True
+    progress_log_interval_seconds: float = Field(default=30.0, ge=0)
+    progress_page_interval: int = Field(default=1, ge=1)
+    progress_history_limit: int = Field(default=50, ge=1)
     retention_days: int = Field(default=30, ge=1)
     docling_accelerator_device: str = Field(
         default="auto",
@@ -532,6 +536,14 @@ class Settings(BaseSettings):
             output_enabled=self.confidence_output_enabled,
             min_document_score=self.confidence_min_document_score,
             warn_only=self.confidence_warn_only,
+        )
+
+    @property
+    def progress_config(self) -> ProgressConfig:
+        return ProgressConfig(
+            log_interval_seconds=self.progress_log_interval_seconds,
+            page_interval=self.progress_page_interval,
+            history_limit=self.progress_history_limit,
         )
 
     @property

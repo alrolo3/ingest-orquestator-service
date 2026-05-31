@@ -29,3 +29,21 @@ def test_parser_adds_docling_accelerator_metadata(tmp_path: Path) -> None:
     assert output.document.metadata["docling"]["pipeline"] == "standard"
     assert "runtime" in output.document.metadata["docling"]
     assert output.document.metadata["docling_result"]["status"] is None
+
+
+def test_parser_emits_docling_progress_updates(tmp_path: Path) -> None:
+    input_file = tmp_path / "example.md"
+    input_file.write_text("# Example", encoding="utf-8")
+    updates = []
+
+    DoclingDocumentParser(converter=FakeDoclingConverter(), settings=Settings()).parse(
+        input_file,
+        progress_callback=updates.append,
+    )
+
+    stages = [update.stage for update in updates]
+    assert "docling.input.detected" in stages
+    assert "docling.pipeline.resolved" in stages
+    assert "docling.convert.started" in stages
+    assert "docling.convert.completed" in stages
+    assert "docling.normalize.completed" in stages

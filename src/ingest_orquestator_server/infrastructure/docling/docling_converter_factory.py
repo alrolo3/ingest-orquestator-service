@@ -30,12 +30,27 @@ class DoclingConverterFactory:
                 PdfFormatOption,
                 XBRLFormatOption,
             )
+            from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
             from docling.pipeline.vlm_pipeline import VlmPipeline
         except ImportError as exc:
             raise RuntimeError(
                 "Docling is not installed. Install project dependencies with "
                 "`python -m pip install -e .` inside the project virtual environment."
             ) from exc
+
+        from ingest_orquestator_server.infrastructure.docling.progress_pipelines import (
+            ProgressStandardPdfPipeline,
+            ProgressVlmPipeline,
+        )
+
+        class IngestProgressStandardPdfPipeline(
+            ProgressStandardPdfPipeline,
+            StandardPdfPipeline,
+        ):
+            pass
+
+        class IngestProgressVlmPipeline(ProgressVlmPipeline, VlmPipeline):
+            pass
 
         if input_format is not None:
             validate_allowed_format(input_format, settings.docling_allowed_formats)
@@ -48,12 +63,12 @@ class DoclingConverterFactory:
             vlm_pipeline_options = build_vlm_pipeline_options(settings)
             if input_format in {None, "pdf"}:
                 format_options[InputFormat.PDF] = PdfFormatOption(
-                    pipeline_cls=VlmPipeline,
+                    pipeline_cls=IngestProgressVlmPipeline,
                     pipeline_options=vlm_pipeline_options,
                 )
             if input_format in {None, "image"}:
                 format_options[InputFormat.IMAGE] = ImageFormatOption(
-                    pipeline_cls=VlmPipeline,
+                    pipeline_cls=IngestProgressVlmPipeline,
                     pipeline_options=vlm_pipeline_options,
                 )
         else:
@@ -61,12 +76,14 @@ class DoclingConverterFactory:
             if input_format in {None, "pdf"}:
                 standard_pipeline_options = build_pdf_pipeline_options(settings)
                 format_options[InputFormat.PDF] = PdfFormatOption(
+                    pipeline_cls=IngestProgressStandardPdfPipeline,
                     pipeline_options=standard_pipeline_options,
                 )
             if input_format in {None, "image"}:
                 if standard_pipeline_options is None:
                     standard_pipeline_options = build_pdf_pipeline_options(settings)
                 format_options[InputFormat.IMAGE] = ImageFormatOption(
+                    pipeline_cls=IngestProgressStandardPdfPipeline,
                     pipeline_options=standard_pipeline_options,
                 )
             if input_format in {None, "xml_xbrl"}:

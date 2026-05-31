@@ -19,6 +19,9 @@ from ingest_orquestator_server.application.ports.upload_storage import UploadSto
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
+from ingest_orquestator_server.application.services.job_progress_reporter import (
+    JobProgressReporter,
+)
 from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.application.validation.upload_validator import UploadValidator
 from ingest_orquestator_server.config.settings import Settings
@@ -57,6 +60,10 @@ class FileIngestionService:
         self._upload_validator = upload_validator
         self._embedding_dispatch_service = embedding_dispatch_service
         self._parser_worker_service = parser_worker_service
+        self._progress_reporter = JobProgressReporter(
+            job_repository=job_repository,
+            history_limit=settings.progress_history_limit,
+        )
 
     async def ingest_upload(
         self,
@@ -225,13 +232,15 @@ class FileIngestionService:
                 pipeline=str(pipeline) if pipeline is not None else None,
                 chunking_enabled=bool(chunking_enabled) if chunking_enabled is not None else None,
                 chunking_strategy=str(chunking_strategy) if chunking_strategy is not None else None,
+                progress_callback=self._progress_reporter.callback_for(job_id),
             )
         except Exception as exc:
-            failed_job = running_job.model_copy(
+            latest_job = self._job_repository.get(job_id) or running_job
+            failed_job = latest_job.model_copy(
                 update={
                     "status": IngestionStatus.FAILED,
                     "error": str(exc),
-                    "metadata": running_job.metadata | self._error_metadata(exc),
+                    "metadata": latest_job.metadata | self._error_metadata(exc),
                     "updated_at": datetime.now(UTC),
                     "completed_at": datetime.now(UTC),
                 }
@@ -250,8 +259,9 @@ class FileIngestionService:
             )
             return
 
-        completed_metadata = running_job.metadata | parse_result.diagnostics.metadata
-        completed_job = running_job.model_copy(
+        latest_job = self._job_repository.get(job_id) or running_job
+        completed_metadata = latest_job.metadata | parse_result.diagnostics.metadata
+        completed_job = latest_job.model_copy(
             update={
                 "status": IngestionStatus.PARSED,
                 "document_id": parse_result.parse_output.document.document_id,

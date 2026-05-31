@@ -119,6 +119,19 @@ requests, or does both according to `INGEST_DISPATCH_SINK_MODE`.
 | `INGEST_CONFIDENCE_MIN_DOCUMENT_SCORE` | unset | `0.8` | Optional minimum acceptable document score. When set, documents below the threshold create warnings or failures depending on `INGEST_CONFIDENCE_WARN_ONLY`. |
 | `INGEST_CONFIDENCE_WARN_ONLY` | `true` | `true` | When `true`, low confidence is reported as warnings. When `false`, low confidence is treated as an ingestion problem. |
 
+## Progress Logging
+
+Progress updates are emitted to stdout as structured `ingestion.progress`
+events and persisted into each job row under `metadata.progress` plus a bounded
+`metadata.progress_history` list. PDF/image conversions report Docling model
+loading, page completion, assembly, enrichment, and normalization stages.
+
+| Variable | Code Default | Example | Explanation |
+| --- | --- | --- | --- |
+| `INGEST_PROGRESS_LOG_INTERVAL_SECONDS` | `30` | `30` | Heartbeat interval while Docling is busy but has not completed another page yet, such as during model loading or a long VLM call. Set `0` to disable heartbeat updates. |
+| `INGEST_PROGRESS_PAGE_INTERVAL` | `1` | `1` | Minimum number of newly completed pages between page progress updates. Keep `1` for maximum visibility; increase for very large documents if SQLite/job metadata writes become too chatty. |
+| `INGEST_PROGRESS_HISTORY_LIMIT` | `50` | `50` | Maximum number of recent progress events retained in `metadata.progress_history` for each job. The latest event is always available in `metadata.progress`. |
+
 ## Docling Common Options
 
 | Variable | Code Default | Example | Explanation |

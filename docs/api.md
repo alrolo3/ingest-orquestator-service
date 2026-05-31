@@ -82,6 +82,10 @@ GET /v1/ingest/jobs/{job_id}
 ```
 
 Returns persisted job metadata, including status, parser, input path, output paths, timestamps, and error details.
+While a document is parsing, `metadata.progress` contains the latest Docling
+stage, page totals, completed pages, remaining pages, and percent complete when
+page counts are available. `metadata.progress_history` keeps the recent bounded
+history of those updates.
 
 ## List Outputs
 

@@ -87,6 +87,12 @@ class ConfidenceConfig(BaseModel):
     warn_only: bool
 
 
+class ProgressConfig(BaseModel):
+    log_interval_seconds: float
+    page_interval: int
+    history_limit: int
+
+
 class DispatchConfig(BaseModel):
     parser_worker_count: int
     queue_max_size: int

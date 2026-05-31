@@ -18,6 +18,7 @@ from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
 from ingest_orquestator_server.models.parse_output import ParseOutput
+from ingest_orquestator_server.models.parse_progress import ParseProgressCallback
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ class DocumentParseService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        progress_callback: ParseProgressCallback | None = None,
     ) -> DocumentParseResult:
         parser = self._parser_registry.get(parser_name)
         started_at = datetime.now(UTC)
@@ -63,6 +65,7 @@ class DocumentParseService:
             file_path,
             document_id=document_id,
             pipeline=pipeline,
+            progress_callback=progress_callback,
         )
         return self._build_parse_result(
             parse_output,
