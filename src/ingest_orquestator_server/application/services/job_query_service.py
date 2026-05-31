@@ -16,3 +16,15 @@ class JobQueryService:
         if job is None:
             raise JobNotFoundError(job_id)
         return job
+
+    def list_jobs(self, job_ids: list[str]) -> list[IngestionJob]:
+        jobs: list[IngestionJob] = []
+        seen: set[str] = set()
+        for job_id in job_ids:
+            if job_id in seen:
+                continue
+            seen.add(job_id)
+            job = self._job_repository.get(job_id)
+            if job is not None:
+                jobs.append(job)
+        return jobs

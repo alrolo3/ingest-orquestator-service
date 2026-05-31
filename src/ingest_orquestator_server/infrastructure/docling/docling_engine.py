@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Event, Lock, Semaphore, Timer
+from threading import Event, Lock, Semaphore
 from typing import Any
 
 from ingest_orquestator_server.application.services.stage_logger import log_stage
@@ -361,7 +361,7 @@ class DoclingConversionScheduler:
         pipeline: str,
     ) -> tuple[Any, dict[str, Any]]:
         item = _PendingBatchItem(source_path=source_path)
-        flush_now = False
+        batch_to_flush: _PendingBatch | None = None
         with self._batch_lock:
             batch = self._pending_batches.get(engine.key)
             if batch is None:
@@ -371,19 +371,11 @@ class DoclingConversionScheduler:
                     pipeline=pipeline,
                 )
                 self._pending_batches[engine.key] = batch
-                batch.timer = Timer(
-                    self._engine_registry._settings.docling_gpu_batch_wait_ms / 1000,
-                    self._flush_batch,
-                    args=(engine.key,),
-                )
-                batch.timer.daemon = True
-                batch.timer.start()
             batch.items.append(item)
-            flush_now = (
+            if (
                 len(batch.items) >= self._engine_registry._settings.docling_gpu_batch_max_documents
-            )
-            if flush_now and batch.timer is not None:
-                batch.timer.cancel()
+            ):
+                batch_to_flush = self._pending_batches.pop(engine.key, None)
 
         log_stage(
             "docling.engine.batch.queued",
@@ -392,20 +384,25 @@ class DoclingConversionScheduler:
             pipeline=pipeline,
             source_path=source_path,
         )
-        if flush_now:
-            self._flush_batch(engine.key)
+        if batch_to_flush is not None:
+            self._flush_batch(batch_to_flush)
 
-        item.completed.wait()
+        if not item.completed.wait(self._batch_wait_seconds()):
+            with self._batch_lock:
+                pending_batch = self._pending_batches.get(engine.key)
+                if pending_batch is not None and item in pending_batch.items:
+                    batch_to_flush = self._pending_batches.pop(engine.key, None)
+                else:
+                    batch_to_flush = None
+            if batch_to_flush is not None:
+                self._flush_batch(batch_to_flush)
+            else:
+                item.completed.wait()
         if item.error is not None:
             raise item.error
         return item.result, item.engine_snapshot or engine.snapshot()
 
-    def _flush_batch(self, key: DoclingEngineKey) -> None:
-        with self._batch_lock:
-            batch = self._pending_batches.pop(key, None)
-        if batch is None:
-            return
-
+    def _flush_batch(self, batch: _PendingBatch) -> None:
         source_paths = [item.source_path for item in batch.items]
         try:
             if len(source_paths) == 1:
@@ -429,6 +426,9 @@ class DoclingConversionScheduler:
             for item in batch.items:
                 item.error = exc
                 item.completed.set()
+
+    def _batch_wait_seconds(self) -> float:
+        return self._engine_registry._settings.docling_gpu_batch_wait_ms / 1000
 
 
 def build_docling_engine_key(
@@ -474,7 +474,6 @@ class _PendingBatch:
     input_format: str
     pipeline: str
     items: list[_PendingBatchItem] = field(default_factory=list)
-    timer: Timer | None = None
 
 
 def _docling_input_format(input_format: str) -> Any:

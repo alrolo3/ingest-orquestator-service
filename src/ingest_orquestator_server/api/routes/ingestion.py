@@ -96,6 +96,17 @@ async def ingest_files(
         raise HTTPException(status_code=500, detail=f"Failed to enqueue files: {exc}") from exc
 
 
+@router.get("/jobs", response_model=list[IngestionJob])
+def list_jobs(
+    service: Annotated[JobQueryService, Depends(get_job_query_service)],
+    ids: Annotated[str | None, Query(description="Comma-separated job ids.")] = None,
+) -> list[IngestionJob]:
+    job_ids = [job_id.strip() for job_id in (ids or "").split(",") if job_id.strip()]
+    if len(job_ids) > 100:
+        raise HTTPException(status_code=400, detail="At most 100 job ids can be requested.")
+    return service.list_jobs(job_ids)
+
+
 @router.get("/jobs/{job_id}", response_model=IngestionJob)
 def get_job(
     job_id: str,

@@ -12,12 +12,12 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
-import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   defaultApiBaseUrl,
   getCapabilities,
-  getJob,
+  getJobs,
   outputUrl,
   uploadFiles,
 } from "./api";
@@ -43,6 +43,7 @@ import type {
 } from "./types";
 
 const persistedJobsKey = "ingest-orquestator.frontend.jobs";
+const jobPollingIntervalMs = 5000;
 
 const defaultOptions: IngestionOptions = {
   parser: "docling",
@@ -64,6 +65,7 @@ function App() {
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "completed" | "failed">(
     "all",
   );
+  const jobsRef = useRef(jobs);
 
   useEffect(() => {
     let ignore = false;
@@ -94,6 +96,7 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem(persistedJobsKey, JSON.stringify(jobs.map(stripFile)));
+    jobsRef.current = jobs;
   }, [jobs]);
 
   useEffect(() => {
@@ -101,42 +104,44 @@ function App() {
   }, [options]);
 
   useEffect(() => {
-    const active = jobs.filter((job) => job.job_id && !isTerminalStatus(job.job?.status));
-    if (active.length === 0) {
-      return;
-    }
-
     let cancelled = false;
+    let inFlight = false;
     const poll = async () => {
-      const updates = await Promise.allSettled(
-        active.map(async (tracked) => ({
-          local_id: tracked.local_id,
-          job: await getJob(tracked.job_id!, apiBaseUrl),
-        })),
+      if (inFlight) {
+        return;
+      }
+      const active = jobsRef.current.filter(
+        (job) => job.job_id && !isTerminalStatus(job.job?.status),
       );
+      if (active.length === 0) {
+        return;
+      }
+      inFlight = true;
+      const jobIds = active.map((tracked) => tracked.job_id!);
+      const updates = await getJobs(jobIds, apiBaseUrl).catch(() => []);
+      inFlight = false;
       if (cancelled) {
         return;
       }
+      const updatesById = new Map(updates.map((job) => [job.job_id, job]));
       setJobs((current) =>
         current.map((tracked) => {
-          const update = updates.find(
-            (item) => item.status === "fulfilled" && item.value.local_id === tracked.local_id,
-          );
-          if (!update || update.status !== "fulfilled") {
+          const update = tracked.job_id ? updatesById.get(tracked.job_id) : undefined;
+          if (!update) {
             return tracked;
           }
-          return { ...tracked, job: update.value.job };
+          return { ...tracked, job: update };
         }),
       );
     };
 
     void poll();
-    const interval = window.setInterval(poll, 3000);
+    const interval = window.setInterval(poll, jobPollingIntervalMs);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [apiBaseUrl, jobs]);
+  }, [apiBaseUrl]);
 
   const filteredJobs = useMemo(
     () =>

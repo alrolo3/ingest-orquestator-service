@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildIngestQuery } from "./api";
+import { buildIngestQuery, getJobs } from "./api";
 import type { IngestionOptions } from "./types";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("buildIngestQuery", () => {
   it("serializes every upload option supported by the API", () => {
@@ -22,5 +26,21 @@ describe("buildIngestQuery", () => {
     expect(params.get("chunking_strategy")).toBe("line_based");
     expect(params.get("async_mode")).toBe("true");
     expect(params.get("include_document")).toBe("false");
+  });
+});
+
+describe("getJobs", () => {
+  it("requests active jobs in one batch", async () => {
+    const fetch = vi.fn(async () => {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await getJobs(["job-1", "job-2"], "http://api.test");
+
+    expect(fetch).toHaveBeenCalledWith("http://api.test/v1/ingest/jobs?ids=job-1%2Cjob-2", undefined);
   });
 });

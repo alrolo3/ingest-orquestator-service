@@ -67,6 +67,18 @@ export async function getJob(
   return requestJson<IngestionJob>(`${apiBaseUrl}/v1/ingest/jobs/${jobId}`);
 }
 
+export async function getJobs(
+  jobIds: string[],
+  apiBaseUrl = defaultApiBaseUrl,
+): Promise<IngestionJob[]> {
+  if (jobIds.length === 0) {
+    return [];
+  }
+  const params = new URLSearchParams();
+  params.set("ids", jobIds.join(","));
+  return requestJson<IngestionJob[]>(`${apiBaseUrl}/v1/ingest/jobs?${params.toString()}`);
+}
+
 export async function listOutputs(
   jobId: string,
   apiBaseUrl = defaultApiBaseUrl,

@@ -155,6 +155,10 @@ def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
         assert job_response.status_code == 200
         assert job_response.json()["status"] == "completed"
 
+        jobs_response = client.get(f"/v1/ingest/jobs?ids={job_id},missing")
+        assert jobs_response.status_code == 200
+        assert [job["job_id"] for job in jobs_response.json()] == [job_id]
+
         outputs_response = client.get(f"/v1/ingest/jobs/{job_id}/outputs")
         assert outputs_response.status_code == 200
         assert outputs_response.json()["chunks_json"].endswith("chunks.json")
