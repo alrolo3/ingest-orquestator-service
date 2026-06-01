@@ -44,8 +44,9 @@ def test_env_example_loads() -> None:
 
     assert settings.docling_pdf_ocr_engine == "suryaocr"
     assert settings.docling_pdf_ocr_languages == ["en"]
-    assert settings.chunking_enabled is True
-    assert settings.chunking_strategy == "hybrid"
+    assert settings.chunking_enabled is False
+    assert settings.chunking_strategy == "page"
+    assert str(settings.chunk_tokenizer_path) == "/datastore/tokenizers/qwen3-embedding-8b"
     assert settings.confidence_output_enabled is True
     assert settings.docling_accelerator_device == "cuda"
     assert settings.docling_xbrl_enable_local_fetch is True
@@ -115,7 +116,8 @@ def test_cpu_env_loads() -> None:
     assert settings.docling_perf_page_batch_size == 32
     assert settings.docling_pdf_ocr_batch_size == 32
     assert settings.docling_pdf_queue_max_size == 512
-    assert settings.chunking_strategy == "hybrid"
+    assert settings.chunking_strategy == "page"
+    assert str(settings.chunk_tokenizer_path) == "/datastore/tokenizers/qwen3-embedding-8b"
 
 
 def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
@@ -136,6 +138,12 @@ def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     assert settings.docling_pdf_picture_description_max_new_tokens == 2048
     assert settings.docling_remote_llm_concurrency == settings.parser_worker_count
     assert settings.docling_remote_llm_page_batch_size == settings.parser_worker_count
+
+
+def test_settings_normalize_legacy_chunking_strategy_alias() -> None:
+    settings = Settings(chunking_strategy="hybrid")
+
+    assert settings.chunking_strategy == "token"
 
 
 def test_settings_do_not_expose_docling_ocr_defaults_as_fields() -> None:

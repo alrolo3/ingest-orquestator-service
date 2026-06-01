@@ -7,8 +7,10 @@ services:
       INGEST_STORAGE_DIR: /app/.data
       INGEST_MAX_UPLOAD_SIZE_MB: 100
       INGEST_ALLOWED_UPLOAD_EXTENSIONS: .pdf,.md,.markdown,.txt,.html,.htm,.docx,.pptx
-      INGEST_CHUNK_SIZE_CHARS: 1200
-      INGEST_CHUNK_OVERLAP_CHARS: 150
+      INGEST_CHUNKING_ENABLED: "false"
+      INGEST_CHUNKING_STRATEGY: page
+      INGEST_CHUNK_MAX_TOKENS: 768
+      INGEST_CHUNK_TOKENIZER_PATH: ""
       INGEST_RETENTION_DAYS: 30
     ports:
       - "8000:8000"

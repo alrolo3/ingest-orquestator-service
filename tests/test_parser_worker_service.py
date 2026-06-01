@@ -4,9 +4,6 @@ from pathlib import Path
 import pytest
 
 from ingest_orquestator_server.application.parser_registry import ParserRegistry
-from ingest_orquestator_server.application.services.document_chunking_service import (
-    DocumentChunkingService,
-)
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseResult,
     DocumentParseService,
@@ -33,6 +30,9 @@ from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writ
 )
 from ingest_orquestator_server.infrastructure.filesystem.local_upload_storage import (
     LocalUploadStorage,
+)
+from ingest_orquestator_server.infrastructure.parser.parser_chunking_factory import (
+    build_parser_chunking_service,
 )
 from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_repository import (
     SqliteIngestionJobRepository,
@@ -489,7 +489,7 @@ def _build_parse_service(settings: Settings) -> DocumentParseService:
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
 
 

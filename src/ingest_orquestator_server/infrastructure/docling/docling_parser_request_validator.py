@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ingest_orquestator_server.config.chunking import validate_chunking_strategy
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.infrastructure.docling.docling_formats import (
     detect_input_format,
@@ -20,10 +19,7 @@ class DoclingParserRequestValidator:
         *,
         filename: str,
         pipeline: str | None,
-        chunking_strategy: str | None = None,
     ) -> None:
         input_format = detect_input_format(Path(filename))
         validate_allowed_format(input_format, self._settings.docling_allowed_formats)
         resolve_pipeline_mode(pipeline or self._settings.docling_pipeline, input_format)
-        if chunking_strategy is not None:
-            validate_chunking_strategy(chunking_strategy)

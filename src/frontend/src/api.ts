@@ -16,7 +16,9 @@ export function buildIngestQuery(options: IngestionOptions): string {
   params.set("parser", options.parser);
   params.set("pipeline", options.pipeline);
   params.set("chunking_enabled", String(options.chunkingEnabled));
-  params.set("chunking_strategy", options.chunkingStrategy);
+  if (options.chunkingEnabled) {
+    params.set("chunking_strategy", options.chunkingStrategy);
+  }
   params.set("dispatch_sink_mode", options.dispatchSinkMode);
   if (options.ocrLanguages.length > 0) {
     params.set("ocr_languages", options.ocrLanguages.join(","));

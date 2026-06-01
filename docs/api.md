@@ -26,7 +26,7 @@ Returns UI-safe ingestion option metadata:
 
 - allowed upload extensions and max upload size.
 - supported parsers and pipelines.
-- chunking defaults and supported chunking strategies.
+- parser-specific chunking defaults and supported chunking strategies.
 - runtime metadata such as sink mode, OCR engine, VLM model, and Elastic index.
 - output artifact types and job statuses.
 
@@ -56,7 +56,9 @@ Query parameters:
   is used.
 - `chunking_enabled`: optional request-level chunking override.
 - `chunking_strategy`: optional request-level strategy override. Supported
-  values are `hybrid`, `line_based`, and `legacy_char`.
+  values are parser-specific and discoverable from `/v1/ingest/capabilities`.
+  Docling currently exposes `token` and `page`; `line` is a platform strategy
+  name but is not implemented for Docling yet.
 - `ocr_languages`: optional comma-separated OCR language list. OCR is always
   enabled and defaults to `en`.
 - `async_mode`: deprecated compatibility parameter. In v1.5 all ingest calls
@@ -98,7 +100,8 @@ Use `status_url` to poll the job and `outputs_url` after the job reaches
 Docling formats use `pipeline=standard`.
 
 Use `chunking_enabled=false` when a downstream embedding store will do its own
-chunking.
+chunking. Use the selected parser's capability entry before sending
+`chunking_strategy`.
 
 In v1.5, ingestion always uses the internal queue. The status starts as
 `parser_queued`, then progresses through `parsing`, `parsed`, `dispatch_queued`,

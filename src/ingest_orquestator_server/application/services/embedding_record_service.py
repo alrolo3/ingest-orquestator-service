@@ -48,7 +48,8 @@ class EmbeddingRecordService:
                         "picture_description_runtime_requested": document_metadata.get(
                             "picture_description_runtime_requested"
                         ),
-                        "chunker_strategy": chunk.metadata.get("chunker_strategy"),
+                        "chunking_strategy": chunk.metadata.get("chunking_strategy")
+                        or chunk.metadata.get("chunker_strategy"),
                         "confidence": document.metadata.get("docling_result", {}).get(
                             "confidence_summary", {}
                         ),

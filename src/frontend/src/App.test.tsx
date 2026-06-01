@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -48,7 +48,21 @@ describe("App", () => {
             service: "ingest-orquestator-server",
             max_upload_size_mb: 100,
             allowed_upload_extensions: [".pdf", ".md"],
-            parsers: [{ value: "docling", label: "Docling", default: true }],
+            parsers: [
+              {
+                value: "docling",
+                label: "Docling",
+                default: true,
+                chunking: {
+                  enabled: true,
+                  default_strategy: "page",
+                  strategies: [
+                    { value: "token", label: "Token" },
+                    { value: "page", label: "Page" },
+                  ],
+                },
+              },
+            ],
             pipelines: [
               { value: "standard", label: "Standard", default: true },
               { value: "vlm", label: "VLM" },
@@ -73,11 +87,22 @@ describe("App", () => {
             },
             chunking: {
               enabled: true,
-              default_strategy: "hybrid",
+              default_strategy: "page",
               strategies: [
-                { value: "hybrid", label: "Hybrid" },
-                { value: "line_based", label: "Line Based" },
+                { value: "token", label: "Token" },
+                { value: "page", label: "Page" },
+                { value: "line", label: "Line" },
               ],
+              by_parser: {
+                docling: {
+                  enabled: true,
+                  default_strategy: "page",
+                  strategies: [
+                    { value: "token", label: "Token" },
+                    { value: "page", label: "Page" },
+                  ],
+                },
+              },
             },
             runtime: {},
             output_types: ["metadata", "markdown", "rag", "html"],
@@ -112,5 +137,29 @@ describe("App", () => {
 
     expect(await screen.findByText("ingest-parser")).toBeInTheDocument();
     expect(screen.getByText("example.pdf")).toBeInTheDocument();
+  });
+
+  it("renders chunking toggle before parser-dependent strategy options", async () => {
+    render(<App />);
+
+    const chunkingToggle = await screen.findByRole("checkbox", { name: "Chunking" });
+    expect(screen.queryByLabelText("Chunking strategy")).not.toBeInTheDocument();
+
+    fireEvent.click(chunkingToggle);
+
+    const chunkingStrategy = screen.getByLabelText("Chunking strategy");
+
+    expect(chunkingToggle.compareDocumentPosition(chunkingStrategy)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(within(chunkingStrategy).getByRole("option", { name: "Token" })).toBeInTheDocument();
+    expect(within(chunkingStrategy).getByRole("option", { name: "Page" })).toBeInTheDocument();
+    expect(
+      within(chunkingStrategy).queryByRole("option", { name: "Line" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(chunkingToggle);
+
+    expect(screen.queryByLabelText("Chunking strategy")).not.toBeInTheDocument();
   });
 });

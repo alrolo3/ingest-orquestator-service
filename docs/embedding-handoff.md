@@ -97,7 +97,7 @@ spool in a future version.
 The dispatcher sends a lean chunk document to Elasticsearch. Each indexed chunk
 contains the stable fields needed for RAG retrieval and filtering:
 `record_id`, `document_id`, `chunk_id`, `content`, `title`,
-`source_file_name`, `input_format`, `parser`, `pipeline`, `chunker_strategy`,
+`source_file_name`, `input_format`, `parser`, `pipeline`, `chunking_strategy`,
 page span, element types, and confidence scores. Full Docling metadata,
 runtime diagnostics, provenance boxes, local paths, and raw duplicate text stay
 in the local document artifacts instead of being repeated in every indexed

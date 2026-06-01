@@ -122,6 +122,7 @@ class FileIngestionService:
             filename=upload.filename or "",
             parser_name=parser_name,
             pipeline=pipeline,
+            chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
         )
         job_id = str(uuid4())

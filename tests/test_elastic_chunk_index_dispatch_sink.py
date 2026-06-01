@@ -103,7 +103,7 @@ def test_elastic_dispatcher_uses_semantic_text_v2_without_bulk_action_pipeline(
         "input_format",
         "parser",
         "pipeline",
-        "chunker_strategy",
+        "chunking_strategy",
         "page_start",
         "page_end",
         "confidence",
@@ -137,7 +137,7 @@ def _item(tmp_path: Path) -> ParsedDocumentDispatchItem:
             "source_path": str(tmp_path / "private.pdf"),
             "raw_text": "private raw content",
             "title": "Quarterly Revenue",
-            "chunker_strategy": "hybrid",
+            "chunking_strategy": "token",
             "confidence_summary": {"mean_score": 0.95},
         },
     )

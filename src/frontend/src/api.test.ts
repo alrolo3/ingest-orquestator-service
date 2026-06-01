@@ -13,7 +13,7 @@ describe("buildIngestQuery", () => {
       parser: "docling",
       pipeline: "vlm",
       chunkingEnabled: false,
-      chunkingStrategy: "line_based",
+      chunkingStrategy: "page",
       dispatchSinkMode: "elastic",
       ocrLanguages: ["es", "en"],
       asyncMode: true,
@@ -26,12 +26,31 @@ describe("buildIngestQuery", () => {
     expect(params.get("parser")).toBe("docling");
     expect(params.get("pipeline")).toBe("vlm");
     expect(params.get("chunking_enabled")).toBe("false");
-    expect(params.get("chunking_strategy")).toBe("line_based");
+    expect(params.get("chunking_strategy")).toBeNull();
     expect(params.get("dispatch_sink_mode")).toBe("elastic");
     expect(params.get("ocr_languages")).toBe("es,en");
     expect(params.get("async_mode")).toBe("true");
     expect(params.get("include_document")).toBe("false");
     expect(params.get("include_html")).toBe("true");
+  });
+
+  it("serializes strategy only when request-level chunking is enabled", () => {
+    const options: IngestionOptions = {
+      parser: "docling",
+      pipeline: "standard",
+      chunkingEnabled: true,
+      chunkingStrategy: "token",
+      dispatchSinkMode: "local",
+      ocrLanguages: [],
+      asyncMode: false,
+      includeDocument: true,
+      includeHtml: false,
+    };
+
+    const params = new URLSearchParams(buildIngestQuery(options));
+
+    expect(params.get("chunking_enabled")).toBe("true");
+    expect(params.get("chunking_strategy")).toBe("token");
   });
 });
 

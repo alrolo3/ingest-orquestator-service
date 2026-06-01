@@ -39,10 +39,12 @@ import {
 } from "./status";
 import type {
   CapabilityOption,
+  ChunkingStrategy,
   IngestionCapabilities,
   IngestionJob,
   IngestionOptions,
   JobStatus,
+  ParserChunkingCapabilities,
   QueueMetrics,
   QueueStageMetrics,
   TrackedJob,
@@ -54,8 +56,8 @@ const jobPollingIntervalMs = 5000;
 const defaultOptions: IngestionOptions = {
   parser: "docling",
   pipeline: "standard",
-  chunkingEnabled: true,
-  chunkingStrategy: "hybrid",
+  chunkingEnabled: false,
+  chunkingStrategy: "page",
   dispatchSinkMode: "local",
   ocrLanguages: ["en"],
   asyncMode: false,
@@ -93,7 +95,11 @@ function App() {
           parser: current.parser || data.default_parser,
           pipeline: current.pipeline || data.default_pipeline,
           chunkingEnabled: current.chunkingEnabled ?? data.chunking.enabled,
-          chunkingStrategy: current.chunkingStrategy || data.chunking.default_strategy,
+          chunkingStrategy: defaultChunkingStrategyForParser(
+            data,
+            current.parser || data.default_parser,
+            current.chunkingStrategy,
+          ),
           dispatchSinkMode: current.dispatchSinkMode || data.default_dispatch_sink_mode,
           ocrLanguages:
             current.ocrLanguages?.length > 0 ? current.ocrLanguages : data.ocr.default_languages,
@@ -473,6 +479,11 @@ function UploadPanel(props: UploadPanelProps) {
   const disabled = files.length === 0 || submitting;
   const fileErrors = files.map((file) => validateFile(file, capabilities));
   const hasInvalidFiles = fileErrors.some(Boolean);
+  const parserChunking = chunkingCapabilitiesForParser(capabilities, options.parser);
+  const chunkingStrategies = parserChunking?.strategies ?? [
+    { value: "token", label: "Token" },
+    { value: "page", label: "Page" },
+  ];
 
   return (
     <form className="upload-panel" onSubmit={onSubmit}>
@@ -534,7 +545,17 @@ function UploadPanel(props: UploadPanelProps) {
             label="Parser"
             value={options.parser}
             options={capabilities?.parsers ?? [{ value: "docling", label: "Docling" }]}
-            onChange={(value) => onOptionsChange({ ...options, parser: value })}
+            onChange={(value) =>
+              onOptionsChange({
+                ...options,
+                parser: value,
+                chunkingStrategy: defaultChunkingStrategyForParser(
+                  capabilities,
+                  value,
+                  options.chunkingStrategy,
+                ),
+              })
+            }
           />
           <SelectField
             label="Pipeline"
@@ -550,24 +571,36 @@ function UploadPanel(props: UploadPanelProps) {
               onOptionsChange({ ...options, pipeline: value as IngestionOptions["pipeline"] })
             }
           />
-          <SelectField
+          <Toggle
+            checked={options.chunkingEnabled}
             label="Chunking"
-            value={options.chunkingStrategy}
-            options={
-              capabilities?.chunking.strategies ?? [
-                { value: "hybrid", label: "Hybrid" },
-                { value: "line_based", label: "Line Based" },
-                { value: "legacy_char", label: "Legacy Char" },
-              ]
-            }
-            onChange={(value) =>
+            onChange={(checked) =>
               onOptionsChange({
                 ...options,
-                chunkingStrategy: value as IngestionOptions["chunkingStrategy"],
+                chunkingEnabled: checked,
+                chunkingStrategy: checked
+                  ? defaultChunkingStrategyForParser(
+                      capabilities,
+                      options.parser,
+                      options.chunkingStrategy,
+                    )
+                  : options.chunkingStrategy,
               })
             }
-            disabled={!options.chunkingEnabled}
           />
+          {options.chunkingEnabled ? (
+            <SelectField
+              label="Chunking strategy"
+              value={options.chunkingStrategy}
+              options={chunkingStrategies}
+              onChange={(value) =>
+                onOptionsChange({
+                  ...options,
+                  chunkingStrategy: value as IngestionOptions["chunkingStrategy"],
+                })
+              }
+            />
+          ) : null}
           <SelectField
             label="Dispatcher"
             value={options.dispatchSinkMode}
@@ -599,11 +632,6 @@ function UploadPanel(props: UploadPanelProps) {
           />
         </div>
         <div className="toggle-row">
-          <Toggle
-            checked={options.chunkingEnabled}
-            label="Chunking"
-            onChange={(checked) => onOptionsChange({ ...options, chunkingEnabled: checked })}
-          />
           <Toggle
             checked={options.includeDocument}
             label="Include document"
@@ -1088,6 +1116,44 @@ function validateFile(file: File, capabilities: IngestionCapabilities | null): s
     return `Over ${capabilities.max_upload_size_mb} MB`;
   }
   return null;
+}
+
+function chunkingCapabilitiesForParser(
+  capabilities: IngestionCapabilities | null,
+  parser: string,
+): ParserChunkingCapabilities | null {
+  if (!capabilities) {
+    return null;
+  }
+  return (
+    capabilities.chunking.by_parser?.[parser] ??
+    capabilities.parsers.find((option) => option.value === parser)?.chunking ??
+    {
+      enabled: capabilities.chunking.enabled,
+      default_strategy: capabilities.chunking.default_strategy,
+      strategies: capabilities.chunking.strategies,
+    }
+  );
+}
+
+function defaultChunkingStrategyForParser(
+  capabilities: IngestionCapabilities | null,
+  parser: string,
+  current?: ChunkingStrategy,
+): ChunkingStrategy {
+  const chunking = chunkingCapabilitiesForParser(capabilities, parser);
+  const strategies = chunking?.strategies ?? [
+    { value: "token", label: "Token" },
+    { value: "page", label: "Page" },
+  ];
+  if (current && strategies.some((strategy) => strategy.value === current)) {
+    return current;
+  }
+  return (
+    (chunking?.default_strategy as ChunkingStrategy | undefined) ??
+    (strategies[0]?.value as ChunkingStrategy | undefined) ??
+    "page"
+  );
 }
 
 function hasOutput(job: IngestionJob, outputType: string): boolean {

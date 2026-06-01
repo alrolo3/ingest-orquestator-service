@@ -74,13 +74,7 @@ class ChunkingConfig(BaseModel):
     enabled: bool
     strategy: str
     max_tokens: int
-    tokenizer_model: str | None
-    merge_peers: bool
-    repeat_table_header: bool
-    omit_header_on_overflow: bool
-    omit_prefix_on_overflow: bool
-    chunk_size_chars: int
-    chunk_overlap_chars: int
+    tokenizer_path: Path | None
     embedding_output_enabled: bool
 
 

@@ -126,7 +126,9 @@ The environment chooses:
 - `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda`
 - `INGEST_DOCLING_NUM_THREADS=32`
 - `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false`
-- Docling HybridChunker enabled with `INGEST_CHUNK_MAX_TOKENS=1024`
+- request-level Docling chunking defaults to disabled, with page chunking as
+  the compatibility fallback and `INGEST_CHUNK_MAX_TOKENS=1024` for token
+  chunking requests
 - confidence output enabled
 - Docling engine cache enabled, no idle eviction, and compatible conversion
   batching up to 5 documents

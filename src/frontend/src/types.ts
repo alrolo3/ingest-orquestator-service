@@ -15,7 +15,7 @@ export type JobStatus =
   | "failed";
 
 export type Pipeline = "standard" | "vlm" | "auto";
-export type ChunkingStrategy = "hybrid" | "line_based" | "legacy_char";
+export type ChunkingStrategy = "token" | "page" | "line";
 export type DispatchSinkMode = "local" | "elastic" | "local_and_elastic";
 
 export interface CapabilityOption {
@@ -23,6 +23,13 @@ export interface CapabilityOption {
   label: string;
   default?: boolean;
   supported_input_formats?: string[];
+  chunking?: ParserChunkingCapabilities;
+}
+
+export interface ParserChunkingCapabilities {
+  enabled: boolean;
+  default_strategy?: ChunkingStrategy | null;
+  strategies: CapabilityOption[];
 }
 
 export interface IngestionCapabilities {
@@ -43,8 +50,9 @@ export interface IngestionCapabilities {
   };
   chunking: {
     enabled: boolean;
-    default_strategy: ChunkingStrategy;
+    default_strategy?: ChunkingStrategy | null;
     strategies: CapabilityOption[];
+    by_parser?: Record<string, ParserChunkingCapabilities>;
   };
   runtime: Record<string, unknown>;
   output_types: string[];

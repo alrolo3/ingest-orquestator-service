@@ -80,16 +80,10 @@ class Settings(BaseSettings):
             ".xbrl",
         ]
     )
-    chunk_size_chars: int = Field(default=1200, ge=100)
-    chunk_overlap_chars: int = Field(default=150, ge=0)
-    chunking_enabled: bool = True
-    chunking_strategy: str = "hybrid"
+    chunking_enabled: bool = False
+    chunking_strategy: str = "page"
     chunk_max_tokens: int = Field(default=768, ge=32)
-    chunk_tokenizer_model: str | None = None
-    chunk_merge_peers: bool = True
-    chunk_repeat_table_header: bool = True
-    chunk_omit_header_on_overflow: bool = False
-    chunk_omit_prefix_on_overflow: bool = False
+    chunk_tokenizer_path: Path | None = None
     confidence_output_enabled: bool = True
     confidence_min_document_score: float | None = Field(default=None, ge=0, le=1)
     confidence_warn_only: bool = True
@@ -212,10 +206,12 @@ class Settings(BaseSettings):
     @field_validator("chunking_strategy")
     @classmethod
     def validate_chunking_strategy(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized in {"hybrid", "line_based", "legacy_char"}:
-            return normalized
-        raise ValueError("must be one of hybrid, line_based, or legacy_char")
+        from ingest_orquestator_server.models.chunking import normalize_chunking_strategy
+
+        try:
+            return normalize_chunking_strategy(value).value
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
 
     @field_validator("docling_pdf_layout_model", "docling_pdf_picture_classifier_preset")
     @classmethod
@@ -304,6 +300,7 @@ class Settings(BaseSettings):
         "embedding_elastic_pipeline",
         "docling_remote_llm_model",
         "docling_remote_llm_api_key",
+        "chunk_tokenizer_path",
         mode="before",
     )
     @classmethod
@@ -547,13 +544,7 @@ class Settings(BaseSettings):
             enabled=self.chunking_enabled,
             strategy=self.chunking_strategy,
             max_tokens=self.chunk_max_tokens,
-            tokenizer_model=self.chunk_tokenizer_model,
-            merge_peers=self.chunk_merge_peers,
-            repeat_table_header=self.chunk_repeat_table_header,
-            omit_header_on_overflow=self.chunk_omit_header_on_overflow,
-            omit_prefix_on_overflow=self.chunk_omit_prefix_on_overflow,
-            chunk_size_chars=self.chunk_size_chars,
-            chunk_overlap_chars=self.chunk_overlap_chars,
+            tokenizer_path=self.chunk_tokenizer_path,
             embedding_output_enabled=self.embedding_output_enabled,
         )
 

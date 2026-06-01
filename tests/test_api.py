@@ -11,9 +11,6 @@ from ingest_orquestator_server.api.dependencies import (
     get_queue_metrics_service,
 )
 from ingest_orquestator_server.application.parser_registry import ParserRegistry
-from ingest_orquestator_server.application.services.document_chunking_service import (
-    DocumentChunkingService,
-)
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
@@ -44,6 +41,9 @@ from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writ
 from ingest_orquestator_server.infrastructure.filesystem.local_upload_storage import (
     LocalUploadStorage,
 )
+from ingest_orquestator_server.infrastructure.parser.parser_chunking_factory import (
+    build_parser_chunking_service,
+)
 from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_repository import (
     SqliteIngestionJobRepository,
 )
@@ -71,8 +71,8 @@ def test_ingest_capabilities_exposes_ui_safe_options(tmp_path: Path) -> None:
         storage_dir=tmp_path,
         allowed_upload_extensions=[".pdf", ".md"],
         docling_pipeline="standard",
-        chunking_enabled=True,
-        chunking_strategy="hybrid",
+        chunking_enabled=False,
+        chunking_strategy="page",
         embedding_elastic_password="secret",
     )
     from ingest_orquestator_server.config.settings import get_settings
@@ -87,7 +87,13 @@ def test_ingest_capabilities_exposes_ui_safe_options(tmp_path: Path) -> None:
         assert body["default_parser"] == "docling"
         assert body["default_pipeline"] == "standard"
         assert body["allowed_upload_extensions"] == [".md", ".pdf"]
-        assert body["chunking"]["default_strategy"] == "hybrid"
+        assert body["chunking"]["enabled"] is False
+        assert body["chunking"]["default_strategy"] == "page"
+        assert [item["value"] for item in body["parsers"][0]["chunking"]["strategies"]] == [
+            "token",
+            "page",
+        ]
+        assert body["chunking"]["by_parser"]["docling"]["default_strategy"] == "page"
         assert {item["value"] for item in body["pipelines"]} == {
             "standard",
             "vlm",
@@ -115,7 +121,7 @@ def test_ingest_job_and_output_endpoints(tmp_path: Path) -> None:
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,
@@ -199,7 +205,7 @@ def test_batch_ingest_persists_valid_jobs_and_rejections(tmp_path: Path) -> None
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,
@@ -261,7 +267,7 @@ def test_ingest_rejects_vlm_pipeline_for_markdown(tmp_path: Path) -> None:
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,
@@ -295,6 +301,95 @@ def test_ingest_rejects_vlm_pipeline_for_markdown(tmp_path: Path) -> None:
         app.dependency_overrides.clear()
 
 
+def test_ingest_rejects_unsupported_chunking_strategy_before_queueing(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=build_parser_chunking_service(settings),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/file?chunking_enabled=true&chunking_strategy=line",
+            files={"file": ("example.md", b"# Example", "text/markdown")},
+        )
+
+        assert response.status_code == 400
+        assert "does not support" in response.json()["detail"]
+        assert repository.list_active_job_ids() == set()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_ingest_persists_request_level_chunking_options(tmp_path: Path) -> None:
+    settings = Settings(
+        storage_dir=tmp_path,
+        allowed_upload_extensions=[".md"],
+        chunking_enabled=False,
+        chunking_strategy="page",
+    )
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=build_parser_chunking_service(settings),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/file?chunking_enabled=true&chunking_strategy=page",
+            files={"file": ("example.md", b"# Example", "text/markdown")},
+        )
+
+        assert response.status_code == 200
+        stored_job = repository.get(response.json()["job_id"])
+        assert stored_job is not None
+        assert stored_job.metadata["requested_chunking_enabled"] is True
+        assert stored_job.metadata["requested_chunking_strategy"] == "page"
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_ingest_accepts_chunking_controls(tmp_path: Path) -> None:
     settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)
@@ -309,7 +404,7 @@ def test_ingest_accepts_chunking_controls(tmp_path: Path) -> None:
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,
@@ -373,7 +468,7 @@ def test_ingest_accepts_dispatcher_and_ocr_controls(tmp_path: Path) -> None:
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,
@@ -431,7 +526,7 @@ def test_ingest_ocr_language_api_param_controls_parser_options(tmp_path: Path) -
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,
@@ -492,7 +587,7 @@ def test_ingest_rejects_invalid_dispatcher_and_ocr_controls(tmp_path: Path) -> N
                 }
             ),
             output_writer=LocalParseOutputWriter(),
-            chunking_service=DocumentChunkingService(settings),
+            chunking_service=build_parser_chunking_service(settings),
         ),
         job_repository=repository,
         upload_validator=validator,
@@ -532,7 +627,7 @@ def test_async_ingest_queues_and_processes_job(tmp_path: Path) -> None:
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,
@@ -596,7 +691,7 @@ def test_ingest_file_enqueues_parsed_document_handoff_internally(
             }
         ),
         output_writer=LocalParseOutputWriter(),
-        chunking_service=DocumentChunkingService(settings),
+        chunking_service=build_parser_chunking_service(settings),
     )
     dispatch_service = ParsedDocumentDispatchService(
         settings=settings,

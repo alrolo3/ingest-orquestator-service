@@ -91,23 +91,27 @@ RAG/wiki ingestion.
 
 ## Chunking
 
-Chunking is enabled by default because the service produces embedding-ready RAG
-artifacts.
+Chunking is selected per ingestion request. The capability response advertises
+which strategies are valid for each parser.
 
 ```text
-INGEST_CHUNKING_ENABLED=true
-INGEST_CHUNKING_STRATEGY=hybrid
+INGEST_CHUNKING_ENABLED=false
+INGEST_CHUNKING_STRATEGY=page
 INGEST_CHUNK_MAX_TOKENS=768
+INGEST_CHUNK_TOKENIZER_PATH=/datastore/tokenizers/qwen3-embedding-8b
 ```
 
-Supported strategies:
+Docling strategies in this version:
 
-- `hybrid`: Docling `HybridChunker`. This is the default for RAG ingestion.
-- `line_based`: Docling `LineBasedTokenChunker`.
-- `legacy_char`: service-local character chunker retained as a fallback.
+- `token`: Docling `HybridChunker` with a local Hugging Face tokenizer loaded
+  from `INGEST_CHUNK_TOKENIZER_PATH`.
+- `page`: Docling `HierarchicalChunker`.
+- `line`: not implemented for Docling and rejected before the job is queued.
 
-Set `INGEST_CHUNKING_ENABLED=false` or pass `chunking_enabled=false` when the
-embedding database will split the parsed document itself.
+Pass `chunking_enabled=true&chunking_strategy=token` or
+`chunking_enabled=true&chunking_strategy=page` to enable Docling chunking for a
+request. Omit chunking or pass `chunking_enabled=false` when the embedding
+database will split the parsed document itself.
 
 ## Confidence Scores
 

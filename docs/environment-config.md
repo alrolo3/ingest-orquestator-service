@@ -67,16 +67,17 @@ extensions so upload validation and parser support stay aligned.
 
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
-| `INGEST_CHUNKING_ENABLED` | `true` | `true` | `true` or `false`. | Enables chunk generation during ingestion. Disable when the downstream vector database or RAG pipeline owns chunking. |
-| `INGEST_CHUNKING_STRATEGY` | `hybrid` | `hybrid` | `hybrid`, `line_based`, or `legacy_char`. | Chunking strategy. `hybrid` uses Docling `HybridChunker`; `line_based` uses Docling line-based token chunking; `legacy_char` uses the service's character splitter. |
-| `INGEST_CHUNK_MAX_TOKENS` | `768` | `1024` | Integer `>= 32`. | Maximum token budget for Docling chunkers. The current service tokenizer is whitespace-based and uses this as its word budget. |
-| `INGEST_CHUNK_TOKENIZER_MODEL` | unset | `sentence-transformers/all-MiniLM-L6-v2` | Unset or any tokenizer model identifier string. | Optional tokenizer model identifier reserved for tokenizer-aware chunking metadata. The current implementation records this value but uses the built-in whitespace tokenizer. |
-| `INGEST_CHUNK_MERGE_PEERS` | `true` | `true` | `true` or `false`. | Passed to Docling `HybridChunker`. Allows neighboring compatible document items to be merged into larger, more useful RAG chunks. |
-| `INGEST_CHUNK_REPEAT_TABLE_HEADER` | `true` | `true` | `true` or `false`. | Passed to Docling `HybridChunker`. Repeats table headers when tables overflow across chunks so table chunks remain understandable alone. |
-| `INGEST_CHUNK_OMIT_HEADER_ON_OVERFLOW` | `false` | `false` | `true` or `false`. | Passed to Docling `HybridChunker`. When `true`, omits repeated headers if a chunk overflows the token budget. |
-| `INGEST_CHUNK_OMIT_PREFIX_ON_OVERFLOW` | `false` | `false` | `true` or `false`. | Passed to Docling `LineBasedTokenChunker`. When `true`, omits context prefixes when lines overflow the token budget. |
-| `INGEST_CHUNK_SIZE_CHARS` | `1200` | `1200` | Integer `>= 100`. | Character chunk size used only by `legacy_char` or by fallback behavior if Docling chunking fails. |
-| `INGEST_CHUNK_OVERLAP_CHARS` | `150` | `150` | Integer `>= 0`. | Character overlap used only by `legacy_char` or fallback behavior. |
+| `INGEST_CHUNKING_ENABLED` | `false` | `false` | `true` or `false`. | Deprecated compatibility fallback only. Prefer request-level `chunking_enabled`; API values take precedence. |
+| `INGEST_CHUNKING_STRATEGY` | `page` | `page` | `token`, `page`, or `line`. | Deprecated compatibility fallback only. Prefer request-level `chunking_strategy`; parser capabilities decide which values are valid. Legacy `hybrid` is accepted as an alias for `token`; legacy `line_based` is accepted as an alias for `line`, which Docling rejects in this iteration. |
+| `INGEST_CHUNK_MAX_TOKENS` | `768` | `1024` | Integer `>= 32`. | Token budget used by token-based parser chunkers. |
+| `INGEST_CHUNK_TOKENIZER_PATH` | unset | `/datastore/tokenizers/qwen3-embedding-8b` | Local filesystem path. | Local Hugging Face tokenizer directory for token chunking. Runtime tokenizer downloads are not used by default. |
+
+Removed chunking variables: `INGEST_CHUNK_TOKENIZER_MODEL`,
+`INGEST_CHUNK_MERGE_PEERS`, `INGEST_CHUNK_REPEAT_TABLE_HEADER`,
+`INGEST_CHUNK_OMIT_HEADER_ON_OVERFLOW`,
+`INGEST_CHUNK_OMIT_PREFIX_ON_OVERFLOW`, `INGEST_CHUNK_SIZE_CHARS`, and
+`INGEST_CHUNK_OVERLAP_CHARS`. Parser-owned chunkers now own strategy-specific
+implementation details.
 
 ## RAG Output Compatibility
 
@@ -225,7 +226,8 @@ These variables are used by `env-cuda-gpu` but are not part of the Pydantic
   `pipeline`, `chunking_enabled`, and `chunking_strategy`.
 - Direct `pipeline=vlm` mode is supported only for PDF and image inputs in this
   service version.
-- Set `INGEST_CHUNKING_ENABLED=false` or pass `chunking_enabled=false` when the
-  downstream embedding store owns chunking.
+- Prefer request-level `chunking_enabled=false` when the downstream embedding
+  store owns chunking. `INGEST_CHUNKING_ENABLED` remains only as a deprecated
+  fallback for clients that omit chunking options.
 - CPU hosts should normally use `INGEST_DOCLING_PDF_OCR_ENGINE=auto` unless the
   selected OCR plugin is installed and compatible with the platform.

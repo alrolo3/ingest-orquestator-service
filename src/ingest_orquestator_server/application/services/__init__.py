@@ -1,6 +1,3 @@
-from ingest_orquestator_server.application.services.document_chunking_service import (
-    DocumentChunkingService,
-)
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseResult,
     DocumentParseService,
@@ -20,6 +17,9 @@ from ingest_orquestator_server.application.services.parsed_document_dispatch_que
 from ingest_orquestator_server.application.services.parsed_document_dispatch_service import (
     ParsedDocumentDispatchService,
 )
+from ingest_orquestator_server.application.services.parser_chunking_service import (
+    ParserChunkingService,
+)
 from ingest_orquestator_server.application.services.parser_worker_service import (
     ParserWorkerService,
 )
@@ -30,13 +30,13 @@ from ingest_orquestator_server.application.services.storage_cleanup_service impo
 
 __all__ = [
     "CleanupResult",
-    "DocumentChunkingService",
     "DocumentParseResult",
     "DocumentParseService",
     "FileIngestionService",
     "JobQueryService",
     "OutputRetrievalService",
     "OutputType",
+    "ParserChunkingService",
     "ParserWorkerService",
     "ParsedDocumentDispatchQueueError",
     "ParsedDocumentDispatchQueueService",

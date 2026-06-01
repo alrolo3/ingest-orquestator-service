@@ -19,7 +19,9 @@ class RagIngestionRecordService:
         input_format: str | None,
         confidence_summary: dict[str, Any],
         warnings: list[dict[str, Any]],
+        chunking_metadata: dict[str, object] | None = None,
     ) -> list[RagIngestionRecord]:
+        chunking_metadata = chunking_metadata or {}
         if chunks:
             return [
                 self._chunk_record(
@@ -32,6 +34,7 @@ class RagIngestionRecordService:
                     input_format=input_format,
                     confidence_summary=confidence_summary,
                     warnings=warnings,
+                    chunking_metadata=chunking_metadata,
                 )
                 for index, chunk in enumerate(chunks)
                 if chunk.text.strip()
@@ -55,6 +58,7 @@ class RagIngestionRecordService:
                     document=document,
                     confidence_summary=confidence_summary,
                     warnings=warnings,
+                    chunking_metadata=chunking_metadata,
                 ),
             )
         ]
@@ -71,6 +75,7 @@ class RagIngestionRecordService:
         input_format: str | None,
         confidence_summary: dict[str, Any],
         warnings: list[dict[str, Any]],
+        chunking_metadata: dict[str, object],
     ) -> RagIngestionRecord:
         return RagIngestionRecord(
             record_id=f"{document.document_id}:rag:{index + 1}",
@@ -91,6 +96,7 @@ class RagIngestionRecordService:
                 chunk=chunk,
                 confidence_summary=confidence_summary,
                 warnings=warnings,
+                chunking_metadata=chunking_metadata,
             ),
         )
 
@@ -101,6 +107,7 @@ class RagIngestionRecordService:
         confidence_summary: dict[str, Any],
         warnings: list[dict[str, Any]],
         chunk: DocumentChunk | None = None,
+        chunking_metadata: dict[str, object] | None = None,
     ) -> dict[str, Any]:
         metadata: dict[str, Any] = {
             "mime_type": document.mime_type,
@@ -108,6 +115,7 @@ class RagIngestionRecordService:
             "confidence_summary": confidence_summary,
             "warning_count": len(warnings),
             "warnings": warnings,
+            **(chunking_metadata or {}),
         }
         if chunk is not None:
             metadata |= {

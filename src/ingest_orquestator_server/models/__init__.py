@@ -1,3 +1,9 @@
+from ingest_orquestator_server.models.chunking import (
+    ChunkingSelection,
+    ChunkingStrategy,
+    ChunkingStrategyCapability,
+    ParserChunkingCapabilities,
+)
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
 from ingest_orquestator_server.models.document_element import DocumentElement
 from ingest_orquestator_server.models.document_page import DocumentPage
@@ -32,6 +38,9 @@ from ingest_orquestator_server.models.rag_ingestion import RagIngestionRecord, R
 
 __all__ = [
     "DispatchQueueCounts",
+    "ChunkingSelection",
+    "ChunkingStrategy",
+    "ChunkingStrategyCapability",
     "DocumentChunk",
     "DocumentElement",
     "DocumentPage",
@@ -52,6 +61,7 @@ __all__ = [
     "ParseOutput",
     "ParseProgressCallback",
     "ParseProgressUpdate",
+    "ParserChunkingCapabilities",
     "QueueJobSummary",
     "QueueMetrics",
     "QueueStageMetrics",

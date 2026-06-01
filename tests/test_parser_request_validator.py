@@ -11,14 +11,17 @@ from ingest_orquestator_server.application.validation.parser_request_validator i
     ParserRequestValidationService,
 )
 from ingest_orquestator_server.config import Settings
+from ingest_orquestator_server.infrastructure.docling.docling_chunker import DoclingParserChunker
 from ingest_orquestator_server.infrastructure.docling.docling_parser_request_validator import (
     DoclingParserRequestValidator,
 )
 
 
 def test_parser_request_validator_accepts_docling_standard_markdown(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path)
     validator = ParserRequestValidationService(
-        {"docling": DoclingParserRequestValidator(Settings(storage_dir=tmp_path))}
+        {"docling": DoclingParserRequestValidator(settings)},
+        {"docling": DoclingParserChunker(settings)},
     )
 
     validator.validate(
@@ -29,8 +32,10 @@ def test_parser_request_validator_accepts_docling_standard_markdown(tmp_path: Pa
 
 
 def test_parser_request_validator_rejects_docling_vlm_for_markdown(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path)
     validator = ParserRequestValidationService(
-        {"docling": DoclingParserRequestValidator(Settings(storage_dir=tmp_path))}
+        {"docling": DoclingParserRequestValidator(settings)},
+        {"docling": DoclingParserChunker(settings)},
     )
 
     with pytest.raises(UnsupportedPipelineError, match="PDF and image"):
@@ -42,8 +47,10 @@ def test_parser_request_validator_rejects_docling_vlm_for_markdown(tmp_path: Pat
 
 
 def test_parser_request_validator_ignores_unknown_parser(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path)
     validator = ParserRequestValidationService(
-        {"docling": DoclingParserRequestValidator(Settings(storage_dir=tmp_path))}
+        {"docling": DoclingParserRequestValidator(settings)},
+        {"docling": DoclingParserChunker(settings)},
     )
 
     validator.validate(
@@ -55,12 +62,10 @@ def test_parser_request_validator_ignores_unknown_parser(tmp_path: Path) -> None
 
 
 def test_parser_request_validator_rejects_disabled_docling_format(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".pdf"])
     validator = ParserRequestValidationService(
-        {
-            "docling": DoclingParserRequestValidator(
-                Settings(storage_dir=tmp_path, allowed_upload_extensions=[".pdf"])
-            )
-        }
+        {"docling": DoclingParserRequestValidator(settings)},
+        {"docling": DoclingParserChunker(settings)},
     )
 
     with pytest.raises(UnsupportedDocumentFormatError, match="disabled"):
@@ -72,8 +77,10 @@ def test_parser_request_validator_rejects_disabled_docling_format(tmp_path: Path
 
 
 def test_parser_request_validator_rejects_docling_chunking_strategy(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path)
     validator = ParserRequestValidationService(
-        {"docling": DoclingParserRequestValidator(Settings(storage_dir=tmp_path))}
+        {"docling": DoclingParserRequestValidator(settings)},
+        {"docling": DoclingParserChunker(settings)},
     )
 
     with pytest.raises(UnsupportedIngestionOptionError, match="chunking_strategy"):
@@ -82,4 +89,23 @@ def test_parser_request_validator_rejects_docling_chunking_strategy(tmp_path: Pa
             parser_name="docling",
             pipeline="standard",
             chunking_strategy="unknown",
+        )
+
+
+def test_parser_request_validator_rejects_unsupported_docling_line_chunking(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    validator = ParserRequestValidationService(
+        {"docling": DoclingParserRequestValidator(settings)},
+        {"docling": DoclingParserChunker(settings)},
+    )
+
+    with pytest.raises(UnsupportedIngestionOptionError, match="does not support.*line"):
+        validator.validate(
+            filename="example.md",
+            parser_name="docling",
+            pipeline="standard",
+            chunking_enabled=True,
+            chunking_strategy="line",
         )

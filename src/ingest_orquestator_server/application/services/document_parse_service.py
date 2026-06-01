@@ -7,8 +7,8 @@ from time import perf_counter
 
 from ingest_orquestator_server.application.parser_registry import ParserRegistry
 from ingest_orquestator_server.application.ports.parse_output_writer import ParseOutputWriter
-from ingest_orquestator_server.application.services.document_chunking_service import (
-    DocumentChunkingService,
+from ingest_orquestator_server.application.services.parser_chunking_service import (
+    ParserChunkingService,
 )
 from ingest_orquestator_server.application.services.rag_ingestion_record_service import (
     RagIngestionRecordService,
@@ -33,7 +33,7 @@ class DocumentParseService:
         *,
         parser_registry: ParserRegistry,
         output_writer: ParseOutputWriter,
-        chunking_service: DocumentChunkingService,
+        chunking_service: ParserChunkingService,
         rag_record_service: RagIngestionRecordService | None = None,
         embedding_output_enabled: bool = True,
     ) -> None:
@@ -145,18 +145,14 @@ class DocumentParseService:
     ) -> DocumentParseResult:
         if parse_output.normalized_document is None:
             raise RuntimeError("Parser output did not include a normalized document.")
-        chunking_is_enabled = self._chunking_service.is_enabled(
-            chunking_enabled=chunking_enabled,
-        )
-        requested_chunking_strategy = self._chunking_service.strategy(
-            chunking_strategy=chunking_strategy,
-        )
-        chunks = self._chunking_service.chunk(
+        chunks, chunking_selection = self._chunking_service.chunk(
             parse_output.normalized_document,
+            parser_name=parser_name,
             chunking_document=parse_output.chunking_document,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
         )
+        chunking_metadata = chunking_selection.metadata()
         pipeline_name = parse_output.metadata.get("pipeline")
         input_format = parse_output.metadata.get("input_format")
         rag_records = self._rag_record_service.build_records(
@@ -168,6 +164,7 @@ class DocumentParseService:
             input_format=str(input_format) if input_format is not None else None,
             confidence_summary=parse_output.confidence_summary,
             warnings=parse_output.warnings,
+            chunking_metadata=chunking_metadata,
         )
         completed_at = datetime.now(UTC)
         diagnostics = ParseDiagnostics(
@@ -178,10 +175,7 @@ class DocumentParseService:
             chunk_count=len(chunks),
             metadata={
                 **parse_output.metadata,
-                "chunking_enabled": chunking_is_enabled,
-                "chunking_strategy": chunks[0].metadata.get("chunker_strategy")
-                if chunks
-                else requested_chunking_strategy,
+                **chunking_metadata,
                 "rag_record_count": len(rag_records),
                 "include_html": include_html,
                 "conversion_status": parse_output.conversion_status,

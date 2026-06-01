@@ -88,7 +88,8 @@ class ElasticChunkIndexDispatchSink:
             "input_format": record.input_format or item.metadata.get("input_format"),
             "parser": record.parser or item.metadata.get("parser"),
             "pipeline": record.pipeline or item.metadata.get("pipeline"),
-            "chunker_strategy": metadata.get("chunker_strategy"),
+            "chunking_strategy": metadata.get("chunking_strategy")
+            or metadata.get("chunker_strategy"),
             "page_start": record.page_start,
             "page_end": record.page_end,
             "element_types": metadata.get("element_types", []),

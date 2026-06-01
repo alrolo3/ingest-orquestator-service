@@ -4,6 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from ingest_orquestator_server.application.ports.parser_chunker import ParserChunker
+from ingest_orquestator_server.application.services.parser_chunking_service import (
+    ParserChunkingService,
+)
 from ingest_orquestator_server.config.settings import Settings
 
 
@@ -13,7 +17,6 @@ class ParserSpecificRequestValidator(Protocol):
         *,
         filename: str,
         pipeline: str | None,
-        chunking_strategy: str | None = None,
     ) -> None: ...
 
 
@@ -24,6 +27,7 @@ class ParserRequestValidator(Protocol):
         filename: str,
         parser_name: str,
         pipeline: str | None,
+        chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> None: ...
 
@@ -31,6 +35,9 @@ class ParserRequestValidator(Protocol):
 @dataclass(frozen=True)
 class ParserRequestValidationService:
     validators: Mapping[str, ParserSpecificRequestValidator]
+    chunkers: Mapping[str, ParserChunker]
+    default_chunking_enabled: bool = False
+    default_chunking_strategy: str | None = None
 
     def validate(
         self,
@@ -38,6 +45,7 @@ class ParserRequestValidationService:
         filename: str,
         parser_name: str,
         pipeline: str | None,
+        chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> None:
         validator = self.validators.get(parser_name)
@@ -46,6 +54,14 @@ class ParserRequestValidationService:
         validator.validate(
             filename=filename,
             pipeline=pipeline,
+        )
+        ParserChunkingService(
+            self.chunkers,
+            default_enabled=self.default_chunking_enabled,
+            default_strategy=self.default_chunking_strategy,
+        ).validate_request(
+            parser_name=parser_name,
+            chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
         )
 

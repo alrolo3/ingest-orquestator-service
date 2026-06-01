@@ -11,6 +11,9 @@ from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_engine import (
     DoclingConversionScheduler,
 )
+from ingest_orquestator_server.infrastructure.parser.parser_chunking_factory import (
+    build_parser_chunking_service,
+)
 
 router = APIRouter(prefix="/v1/ingest")
 
@@ -21,6 +24,10 @@ def ingestion_capabilities(
 ) -> dict[str, object]:
     """Return UI-safe ingestion options without loading parser models."""
 
+    chunking_service = build_parser_chunking_service(settings)
+    docling_chunking = chunking_service.capabilities_for("docling")
+    docling_chunking_payload = docling_chunking.model_dump(mode="json")
+
     return {
         "service": settings.service_name,
         "max_upload_size_mb": settings.max_upload_size_mb,
@@ -30,6 +37,7 @@ def ingestion_capabilities(
                 "value": "docling",
                 "label": "Docling",
                 "default": True,
+                "chunking": docling_chunking_payload,
             }
         ],
         "pipelines": [
@@ -78,12 +86,11 @@ def ingestion_capabilities(
         },
         "chunking": {
             "enabled": settings.chunking_enabled,
-            "default_strategy": settings.chunking_strategy,
-            "strategies": [
-                {"value": "hybrid", "label": "Hybrid"},
-                {"value": "line_based", "label": "Line Based"},
-                {"value": "legacy_char", "label": "Legacy Char"},
-            ],
+            "default_strategy": docling_chunking_payload["default_strategy"],
+            "strategies": docling_chunking_payload["strategies"],
+            "by_parser": {
+                "docling": docling_chunking_payload,
+            },
         },
         "runtime": {
             "dispatch_sink_mode": settings.dispatch_sink_mode,

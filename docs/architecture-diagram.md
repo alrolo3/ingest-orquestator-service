@@ -33,7 +33,7 @@ flowchart TB
     subgraph Application["Application Layer"]
         FileIngestion["FileIngestionService"]
         ParseService["DocumentParseService"]
-        Chunking["DocumentChunkingService"]
+        Chunking["ParserChunkingService"]
         OutputRetrieval["OutputRetrievalService"]
         JobQuery["JobQueryService"]
         ParserWorkers["ParserWorkerService"]
@@ -112,7 +112,7 @@ sequenceDiagram
     participant Parser as "DoclingDocumentParser"
     participant Converter as "Docling DocumentConverter"
     participant Normalizer as "Docling normalizer"
-    participant Chunker as "DocumentChunkingService"
+    participant Chunker as "ParserChunkingService"
     participant Jobs as "SQLite job repository"
     participant Queue as "Full-document dispatch queue"
     participant Dispatch as "Dispatcher service thread"

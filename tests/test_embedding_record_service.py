@@ -36,7 +36,7 @@ def test_embedding_records_include_chunk_and_docling_metadata() -> None:
             metadata={
                 "element_ids": ["pictures/0"],
                 "element_types": ["image"],
-                "chunker_strategy": "hybrid",
+                "chunking_strategy": "token",
                 "raw_text": "Quarterly Revenue by Product",
                 "contextualized": True,
             },
@@ -57,4 +57,4 @@ def test_embedding_records_include_chunk_and_docling_metadata() -> None:
     assert records[0].schema_version == "1.3"
     assert records[0].raw_text == "Quarterly Revenue by Product"
     assert records[0].contextualized is True
-    assert records[0].metadata["chunker_strategy"] == "hybrid"
+    assert records[0].metadata["chunking_strategy"] == "token"

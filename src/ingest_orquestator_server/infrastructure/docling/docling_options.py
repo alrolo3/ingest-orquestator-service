@@ -156,13 +156,9 @@ def docling_options_metadata(
                 "enabled": settings.chunking_enabled,
                 "strategy": settings.chunking_strategy,
                 "max_tokens": settings.chunk_max_tokens,
-                "tokenizer_model": settings.chunk_tokenizer_model,
-                "merge_peers": settings.chunk_merge_peers,
-                "repeat_table_header": settings.chunk_repeat_table_header,
-                "omit_header_on_overflow": settings.chunk_omit_header_on_overflow,
-                "omit_prefix_on_overflow": settings.chunk_omit_prefix_on_overflow,
-                "legacy_chunk_size_chars": settings.chunk_size_chars,
-                "legacy_chunk_overlap_chars": settings.chunk_overlap_chars,
+                "tokenizer_path": str(settings.chunk_tokenizer_path)
+                if settings.chunk_tokenizer_path is not None
+                else None,
             },
             "confidence": {
                 "output_enabled": settings.confidence_output_enabled,
