@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     docling_pipeline: str = "standard"
     docling_pdf_ocr_engine: str = DOCLING_OCR_ENGINE
     docling_pdf_ocr_use_gpu: bool | None = None
+    docling_pdf_layout_model: str = DOCLING_LAYOUT_MODEL
+    docling_pdf_table_structure_backend: str = DOCLING_TABLE_STRUCTURE_BACKEND
+    docling_pdf_picture_classifier_preset: str = DOCLING_PICTURE_CLASSIFIER_PRESET
     docling_vlm_model: str = DOCLING_PICTURE_DESCRIPTION_MODEL
     docling_vlm_prompt: str = "Convert this page to markdown."
     docling_vlm_response_format: str = "markdown"
@@ -213,6 +216,22 @@ class Settings(BaseSettings):
         if normalized in {"hybrid", "line_based", "legacy_char"}:
             return normalized
         raise ValueError("must be one of hybrid, line_based, or legacy_char")
+
+    @field_validator("docling_pdf_layout_model", "docling_pdf_picture_classifier_preset")
+    @classmethod
+    def normalize_non_empty_docling_model_setting(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("must not be empty")
+        return cleaned
+
+    @field_validator("docling_pdf_table_structure_backend")
+    @classmethod
+    def validate_docling_pdf_table_structure_backend(cls, value: str) -> str:
+        normalized = value.strip().lower().replace("-", "_")
+        if normalized == DOCLING_TABLE_STRUCTURE_BACKEND:
+            return normalized
+        raise ValueError("must be tableformer")
 
     @field_validator("docling_vlm_response_format")
     @classmethod
@@ -392,14 +411,6 @@ class Settings(BaseSettings):
         return True
 
     @property
-    def docling_pdf_layout_model(self) -> str:
-        return DOCLING_LAYOUT_MODEL
-
-    @property
-    def docling_pdf_table_structure_backend(self) -> str:
-        return DOCLING_TABLE_STRUCTURE_BACKEND
-
-    @property
     def docling_pdf_table_structure_mode(self) -> str:
         return DOCLING_TABLE_STRUCTURE_MODE
 
@@ -410,10 +421,6 @@ class Settings(BaseSettings):
     @property
     def docling_pdf_do_picture_classification(self) -> bool:
         return True
-
-    @property
-    def docling_pdf_picture_classifier_preset(self) -> str:
-        return DOCLING_PICTURE_CLASSIFIER_PRESET
 
     @property
     def docling_pdf_do_picture_description(self) -> bool:

@@ -10,6 +10,9 @@ services:
       INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS: "true"
       INGEST_DOCLING_PDF_OCR_ENGINE: suryaocr
       INGEST_DOCLING_PDF_OCR_USE_GPU: "true"
+      INGEST_DOCLING_PDF_LAYOUT_MODEL: docling-layout-heron-101
+      INGEST_DOCLING_PDF_TABLE_STRUCTURE_BACKEND: tableformer
+      INGEST_DOCLING_PDF_PICTURE_CLASSIFIER_PRESET: document_figure_classifier_v2
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     deploy:

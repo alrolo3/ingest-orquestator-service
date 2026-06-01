@@ -33,6 +33,15 @@ def test_build_pdf_pipeline_options_selects_standard_pipeline_models() -> None:
     assert options.do_formula_enrichment is False
 
 
+def test_build_pdf_pipeline_options_can_select_ocr_languages_per_request() -> None:
+    options = build_pdf_pipeline_options(
+        Settings(docling_pdf_ocr_engine="auto").with_docling_pdf_ocr_languages(["es"])
+    )
+
+    assert options.do_ocr is True
+    assert options.ocr_options.lang == ["es"]
+
+
 def test_build_pdf_pipeline_options_can_select_remote_picture_description() -> None:
     options = build_pdf_pipeline_options(
         Settings(

@@ -57,6 +57,8 @@ Query parameters:
 - `chunking_enabled`: optional request-level chunking override.
 - `chunking_strategy`: optional request-level strategy override. Supported
   values are `hybrid`, `line_based`, and `legacy_char`.
+- `ocr_languages`: optional comma-separated OCR language list. OCR is always
+  enabled and defaults to `en`.
 - `async_mode`: deprecated compatibility parameter. In v1.5 all ingest calls
   are asynchronous and return a job immediately.
 - `include_document`: deprecated compatibility parameter. Parsed documents are

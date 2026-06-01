@@ -86,6 +86,23 @@ def test_parse_file_only_writes_html_when_requested(tmp_path: Path) -> None:
     assert with_html.outputs.html is not None
 
 
+def test_parse_file_passes_ocr_request_options_to_parser(tmp_path: Path) -> None:
+    input_path = tmp_path / "example.md"
+    input_path.write_text("# Example\n", encoding="utf-8")
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    service = _build_service(settings)
+
+    result = service.parse_file(
+        file_path=input_path,
+        parser_name="docling",
+        output_root=tmp_path / "outputs",
+        ocr_languages=["es"],
+    )
+
+    assert result.diagnostics.metadata["ocr_engine"] == "suryaocr"
+    assert result.diagnostics.metadata["ocr_languages"] == ["es"]
+
+
 def _build_service(settings: Settings) -> DocumentParseService:
     return DocumentParseService(
         parser_registry=ParserRegistry(

@@ -159,6 +159,18 @@ def test_settings_can_create_request_scoped_docling_ocr_languages() -> None:
     assert requested_settings.docling_pdf_do_ocr is True
 
 
+def test_docling_model_selection_settings_remain_env_configurable() -> None:
+    settings = Settings(
+        docling_pdf_layout_model="docling-layout-v2",
+        docling_pdf_table_structure_backend="tableformer",
+        docling_pdf_picture_classifier_preset="document_figure_classifier_v2",
+    )
+
+    assert settings.docling_pdf_layout_model == "docling-layout-v2"
+    assert settings.docling_pdf_table_structure_backend == "tableformer"
+    assert settings.docling_pdf_picture_classifier_preset == "document_figure_classifier_v2"
+
+
 def test_docling_allowed_formats_are_derived_from_backend_upload_extensions() -> None:
     settings = Settings(allowed_upload_extensions=[".PDF", "md", ".png", ".jpg"])
 
@@ -183,11 +195,9 @@ def test_settings_do_not_expose_backend_vlm_loader_settings() -> None:
         "docling_gpu_batch_max_documents",
         "docling_gpu_batch_wait_ms",
         "docling_pdf_do_table_structure",
-        "docling_pdf_table_structure_backend",
         "docling_pdf_table_structure_mode",
         "docling_pdf_table_do_cell_matching",
         "docling_pdf_do_picture_classification",
-        "docling_pdf_picture_classifier_preset",
         "docling_pdf_do_picture_description",
         "docling_pdf_picture_description_model",
         "docling_pdf_picture_description_prompt",
