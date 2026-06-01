@@ -10,7 +10,7 @@ from ingest_orquestator_server.infrastructure.docling.docling_converter_factory 
 
 def test_converter_factory_allows_configured_formats_without_pdf_options_for_md() -> None:
     converter = DoclingConverterFactory().create(
-        Settings(docling_allowed_formats=["md", "pdf"], docling_pdf_ocr_engine="auto"),
+        Settings(allowed_upload_extensions=[".md", ".pdf"], docling_pdf_ocr_engine="auto"),
         input_format="md",
         pipeline="standard",
     )
@@ -24,27 +24,25 @@ def test_converter_factory_allows_configured_formats_without_pdf_options_for_md(
 
 def test_converter_factory_uses_vlm_pipeline_for_pdf() -> None:
     converter = DoclingConverterFactory().create(
-        Settings(docling_allowed_formats=["pdf"], docling_pdf_ocr_engine="auto"),
+        Settings(allowed_upload_extensions=[".pdf"], docling_pdf_ocr_engine="auto"),
         input_format="pdf",
         pipeline="vlm",
     )
 
     assert issubclass(converter.format_to_options[InputFormat.PDF].pipeline_cls, VlmPipeline)
-    assert (
-        converter.format_to_options[InputFormat.PDF].pipeline_options.vlm_options.repo_id
-        == "Qwen/Qwen3-VL-8B-Instruct"
-    )
+    vlm_options = converter.format_to_options[InputFormat.PDF].pipeline_options.vlm_options
+    assert str(vlm_options.url) == "http://localhost:8000/v1/chat/completions"
+    assert vlm_options.params["model"] == "Qwen/Qwen3-VL-8B-Instruct"
 
 
 def test_converter_factory_uses_remote_llm_options_for_pdf() -> None:
     converter = DoclingConverterFactory().create(
         Settings(
-            docling_allowed_formats=["pdf"],
+            allowed_upload_extensions=[".pdf"],
             docling_pdf_ocr_engine="auto",
             docling_vlm_model="granite_vision",
-            docling_vlm_runtime="remote_llm",
             docling_remote_llm_url="http://llm.example/v1/chat/completions",
-            docling_remote_llm_concurrency=8,
+            parser_worker_count=8,
         ),
         input_format="pdf",
         pipeline="vlm",
@@ -63,15 +61,14 @@ def test_converter_factory_uses_remote_llm_options_for_pdf() -> None:
 def test_converter_factory_passes_remote_llm_tuning_to_api_options() -> None:
     converter = DoclingConverterFactory().create(
         Settings(
-            docling_allowed_formats=["pdf"],
+            allowed_upload_extensions=[".pdf"],
             docling_pdf_ocr_engine="auto",
             docling_vlm_model="Qwen/Qwen3-VL-8B-Instruct",
-            docling_vlm_runtime="remote_llm",
             docling_remote_llm_url="http://llm.example/v1/chat/completions",
             docling_remote_llm_model="served-qwen3",
             docling_remote_llm_max_tokens=2048,
             docling_remote_llm_temperature=0.2,
-            docling_remote_llm_concurrency=3,
+            parser_worker_count=3,
         ),
         input_format="pdf",
         pipeline="vlm",
@@ -90,7 +87,7 @@ def test_converter_factory_passes_remote_llm_tuning_to_api_options() -> None:
 
 def test_converter_factory_uses_vlm_pipeline_for_image() -> None:
     converter = DoclingConverterFactory().create(
-        Settings(docling_allowed_formats=["image"], docling_pdf_ocr_engine="auto"),
+        Settings(allowed_upload_extensions=[".png"], docling_pdf_ocr_engine="auto"),
         input_format="image",
         pipeline="vlm",
     )
@@ -101,7 +98,7 @@ def test_converter_factory_uses_vlm_pipeline_for_image() -> None:
 def test_converter_factory_uses_standard_options_for_image() -> None:
     converter = DoclingConverterFactory().create(
         Settings(
-            docling_allowed_formats=["image"],
+            allowed_upload_extensions=[".png"],
             docling_allow_external_plugins=True,
             docling_pdf_ocr_engine="auto",
         ),
@@ -118,7 +115,7 @@ def test_converter_factory_uses_standard_options_for_image() -> None:
 def test_converter_factory_uses_configured_xbrl_backend_options() -> None:
     converter = DoclingConverterFactory().create(
         Settings(
-            docling_allowed_formats=["xml_xbrl"],
+            allowed_upload_extensions=[".xbrl"],
             docling_xbrl_enable_local_fetch=True,
             docling_xbrl_enable_remote_fetch=False,
         ),

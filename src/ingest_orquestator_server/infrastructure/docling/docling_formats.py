@@ -46,6 +46,15 @@ EXTENSION_TO_FORMAT = {
 }
 
 
+def allowed_formats_for_extensions(extensions: list[str]) -> list[str]:
+    formats = {
+        EXTENSION_TO_FORMAT[extension.strip().lower()]
+        for extension in extensions
+        if extension.strip().lower() in EXTENSION_TO_FORMAT
+    }
+    return sorted(formats)
+
+
 def detect_input_format(source_path: Path) -> str:
     extension = source_path.suffix.lower()
     input_format = EXTENSION_TO_FORMAT.get(extension)

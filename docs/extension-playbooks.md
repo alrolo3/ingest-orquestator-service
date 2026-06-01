@@ -28,14 +28,14 @@ Docling plugin reference:
 
 - https://docling-project.github.io/docling/concepts/plugins/
 
-## Add A Pipeline Or RemoteLLM Runtime
+## Add A Pipeline Or RemoteLLM Model
 
 1. Check the `DocumentConverter` reference for the correct `FormatOption`,
    `pipeline_cls`, and `pipeline_options` combination.
-2. Prefer `remote_llm` for new LLM/VLM runtime work so model serving stays
-   outside the API process.
-3. Add settings under the Docling VLM/common config group only when the runtime
-   needs service-side configuration.
+2. Keep new LLM/VLM work behind RemoteLLM so model serving stays outside the
+   API process.
+3. Add settings under the Docling VLM/common config group only when the
+   external endpoint needs service-side configuration.
 4. Add support matrix validation before converter construction.
 5. Add unit tests that construct options without loading model weights.
 6. Add an optional integration smoke test gated by an env flag when model

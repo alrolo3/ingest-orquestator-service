@@ -20,7 +20,7 @@ from tests.fakes.fake_docling_converter import FakeDoclingConverter
 def test_parse_file_can_disable_chunking(tmp_path: Path) -> None:
     input_path = tmp_path / "example.md"
     input_path.write_text("# Example\n", encoding="utf-8")
-    settings = Settings(storage_dir=tmp_path, docling_allowed_formats=["md"])
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     service = _build_service(settings)
 
     result = service.parse_file(
@@ -43,7 +43,7 @@ def test_parse_files_uses_docling_batch_path(tmp_path: Path) -> None:
     second = tmp_path / "second.md"
     first.write_text("# First\n", encoding="utf-8")
     second.write_text("# Second\n", encoding="utf-8")
-    settings = Settings(storage_dir=tmp_path, docling_allowed_formats=["md"])
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     service = _build_service(settings)
 
     results = service.parse_files(
@@ -65,7 +65,7 @@ def test_parse_files_uses_docling_batch_path(tmp_path: Path) -> None:
 def test_parse_file_only_writes_html_when_requested(tmp_path: Path) -> None:
     input_path = tmp_path / "example.md"
     input_path.write_text("# Example\n", encoding="utf-8")
-    settings = Settings(storage_dir=tmp_path, docling_allowed_formats=["md"])
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
     service = _build_service(settings)
 
     without_html = service.parse_file(

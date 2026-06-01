@@ -41,10 +41,10 @@ The CPU environment selects:
 - `INGEST_DOCLING_ACCELERATOR_DEVICE=cpu`
 - `INGEST_DOCLING_PDF_OCR_ENGINE=auto`
 - picture description disabled
-- code and formula enrichment disabled
 - small batch sizes
 
-Those choices avoid loading large VLMs on a CPU-only machine.
+Those choices avoid RemoteLLM picture-description calls and keep local CPU
+parsing lightweight.
 
 ## 4. Run The API
 
@@ -97,7 +97,7 @@ from ingest_orquestator_server.config import Settings
 s = Settings()
 print(s.docling_accelerator_device)
 print(s.docling_pdf_ocr_engine)
-print(s.docling_pdf_do_picture_description)
+print(s.docling_pdf_ocr_use_gpu)
 PY
 ```
 

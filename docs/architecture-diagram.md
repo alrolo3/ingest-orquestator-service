@@ -183,8 +183,8 @@ flowchart TD
     StandardConverter --> Simple["DOCX, PPTX, HTML, MD, CSV, XLSX, XML, VTT, LaTeX<br/>Docling defaults or backend options"]
     StandardConverter --> XBRL["XBRL<br/>XBRLBackendOptions"]
 
-    PdfImage --> Stages["Layout, OCR, table structure,<br/>picture classification/description,<br/>code/formula enrichment"]
-    VLMConverter --> VLMRuntime["Local Transformers<br/>or RemoteLLM endpoint"]
+    PdfImage --> Stages["Layout, OCR, table structure,<br/>picture classification/description"]
+    VLMConverter --> VLMRuntime["RemoteLLM endpoint"]
     XBRL --> Taxonomy["Local/remote taxonomy fetch controls"]
 ```
 
@@ -214,7 +214,6 @@ flowchart TB
     subgraph OptionalGPU["NVIDIA GPU runtime"]
         CUDA["CUDA PyTorch"]
         Surya["SuryaOCR plugin"]
-        Qwen["Local Qwen3-VL model"]
         RemoteLLM["External RemoteLLM server<br/>OpenAI-compatible endpoint"]
     end
 
@@ -224,5 +223,4 @@ flowchart TB
     APIProcess --> CUDA
     APIProcess --> RemoteLLM
     CUDA --> Surya
-    CUDA --> Qwen
 ```

@@ -6,11 +6,10 @@ from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabiliti
 )
 
 
-def test_vlm_convert_resolves_remote_llm_for_new_runtime_name() -> None:
+def test_vlm_convert_resolves_remote_llm_by_default() -> None:
     resolution = resolve_vlm_convert_runtime(
         Settings(
             docling_vlm_model="Qwen/Qwen3-VL-8B-Instruct",
-            docling_vlm_runtime="remote_llm",
         )
     )
 
@@ -20,23 +19,22 @@ def test_vlm_convert_resolves_remote_llm_for_new_runtime_name() -> None:
     assert resolution.mode == "remote"
 
 
-def test_auto_runtime_remains_local_transformers() -> None:
+def test_vlm_convert_does_not_resolve_local_runtime() -> None:
     resolution = resolve_vlm_convert_runtime(
         Settings(
             docling_vlm_model="Qwen/Qwen3-VL-8B-Instruct",
-            docling_vlm_runtime="auto",
         )
     )
 
-    assert resolution.resolved_runtime == "transformers"
-    assert resolution.mode == "inline"
+    assert resolution.requested_runtime == "remote_llm"
+    assert resolution.resolved_runtime == "remote_llm"
+    assert resolution.mode == "remote"
 
 
 def test_picture_description_resolves_remote_llm() -> None:
     resolution = resolve_picture_description_runtime(
         Settings(
-            docling_pdf_picture_description_model="granite_vision",
-            docling_pdf_picture_description_runtime="remote_llm",
+            docling_vlm_model="granite_vision",
         )
     )
 
@@ -48,6 +46,8 @@ def test_picture_description_resolves_remote_llm() -> None:
 def test_runtime_metadata_does_not_advertise_legacy_vllm_compatibility() -> None:
     metadata = docling_runtime_metadata(Settings(), pipeline="standard")
 
+    assert metadata["policy"]["backend_vlm_loading"] == "disabled"
+    assert "local_runtimes" not in metadata["policy"]
     assert "legacy_vllm_env_compatibility" not in metadata["policy"]
     assert "legacy_vllm_alias" not in metadata["stages"]["vlm_convert"]
     assert "legacy_vllm_alias" not in metadata["stages"]["picture_description"]

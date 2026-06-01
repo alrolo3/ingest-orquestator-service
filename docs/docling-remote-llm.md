@@ -20,12 +20,11 @@ with `enable_remote_services=True` and `ApiVlmOptions`-style configuration:
 This project maps that to:
 
 ```text
-INGEST_DOCLING_VLM_RUNTIME=remote_llm
 INGEST_DOCLING_REMOTE_LLM_URL=http://localhost:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
-INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
 ```
+
+RemoteLLM request concurrency follows `INGEST_PARSER_WORKER_COUNT`.
 
 ## Start An External vLLM Server
 
@@ -55,29 +54,20 @@ needs the HTTP endpoint URL and served model id.
 Put these values in `.env`:
 
 ```text
-INGEST_DOCLING_VLM_RUNTIME=remote_llm
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_REMOTE_LLM_URL=http://127.0.0.1:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
-INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
 INGEST_DOCLING_REMOTE_LLM_MAX_TOKENS=4096
 INGEST_DOCLING_REMOTE_LLM_TEMPERATURE=0
 INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED=true
 ```
 
-For standard-pipeline picture descriptions through the same endpoint:
-
-```text
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=remote_llm
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MAX_NEW_TOKENS=1024
-```
+Standard-pipeline picture descriptions use the same VLM model and RemoteLLM
+endpoint. Their token budget is the backend constant `2048`.
 
 Docling recommends setting its page batch size at least as high as remote VLM
-concurrency. The service does that automatically from
-`INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE` or
-`INGEST_DOCLING_REMOTE_LLM_CONCURRENCY` when RemoteLLM is active.
+concurrency. The service derives both from `INGEST_PARSER_WORKER_COUNT` when
+RemoteLLM is active.
 
 ## Health Checks
 

@@ -7,8 +7,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Event, Lock, Semaphore
-from typing import Any
+from threading import Lock, Semaphore
+from typing import Any, Protocol
 
 from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.config.settings import Settings
@@ -21,6 +21,16 @@ from ingest_orquestator_server.infrastructure.docling.docling_formats import (
 from ingest_orquestator_server.infrastructure.docling.docling_options import (
     docling_options_metadata,
 )
+
+
+class DoclingConverterFactoryProtocol(Protocol):
+    def create(
+        self,
+        settings: Settings,
+        *,
+        pipeline: str = "standard",
+        input_format: str | None = None,
+    ) -> Any: ...
 
 
 @dataclass(frozen=True)
@@ -172,14 +182,16 @@ class DoclingEngineRegistry:
         self,
         *,
         settings: Settings,
-        converter_factory: DoclingConverterFactory | None = None,
+        converter_factory: DoclingConverterFactoryProtocol | None = None,
     ) -> None:
         self._settings = settings
         self._converter_factory = converter_factory or DoclingConverterFactory()
-        self._engines: dict[DoclingEngineKey, DoclingEngine] = {}
+        self._engines: dict[DoclingEngineKey, list[DoclingEngine]] = {}
+        self._leased_engine_ids: set[int] = set()
         self._lock = Lock()
+        self._parse_semaphore = Semaphore(settings.effective_docling_parse_concurrency)
 
-    def get_engine(
+    def acquire_engine(
         self,
         *,
         settings: Settings | None = None,
@@ -193,29 +205,61 @@ class DoclingEngineRegistry:
             input_format=input_format,
             pipeline=pipeline,
         )
-        if not effective_settings.docling_engine_cache_enabled:
-            return self._build_engine(key, settings=effective_settings, cache_hit=False)
+        self._parse_semaphore.acquire()
+        try:
+            if not effective_settings.docling_engine_cache_enabled:
+                return self._build_engine(key, settings=effective_settings, cache_hit=False)
 
-        with self._lock:
-            engine = self._engines.get(key)
-            if engine is not None:
-                engine.cache_hit_count += 1
-                log_stage(
-                    "docling.engine.cache.hit",
-                    engine_key=key.label,
-                    input_format=input_format,
-                    pipeline=pipeline,
-                    initialized_formats=sorted(engine.initialized_formats),
+            with self._lock:
+                for engine in self._engines.get(key, []):
+                    if id(engine) in self._leased_engine_ids:
+                        continue
+                    self._leased_engine_ids.add(id(engine))
+                    engine.cache_hit_count += 1
+                    log_stage(
+                        "docling.engine.cache.hit",
+                        engine_key=key.label,
+                        input_format=input_format,
+                        pipeline=pipeline,
+                        initialized_formats=sorted(engine.initialized_formats),
+                    )
+                    return engine
+
+                engine = self._build_engine(
+                    key,
+                    settings=effective_settings,
+                    cache_hit=False,
                 )
+                self._engines.setdefault(key, []).append(engine)
+                self._leased_engine_ids.add(id(engine))
                 return engine
+        except Exception:
+            self._parse_semaphore.release()
+            raise
 
-            engine = self._build_engine(
-                key,
-                settings=effective_settings,
-                cache_hit=False,
-            )
-            self._engines[key] = engine
-            return engine
+    def release_engine(self, engine: DoclingEngine, *, discard: bool = False) -> None:
+        try:
+            with self._lock:
+                self._leased_engine_ids.discard(id(engine))
+                if discard or not engine.cache_enabled:
+                    engines = self._engines.get(engine.key)
+                    if engines is not None:
+                        self._engines[engine.key] = [
+                            cached_engine
+                            for cached_engine in engines
+                            if cached_engine is not engine
+                        ]
+                        if not self._engines[engine.key]:
+                            del self._engines[engine.key]
+                    if discard:
+                        log_stage(
+                            "docling.engine.discarded",
+                            engine_key=engine.key.label,
+                            input_format=engine.key.input_format,
+                            pipeline=engine.key.pipeline,
+                        )
+        finally:
+            self._parse_semaphore.release()
 
     def evict_idle(self) -> int:
         ttl_seconds = self._settings.docling_engine_idle_ttl_seconds
@@ -225,19 +269,28 @@ class DoclingEngineRegistry:
         now = datetime.now(UTC)
         evicted = 0
         with self._lock:
-            for key, engine in list(self._engines.items()):
-                idle_since = engine.last_used_at or engine.created_at
-                if (now - idle_since).total_seconds() <= ttl_seconds:
-                    continue
-                del self._engines[key]
-                evicted += 1
-                log_stage(
-                    "docling.engine.evicted",
-                    engine_key=key.label,
-                    input_format=key.input_format,
-                    pipeline=key.pipeline,
-                    idle_ttl_seconds=ttl_seconds,
-                )
+            for key, engines in list(self._engines.items()):
+                retained: list[DoclingEngine] = []
+                for engine in engines:
+                    if id(engine) in self._leased_engine_ids:
+                        retained.append(engine)
+                        continue
+                    idle_since = engine.last_used_at or engine.created_at
+                    if (now - idle_since).total_seconds() <= ttl_seconds:
+                        retained.append(engine)
+                        continue
+                    evicted += 1
+                    log_stage(
+                        "docling.engine.evicted",
+                        engine_key=key.label,
+                        input_format=key.input_format,
+                        pipeline=key.pipeline,
+                        idle_ttl_seconds=ttl_seconds,
+                    )
+                if retained:
+                    self._engines[key] = retained
+                else:
+                    del self._engines[key]
         return evicted
 
     def warmup(self, *, formats: Iterable[str] | None = None) -> None:
@@ -250,22 +303,31 @@ class DoclingEngineRegistry:
                     reason="format_not_allowed",
                 )
                 continue
-            engine = self.get_engine(
+            engine = self.acquire_engine(
                 input_format=input_format,
                 pipeline=self._settings.docling_pipeline,
             )
-            engine.initialize(input_format)
+            try:
+                engine.initialize(input_format)
+            except Exception:
+                self.release_engine(engine, discard=True)
+                raise
+            self.release_engine(engine)
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
-            engines = [engine.snapshot() for engine in self._engines.values()]
+            engines = [
+                engine.snapshot()
+                for engine_pool in self._engines.values()
+                for engine in engine_pool
+            ]
+            leased_engine_count = len(self._leased_engine_ids)
         return {
             "cache_enabled": self._settings.docling_engine_cache_enabled,
             "warmup_enabled": self._settings.docling_engine_warmup_enabled,
             "warmup_formats": self._settings.docling_engine_warmup_formats,
-            "gpu_engine_concurrency": self._settings.docling_gpu_engine_concurrency,
-            "gpu_batch_max_documents": self._settings.docling_gpu_batch_max_documents,
-            "gpu_batch_wait_ms": self._settings.docling_gpu_batch_wait_ms,
+            "parse_concurrency": self._settings.effective_docling_parse_concurrency,
+            "leased_engine_count": leased_engine_count,
             "engine_idle_ttl_seconds": self._settings.docling_engine_idle_ttl_seconds,
             "perf_page_batch_size": self._settings.docling_perf_page_batch_size,
             "engine_count": len(engines),
@@ -296,7 +358,7 @@ class DoclingEngineRegistry:
         engine = DoclingEngine(
             key=key,
             converter=converter,
-            concurrency=settings.docling_gpu_engine_concurrency,
+            concurrency=1,
             cache_enabled=settings.docling_engine_cache_enabled,
         )
         log_stage(
@@ -305,7 +367,8 @@ class DoclingEngineRegistry:
             input_format=key.input_format,
             pipeline=key.pipeline,
             duration_ms=round((time.perf_counter() - started) * 1000),
-            concurrency=settings.docling_gpu_engine_concurrency,
+            parse_concurrency=settings.effective_docling_parse_concurrency,
+            converter_concurrency=1,
         )
         return engine
 
@@ -313,8 +376,6 @@ class DoclingEngineRegistry:
 class DoclingConversionScheduler:
     def __init__(self, *, engine_registry: DoclingEngineRegistry) -> None:
         self._engine_registry = engine_registry
-        self._batch_lock = Lock()
-        self._pending_batches: dict[DoclingEngineKey, _PendingBatch] = {}
 
     def convert(
         self,
@@ -325,20 +386,19 @@ class DoclingConversionScheduler:
         pipeline: str,
     ) -> tuple[Any, dict[str, Any]]:
         self._engine_registry.evict_idle()
-        engine = self._engine_registry.get_engine(
+        engine = self._engine_registry.acquire_engine(
             settings=settings,
             input_format=input_format,
             pipeline=pipeline,
         )
-        if not self._should_batch():
+        discard_engine = True
+        try:
             result = engine.convert(source_path, input_format=input_format)
-            return result, engine.snapshot()
-        return self._enqueue_for_batch(
-            engine,
-            source_path,
-            input_format=input_format,
-            pipeline=pipeline,
-        )
+            snapshot = engine.snapshot()
+            discard_engine = False
+            return result, snapshot
+        finally:
+            self._engine_registry.release_engine(engine, discard=discard_engine)
 
     def convert_all(
         self,
@@ -349,102 +409,22 @@ class DoclingConversionScheduler:
         pipeline: str,
     ) -> tuple[list[Any], dict[str, Any]]:
         self._engine_registry.evict_idle()
-        engine = self._engine_registry.get_engine(
+        engine = self._engine_registry.acquire_engine(
             settings=settings,
             input_format=input_format,
             pipeline=pipeline,
         )
-        results = engine.convert_all(source_paths, input_format=input_format)
-        return results, engine.snapshot()
+        discard_engine = True
+        try:
+            results = engine.convert_all(source_paths, input_format=input_format)
+            snapshot = engine.snapshot()
+            discard_engine = False
+            return results, snapshot
+        finally:
+            self._engine_registry.release_engine(engine, discard=discard_engine)
 
     def snapshot(self) -> dict[str, Any]:
         return self._engine_registry.snapshot()
-
-    def _should_batch(self) -> bool:
-        settings = self._engine_registry._settings
-        return (
-            settings.docling_engine_cache_enabled
-            and settings.docling_gpu_batch_max_documents > 1
-            and settings.docling_gpu_batch_wait_ms > 0
-        )
-
-    def _enqueue_for_batch(
-        self,
-        engine: DoclingEngine,
-        source_path: Path,
-        *,
-        input_format: str,
-        pipeline: str,
-    ) -> tuple[Any, dict[str, Any]]:
-        item = _PendingBatchItem(source_path=source_path)
-        batch_to_flush: _PendingBatch | None = None
-        with self._batch_lock:
-            batch = self._pending_batches.get(engine.key)
-            if batch is None:
-                batch = _PendingBatch(
-                    engine=engine,
-                    input_format=input_format,
-                    pipeline=pipeline,
-                )
-                self._pending_batches[engine.key] = batch
-            batch.items.append(item)
-            if (
-                len(batch.items) >= self._engine_registry._settings.docling_gpu_batch_max_documents
-            ):
-                batch_to_flush = self._pending_batches.pop(engine.key, None)
-
-        log_stage(
-            "docling.engine.batch.queued",
-            engine_key=engine.key.label,
-            input_format=input_format,
-            pipeline=pipeline,
-            source_path=source_path,
-        )
-        if batch_to_flush is not None:
-            self._flush_batch(batch_to_flush)
-
-        if not item.completed.wait(self._batch_wait_seconds()):
-            with self._batch_lock:
-                pending_batch = self._pending_batches.get(engine.key)
-                if pending_batch is not None and item in pending_batch.items:
-                    batch_to_flush = self._pending_batches.pop(engine.key, None)
-                else:
-                    batch_to_flush = None
-            if batch_to_flush is not None:
-                self._flush_batch(batch_to_flush)
-            else:
-                item.completed.wait()
-        if item.error is not None:
-            raise item.error
-        return item.result, item.engine_snapshot or engine.snapshot()
-
-    def _flush_batch(self, batch: _PendingBatch) -> None:
-        source_paths = [item.source_path for item in batch.items]
-        try:
-            if len(source_paths) == 1:
-                results = [
-                    batch.engine.convert(
-                        source_paths[0],
-                        input_format=batch.input_format,
-                    )
-                ]
-            else:
-                results = batch.engine.convert_all(
-                    source_paths,
-                    input_format=batch.input_format,
-                )
-            snapshot = batch.engine.snapshot()
-            for item, result in zip(batch.items, results, strict=True):
-                item.result = result
-                item.engine_snapshot = snapshot
-                item.completed.set()
-        except Exception as exc:
-            for item in batch.items:
-                item.error = exc
-                item.completed.set()
-
-    def _batch_wait_seconds(self) -> float:
-        return self._engine_registry._settings.docling_gpu_batch_wait_ms / 1000
 
 
 def build_docling_engine_key(
@@ -463,7 +443,7 @@ def build_docling_engine_key(
         ),
         "engine": {
             "cache_enabled": settings.docling_engine_cache_enabled,
-            "gpu_engine_concurrency": settings.docling_gpu_engine_concurrency,
+            "parse_concurrency": settings.effective_docling_parse_concurrency,
             "perf_page_batch_size": settings.docling_perf_page_batch_size,
         },
     }
@@ -474,22 +454,6 @@ def build_docling_engine_key(
         signature=hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
     )
 
-
-@dataclass
-class _PendingBatchItem:
-    source_path: Path
-    completed: Event = field(default_factory=Event)
-    result: Any | None = None
-    engine_snapshot: dict[str, Any] | None = None
-    error: Exception | None = None
-
-
-@dataclass
-class _PendingBatch:
-    engine: DoclingEngine
-    input_format: str
-    pipeline: str
-    items: list[_PendingBatchItem] = field(default_factory=list)
 
 
 def _docling_input_format(input_format: str) -> Any:

@@ -32,9 +32,7 @@ class DoclingCommonConfig(BaseModel):
     engine_cache_enabled: bool
     engine_warmup_enabled: bool
     engine_warmup_formats: list[str]
-    gpu_engine_concurrency: int
-    gpu_batch_max_documents: int
-    gpu_batch_wait_ms: int
+    parse_concurrency: int
     engine_idle_ttl_seconds: int
     perf_page_batch_size: int | None
 
@@ -50,12 +48,7 @@ class DoclingVlmConfig(BaseModel):
     model: str
     prompt: str
     response_format: str
-    runtime: str
     scale: float
-    torch_dtype: str | None
-    load_in_8bit: bool
-    max_new_tokens: int
-    trust_remote_code: bool
     remote_llm_url: str
     remote_llm_model: str | None
     remote_llm_api_key_configured: bool

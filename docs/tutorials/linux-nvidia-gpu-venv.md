@@ -73,7 +73,7 @@ includes SuryaOCR. FlashAttention-2 is optional and is not installed by default
 because it often builds from source and requires the CUDA toolkit compiler to
 match the installed PyTorch CUDA runtime.
 The requirements pin `transformers>=4.57,<5` because SuryaOCR is not compatible
-with Transformers 5.x, while Qwen3-VL is supported in Transformers 4.57+.
+with Transformers 5.x.
 
 ```bash
 python -m pip install -r requirements.txt
@@ -128,18 +128,17 @@ Then set these values in the API service `.env` when you want to use the
 endpoint:
 
 ```text
-INGEST_DOCLING_VLM_RUNTIME=remote_llm
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=remote_llm
 INGEST_DOCLING_REMOTE_LLM_URL=http://127.0.0.1:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
-INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
 ```
+
+Docling conversion concurrency and RemoteLLM request concurrency follow
+`INGEST_PARSER_WORKER_COUNT`.
 
 ## 7. Optional: Enable FlashAttention-2
 
-Skip this section unless you explicitly want Docling to load local VLMs with
-FlashAttention-2. The CUDA toolkit reported by `nvcc -V` must match
+Skip this section unless you explicitly need FlashAttention-2 for supported
+Docling GPU model loads. The CUDA toolkit reported by `nvcc -V` must match
 `torch.version.cuda`. A driver that reports CUDA 13.2 can still run a CUDA 12.8
 PyTorch build, but building FlashAttention for that PyTorch build requires a
 CUDA 12.8 toolkit.
@@ -195,13 +194,11 @@ Create a local `.env` from the checked-in GPU environment:
 cp env-cuda-gpu .env
 ```
 
-For non-A100 GPUs, start with these lower batch sizes:
+For non-A100 GPUs, start with fewer parser workers if memory or the RemoteLLM
+endpoint is constrained:
 
 ```text
-INGEST_DOCLING_PDF_OCR_BATCH_SIZE=8
-INGEST_DOCLING_PDF_LAYOUT_BATCH_SIZE=8
-INGEST_DOCLING_PDF_TABLE_BATCH_SIZE=8
-INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=128
+INGEST_PARSER_WORKER_COUNT=1
 ```
 
 ## 9. Verify GPU Packages

@@ -203,14 +203,17 @@ INGEST_PARSER_WORKER_COUNT=2 INGEST_DISPATCH_WORKER_COUNT=2 \
   docker compose -f docker-compose-queues.yml up -d --build
 ```
 
-If GPU memory is tight, reduce parser threads and batch sizes in `.env`:
+The parser worker container runs Dramatiq with one process and
+`${INGEST_PARSER_WORKER_COUNT:-2}` threads. Keep the process count at `1` per GPU
+unless you intend to duplicate Docling engine pools. Set
+`INGEST_PARSER_WORKER_COUNT` to the number of documents allowed to make Docling
+progress at once, and size the RemoteLLM endpoint for that concurrency.
+
+If GPU memory or the RemoteLLM endpoint is tight, reduce parser threads in
+`.env`:
 
 ```text
 INGEST_PARSER_WORKER_COUNT=1
-INGEST_DOCLING_PDF_OCR_BATCH_SIZE=8
-INGEST_DOCLING_PDF_LAYOUT_BATCH_SIZE=8
-INGEST_DOCLING_PDF_TABLE_BATCH_SIZE=8
-INGEST_DOCLING_PDF_QUEUE_MAX_SIZE=128
 ```
 
 ## 8. Stop Or Restart
