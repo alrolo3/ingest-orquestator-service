@@ -398,21 +398,83 @@ def test_ingest_accepts_dispatcher_and_ocr_controls(tmp_path: Path) -> None:
     try:
         client = TestClient(app)
         response = client.post(
-            "/v1/ingest/file?dispatch_sink_mode=elastic&ocr_languages=es"
+            "/v1/ingest/file?dispatch_sink_mode=elastic&do_ocr=false&ocr_languages=es"
             "&pipeline=standard&include_html=true",
             files={"file": ("example.md", b"# Example", "text/markdown")},
         )
         assert response.status_code == 200
         body = response.json()
         assert body["metadata"]["requested_dispatch_sink_mode"] == "elastic"
+        assert body["metadata"]["requested_ocr_enabled"] is False
         assert body["metadata"]["requested_ocr_languages"] == ["es"]
         assert body["metadata"]["requested_include_html"] is True
 
         stored_job = repository.get(body["job_id"])
         assert stored_job is not None
         assert stored_job.metadata["requested_dispatch_sink_mode"] == "elastic"
+        assert stored_job.metadata["requested_ocr_enabled"] is False
         assert stored_job.metadata["requested_ocr_languages"] == ["es"]
         assert stored_job.metadata["requested_include_html"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_ingest_ocr_enabled_api_param_controls_parser_options(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=DocumentChunkingService(settings),
+    )
+    dispatch_service = ParsedDocumentDispatchService(
+        settings=settings,
+        queue_service=ParsedDocumentDispatchQueueService(
+            max_bulk_size=settings.dispatch_max_bulk_size
+        ),
+        dispatcher=NoopParsedDocumentDispatchSink(),
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+        parsed_document_dispatch_service=dispatch_service,
+    )
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+    app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/ingest/file?do_ocr=false&ocr_languages=es",
+            files={"file": ("example.md", b"# Example", "text/markdown")},
+        )
+        assert response.status_code == 200
+        job_id = response.json()["job_id"]
+
+        ingestion_service.process_queued_job(job_id)
+        job_response = client.get(f"/v1/ingest/jobs/{job_id}")
+
+        assert job_response.status_code == 200
+        metadata = job_response.json()["metadata"]
+        assert metadata["requested_ocr_enabled"] is False
+        assert metadata["requested_ocr_languages"] == ["es"]
+        assert metadata["ocr_enabled"] is False
+        assert "ocr_engine" not in metadata
+        assert "ocr_languages" not in metadata
     finally:
         app.dependency_overrides.clear()
 

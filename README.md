@@ -154,13 +154,18 @@ INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_XBRL_ENABLE_LOCAL_FETCH=false
 INGEST_DOCLING_XBRL_ENABLE_REMOTE_FETCH=false
 INGEST_DOCLING_PDF_OCR_ENGINE=suryaocr
+INGEST_DOCLING_PDF_LAYOUT_MODEL=docling-layout-heron-101
+INGEST_DOCLING_PDF_TABLE_STRUCTURE_BACKEND=tableformer
+INGEST_DOCLING_PDF_PICTURE_CLASSIFIER_PRESET=document_figure_classifier_v2
 ```
 
 The standard pipeline is supported for every allowed upload extension. Docling
 input formats are derived from `INGEST_ALLOWED_UPLOAD_EXTENSIONS`. Direct
 VLM mode is supported for PDF and image inputs through the configured RemoteLLM
 endpoint. The backend does not load VLM models in-process; use a separate
-OpenAI-compatible inference service for Qwen3 or equivalent VLM models.
+OpenAI-compatible inference service for Qwen3 or equivalent VLM models. OCR is
+enabled by default and can be changed per request with `do_ocr` and
+`ocr_languages` API query parameters.
 
 For NVIDIA GPUs, run with a CUDA-enabled PyTorch environment and set:
 

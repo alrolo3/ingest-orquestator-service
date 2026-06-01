@@ -52,6 +52,7 @@ class DocumentParseService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        ocr_enabled: bool | None = None,
         ocr_languages: list[str] | None = None,
         include_html: bool = False,
         progress_callback: ParseProgressCallback | None = None,
@@ -65,6 +66,8 @@ class DocumentParseService:
             "include_html": include_html,
             "progress_callback": progress_callback,
         }
+        if ocr_enabled is not None:
+            parse_kwargs["ocr_enabled"] = ocr_enabled
         if ocr_languages is not None:
             parse_kwargs["ocr_languages"] = ocr_languages
         parse_output = parser.parse(file_path, **parse_kwargs)
@@ -89,6 +92,7 @@ class DocumentParseService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        ocr_enabled: bool | None = None,
         ocr_languages: list[str] | None = None,
         include_html: bool = False,
     ) -> list[DocumentParseResult]:
@@ -103,6 +107,7 @@ class DocumentParseService:
                     pipeline=pipeline,
                     chunking_enabled=chunking_enabled,
                     chunking_strategy=chunking_strategy,
+                    ocr_enabled=ocr_enabled,
                     ocr_languages=ocr_languages,
                     include_html=include_html,
                 )
@@ -112,6 +117,8 @@ class DocumentParseService:
         started_at = datetime.now(UTC)
         started = perf_counter()
         parse_many_kwargs = {"pipeline": pipeline, "include_html": include_html}
+        if ocr_enabled is not None:
+            parse_many_kwargs["ocr_enabled"] = ocr_enabled
         if ocr_languages is not None:
             parse_many_kwargs["ocr_languages"] = ocr_languages
         parse_outputs = parse_many(file_paths, **parse_many_kwargs)

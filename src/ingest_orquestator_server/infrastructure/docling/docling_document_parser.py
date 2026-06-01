@@ -71,11 +71,12 @@ class DoclingDocumentParser:
         *,
         document_id: str | None = None,
         pipeline: str | None = None,
+        ocr_enabled: bool | None = None,
         ocr_languages: list[str] | None = None,
         include_html: bool = False,
         progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
-        settings = self._effective_settings(ocr_languages)
+        settings = self._effective_settings(ocr_enabled, ocr_languages)
         source_path = file_path.expanduser().resolve()
         if not source_path.is_file():
             raise FileNotFoundError(f"Input file does not exist: {source_path}")
@@ -181,10 +182,11 @@ class DoclingDocumentParser:
         file_paths: Iterable[Path],
         *,
         pipeline: str | None = None,
+        ocr_enabled: bool | None = None,
         ocr_languages: list[str] | None = None,
         include_html: bool = False,
     ) -> list[ParseOutput]:
-        settings = self._effective_settings(ocr_languages)
+        settings = self._effective_settings(ocr_enabled, ocr_languages)
         source_paths = [path.expanduser().resolve() for path in file_paths]
         for source_path in source_paths:
             if not source_path.is_file():
@@ -287,8 +289,13 @@ class DoclingDocumentParser:
                 input_format=input_format,
                 pipeline=resolved_pipeline,
             ),
-            "ocr_engine": settings.docling_pdf_ocr_engine,
-            "ocr_languages": settings.docling_pdf_ocr_languages,
+            "ocr_enabled": settings.docling_pdf_do_ocr,
+            "ocr_engine": settings.docling_pdf_ocr_engine
+            if settings.docling_pdf_do_ocr
+            else None,
+            "ocr_languages": settings.docling_pdf_ocr_languages
+            if settings.docling_pdf_do_ocr
+            else None,
             "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
             "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,
             "vlm_runtime_requested": RUNTIME_REMOTE_LLM if resolved_pipeline == "vlm" else None,
@@ -337,8 +344,13 @@ class DoclingDocumentParser:
                 input_format=input_format,
                 pipeline=resolved_pipeline,
             ),
-            "ocr_engine": settings.docling_pdf_ocr_engine,
-            "ocr_languages": settings.docling_pdf_ocr_languages,
+            "ocr_enabled": settings.docling_pdf_do_ocr,
+            "ocr_engine": settings.docling_pdf_ocr_engine
+            if settings.docling_pdf_do_ocr
+            else None,
+            "ocr_languages": settings.docling_pdf_ocr_languages
+            if settings.docling_pdf_do_ocr
+            else None,
             "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
             "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,
             "vlm_runtime_requested": RUNTIME_REMOTE_LLM if resolved_pipeline == "vlm" else None,
@@ -444,11 +456,14 @@ class DoclingDocumentParser:
         except Exception:
             return None
 
-    def _effective_settings(self, ocr_languages: list[str] | None) -> Settings:
-        if ocr_languages is None:
-            return self._settings
-        return self._settings.model_copy(
-            update={"docling_pdf_ocr_languages": list(ocr_languages)}
+    def _effective_settings(
+        self,
+        ocr_enabled: bool | None,
+        ocr_languages: list[str] | None,
+    ) -> Settings:
+        return self._settings.with_docling_ocr_options(
+            do_ocr=ocr_enabled,
+            languages=ocr_languages,
         )
 
     @staticmethod

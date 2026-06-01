@@ -44,6 +44,9 @@ def test_env_example_loads() -> None:
 
     assert settings.docling_pdf_ocr_engine == "suryaocr"
     assert settings.docling_pdf_ocr_languages == ["en"]
+    assert settings.docling_pdf_layout_model == "docling-layout-heron-101"
+    assert settings.docling_pdf_table_structure_backend == "tableformer"
+    assert settings.docling_pdf_picture_classifier_preset == "document_figure_classifier_v2"
     assert settings.chunking_enabled is True
     assert settings.chunking_strategy == "hybrid"
     assert settings.confidence_output_enabled is True
@@ -138,6 +141,35 @@ def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     assert settings.docling_remote_llm_page_batch_size == settings.parser_worker_count
 
 
+def test_docling_ocr_enabled_and_languages_are_request_overrides() -> None:
+    settings = Settings()
+
+    assert settings.docling_pdf_do_ocr is True
+    assert settings.docling_pdf_ocr_languages == ["en"]
+    assert "docling_pdf_do_ocr" not in Settings.model_fields
+    assert "docling_pdf_ocr_languages" not in Settings.model_fields
+
+    effective = settings.with_docling_ocr_options(
+        do_ocr=False,
+        languages=["es", "fr"],
+    )
+
+    assert effective.docling_pdf_do_ocr is False
+    assert effective.docling_pdf_ocr_languages == ["es", "fr"]
+
+
+def test_docling_model_selection_settings_remain_env_configurable() -> None:
+    settings = Settings(
+        docling_pdf_layout_model="docling-layout-v2",
+        docling_pdf_table_structure_backend="tableformer",
+        docling_pdf_picture_classifier_preset="document_figure_classifier_v2",
+    )
+
+    assert settings.docling_pdf_layout_model == "docling-layout-v2"
+    assert settings.docling_pdf_table_structure_backend == "tableformer"
+    assert settings.docling_pdf_picture_classifier_preset == "document_figure_classifier_v2"
+
+
 def test_docling_allowed_formats_are_derived_from_backend_upload_extensions() -> None:
     settings = Settings(allowed_upload_extensions=[".PDF", "md", ".png", ".jpg"])
 
@@ -161,12 +193,12 @@ def test_settings_do_not_expose_backend_vlm_loader_settings() -> None:
         "docling_gpu_engine_concurrency",
         "docling_gpu_batch_max_documents",
         "docling_gpu_batch_wait_ms",
+        "docling_pdf_do_ocr",
+        "docling_pdf_ocr_languages",
         "docling_pdf_do_table_structure",
-        "docling_pdf_table_structure_backend",
         "docling_pdf_table_structure_mode",
         "docling_pdf_table_do_cell_matching",
         "docling_pdf_do_picture_classification",
-        "docling_pdf_picture_classifier_preset",
         "docling_pdf_do_picture_description",
         "docling_pdf_picture_description_model",
         "docling_pdf_picture_description_prompt",
@@ -176,12 +208,6 @@ def test_settings_do_not_expose_backend_vlm_loader_settings() -> None:
     }
 
     assert removed_fields.isdisjoint(Settings.model_fields)
-
-
-def test_settings_parse_docling_ocr_languages_from_string() -> None:
-    settings = Settings(docling_pdf_ocr_languages="en,es")
-
-    assert settings.docling_pdf_ocr_languages == ["en", "es"]
 
 
 def test_settings_grouped_config_views() -> None:
