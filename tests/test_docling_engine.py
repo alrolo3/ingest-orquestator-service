@@ -46,8 +46,7 @@ def test_docling_engine_registry_reuses_converter_and_initialized_pipeline(
 ) -> None:
     input_file = _write_markdown(tmp_path / "one.md")
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_gpu_batch_wait_ms=0,
+        allowed_upload_extensions=[".md"],
     )
     factory = CountingDoclingConverterFactory()
     scheduler = DoclingConversionScheduler(
@@ -77,9 +76,7 @@ def test_docling_conversion_scheduler_does_not_batch_independent_conversions(
         _write_markdown(tmp_path / "two.md"),
     ]
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_gpu_batch_max_documents=2,
-        docling_gpu_batch_wait_ms=1000,
+        allowed_upload_extensions=[".md"],
     )
     factory = CountingDoclingConverterFactory()
     scheduler = DoclingConversionScheduler(
@@ -120,8 +117,7 @@ def test_docling_scheduler_allows_conversions_up_to_parse_concurrency(
     ]
     controller = ControlledConversionController()
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_parse_concurrency=2,
+        allowed_upload_extensions=[".md"],
         parser_worker_count=2,
     )
     scheduler = DoclingConversionScheduler(
@@ -163,9 +159,8 @@ def test_docling_scheduler_bounds_conversions_to_parse_concurrency(
     ]
     controller = ControlledConversionController()
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_parse_concurrency=1,
-        parser_worker_count=3,
+        allowed_upload_extensions=[".md"],
+        parser_worker_count=1,
     )
     scheduler = DoclingConversionScheduler(
         engine_registry=DoclingEngineRegistry(
@@ -205,8 +200,7 @@ def test_docling_parser_progress_callbacks_are_isolated_for_concurrent_jobs(
     second = _write_markdown(tmp_path / "second.md")
     controller = ControlledConversionController()
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_parse_concurrency=2,
+        allowed_upload_extensions=[".md"],
         parser_worker_count=2,
         progress_log_interval_seconds=0,
     )
@@ -255,8 +249,7 @@ def test_docling_scheduler_failed_conversion_does_not_poison_active_conversions(
     failed_file = _write_markdown(tmp_path / "failed.md")
     controller = ControlledConversionController(fail_names={"failed.md"})
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_parse_concurrency=2,
+        allowed_upload_extensions=[".md"],
         parser_worker_count=2,
     )
     scheduler = DoclingConversionScheduler(
@@ -299,8 +292,7 @@ def test_docling_parser_records_engine_metadata_when_scheduler_is_used(
 ) -> None:
     input_file = _write_markdown(tmp_path / "example.md")
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_gpu_batch_wait_ms=0,
+        allowed_upload_extensions=[".md"],
     )
     factory = CountingDoclingConverterFactory()
     scheduler = DoclingConversionScheduler(
@@ -328,8 +320,7 @@ def test_docling_engine_registry_reuses_converter_for_same_ocr_languages(
 ) -> None:
     input_file = _write_markdown(tmp_path / "example.md")
     settings = Settings(
-        docling_allowed_formats=["md"],
-        docling_gpu_batch_wait_ms=0,
+        allowed_upload_extensions=[".md"],
     )
     factory = CountingDoclingConverterFactory()
     scheduler = DoclingConversionScheduler(

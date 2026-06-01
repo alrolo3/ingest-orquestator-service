@@ -39,8 +39,9 @@ python -m pip install --no-deps -e .
 
 The default GPU install path includes SuryaOCR. FlashAttention-2 is optional and
 is not installed by default because it often requires a long source build.
-SuryaOCR requires `transformers>=4.57,<5`; this keeps Qwen3-VL support while
-avoiding a SuryaOCR runtime failure with Transformers 5.x.
+SuryaOCR requires `transformers>=4.57,<5`; this keeps SuryaOCR within the
+currently supported dependency range while avoiding a runtime failure with
+Transformers 5.x.
 RemoteLLM calls go through an external OpenAI-compatible endpoint. Install
 `requirements-vllm.txt` only in the separate environment that runs `vllm serve`,
 not as part of the API service install.
@@ -110,7 +111,7 @@ print(flash_attn.__version__)
 PY
 ```
 
-If Docling fails while loading a VLM with FlashAttention enabled, first set:
+If Docling fails while running a GPU model with FlashAttention enabled, first set:
 
 ```bash
 INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2=false
@@ -136,7 +137,6 @@ The environment chooses:
 - TableFormer accurate mode with cell matching
 - picture classification and picture description enabled
 - picture description defaults to `Qwen/Qwen3-VL-8B-Instruct` through RemoteLLM
-- code and formula enrichment enabled
 - OCR/layout/table batch sizes set to `32`
 - queue size set to `512`
 
@@ -146,28 +146,24 @@ sizes from `32` to `16`.
 
 ## RemoteLLM
 
-The GPU environment uses RemoteLLM as the default backend for Qwen3 so the
-model is hosted by one external inference server instead of being loaded inside
-each API worker:
+The GPU environment uses RemoteLLM for Qwen3 so the model is hosted by one
+external inference server instead of being loaded inside each API worker:
 
 ```text
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_VLM_RUNTIME=remote_llm
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=remote_llm
 ```
 
 Configure the external inference server endpoint with:
 
 ```text
-INGEST_DOCLING_VLM_RUNTIME=remote_llm
-INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME=remote_llm
 INGEST_DOCLING_REMOTE_LLM_URL=http://127.0.0.1:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=8
-INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=8
 INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED=true
 ```
+
+RemoteLLM and Docling conversion concurrency are derived from
+`INGEST_PARSER_WORKER_COUNT`, so parser queue backpressure is the single
+document-level concurrency control.
 
 See [Docling RemoteLLM playbook](docling-remote-llm.md) and
 [Docling model runtime matrix](docling-model-runtime-matrix.md). For API-side

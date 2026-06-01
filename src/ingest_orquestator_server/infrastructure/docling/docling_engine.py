@@ -328,9 +328,6 @@ class DoclingEngineRegistry:
             "warmup_formats": self._settings.docling_engine_warmup_formats,
             "parse_concurrency": self._settings.effective_docling_parse_concurrency,
             "leased_engine_count": leased_engine_count,
-            "gpu_engine_concurrency": self._settings.docling_gpu_engine_concurrency,
-            "gpu_batch_max_documents": self._settings.docling_gpu_batch_max_documents,
-            "gpu_batch_wait_ms": self._settings.docling_gpu_batch_wait_ms,
             "engine_idle_ttl_seconds": self._settings.docling_engine_idle_ttl_seconds,
             "perf_page_batch_size": self._settings.docling_perf_page_batch_size,
             "engine_count": len(engines),
@@ -447,7 +444,6 @@ def build_docling_engine_key(
         "engine": {
             "cache_enabled": settings.docling_engine_cache_enabled,
             "parse_concurrency": settings.effective_docling_parse_concurrency,
-            "gpu_engine_concurrency": settings.docling_gpu_engine_concurrency,
             "perf_page_batch_size": settings.docling_perf_page_batch_size,
         },
     }

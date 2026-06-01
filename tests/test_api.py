@@ -70,7 +70,6 @@ def test_ingest_capabilities_exposes_ui_safe_options(tmp_path: Path) -> None:
     settings = Settings(
         storage_dir=tmp_path,
         allowed_upload_extensions=[".pdf", ".md"],
-        docling_allowed_formats=["pdf", "md"],
         docling_pipeline="standard",
         chunking_enabled=True,
         chunking_strategy="hybrid",

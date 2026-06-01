@@ -46,15 +46,13 @@ Create a local `.env` from the checked-in CPU environment:
 cp env-cpu .env
 ```
 
-The CPU environment disables GPU-heavy enrichment stages and uses Docling's
-automatic OCR selection:
+The CPU environment uses Docling's automatic OCR selection and disables OCR GPU
+usage:
 
 ```text
 INGEST_DOCLING_ACCELERATOR_DEVICE=cpu
 INGEST_DOCLING_PDF_OCR_ENGINE=auto
-INGEST_DOCLING_PDF_DO_PICTURE_DESCRIPTION=false
-INGEST_DOCLING_PDF_DO_CODE_ENRICHMENT=false
-INGEST_DOCLING_PDF_DO_FORMULA_ENRICHMENT=false
+INGEST_DOCLING_PDF_OCR_USE_GPU=false
 ```
 
 ## 5. Run The API

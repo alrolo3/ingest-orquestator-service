@@ -13,7 +13,6 @@ def test_parser_adds_docling_accelerator_metadata(tmp_path: Path) -> None:
     settings = Settings(
         docling_accelerator_device="cuda",
         docling_num_threads=8,
-        docling_pdf_ocr_batch_size=16,
     )
 
     output = DoclingDocumentParser(converter=FakeDoclingConverter(), settings=settings).parse(
@@ -24,7 +23,7 @@ def test_parser_adds_docling_accelerator_metadata(tmp_path: Path) -> None:
     options = output.normalized_document.metadata["docling_options"]
     assert options["common"]["accelerator_device"] == "cuda"
     assert options["common"]["num_threads"] == 8
-    assert options["configured_options"]["pdf"]["ocr_batch_size"] == 16
+    assert options["configured_options"]["pdf"]["ocr_batch_size"] == 32
     assert options["runtime"]["stages"]["picture_description"]["resolved_runtime"]
     assert output.normalized_document.metadata["docling"]["input_format"] == "md"
     assert output.normalized_document.metadata["docling"]["pipeline"] == "standard"

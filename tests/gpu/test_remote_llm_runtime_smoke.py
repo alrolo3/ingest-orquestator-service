@@ -27,11 +27,8 @@ def _gpu_tests_enabled() -> bool:
 def test_remote_llm_docling_options_build() -> None:
     settings = Settings(
         docling_vlm_model="granite_vision",
-        docling_vlm_runtime="remote_llm",
-        docling_pdf_picture_description_model="granite_vision",
-        docling_pdf_picture_description_runtime="remote_llm",
         docling_remote_llm_url="http://localhost:8000/v1/chat/completions",
-        docling_remote_llm_concurrency=8,
+        parser_worker_count=8,
     )
 
     vlm_resolution = resolve_vlm_convert_runtime(settings)

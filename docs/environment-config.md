@@ -39,8 +39,8 @@ settings such as upload extensions, Docling formats, and OCR languages.
 | File | Purpose |
 | --- | --- |
 | `.env.example` | Same source-safe configuration as `env-cuda-gpu`. Copy it to `.env` for GPU-oriented local development. |
-| `env-cpu` | Source-safe CPU environment for macOS and Linux. It avoids external Docling OCR plugins and disables GPU-heavy enrichments. |
-| `env-cuda-gpu` | Source-safe NVIDIA GPU environment tuned for an A100 80GB class machine. It enables CUDA, SuryaOCR, Qwen3 VLM stages through Transformers, higher batch sizes, and larger uploads. |
+| `env-cpu` | Source-safe CPU environment for macOS and Linux. It avoids external Docling OCR plugins and disables RemoteLLM picture descriptions. |
+| `env-cuda-gpu` | Source-safe NVIDIA GPU environment tuned for an A100 80GB class machine. It enables CUDA, SuryaOCR, RemoteLLM VLM stages, higher batch sizes, and larger uploads. |
 
 ## Service And Storage
 
@@ -60,8 +60,8 @@ The checked-in environment files currently include:
 .pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.md,.markdown,.txt,.html,.htm,.docx,.pptx,.xlsx,.csv,.json,.adoc,.asciidoc,.tex,.latex,.vtt,.jats,.nxml,.uspto,.xbrl
 ```
 
-This is the upload gate. Docling format support is controlled separately by
-`INGEST_DOCLING_ALLOWED_FORMATS`.
+This is the upload gate. Docling allowed formats are derived from these
+extensions so upload validation and parser support stay aligned.
 
 ## Chunking
 
@@ -94,7 +94,6 @@ does both according to `INGEST_DISPATCH_SINK_MODE`.
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
 | `INGEST_PARSER_WORKER_COUNT` | `2` | `4` | Integer `>= 1`. | Number of parser worker threads that process queued uploaded files. |
-| `INGEST_DOCLING_PARSE_CONCURRENCY` | unset, uses `INGEST_PARSER_WORKER_COUNT` | `4` | Unset or integer `>= 1`. | Maximum Docling conversions allowed to run at once in one process. This is the explicit backpressure limit for parsing and should not exceed the RemoteLLM endpoint capacity. |
 | `INGEST_DISPATCH_QUEUE_MAX_SIZE` | `100` | `100` | Integer `>= 1`. | Maximum number of parsed document dispatch items waiting in the process-local dispatch queue. |
 | `INGEST_DISPATCH_QUEUE_MAX_PAYLOAD_BYTES` | unset | `104857600` | Unset or integer `>= 1`. | Optional maximum serialized size for one parsed document dispatch payload. Leave unset for no per-item limit; set it to fail oversized documents explicitly instead of allowing unbounded memory growth. |
 | `INGEST_DISPATCH_MAX_BULK_SIZE` | `5` | `5` | Integer from `1` to `5`. | Maximum number of parsed documents drained by the dispatcher in one batch. Elastic receives one bulk item per RAG record. |
@@ -141,16 +140,13 @@ loading, page completion, assembly, enrichment, and normalization stages.
 | `INGEST_DOCLING_NUM_THREADS` | `4` | `32` | Integer `>= 1`. | Thread count passed to Docling accelerator options. Higher values can improve throughput on large CPU/GPU hosts but can also increase memory pressure. |
 | `INGEST_DOCLING_CUDA_USE_FLASH_ATTENTION2` | `false` | `false` | `true` or `false`. | Enables FlashAttention 2 in Docling accelerator options. Keep disabled unless `flash-attn` is installed and verified for the CUDA/PyTorch build. |
 | `INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS` | `true` | `true` | `true` or `false`. | Allows Docling external plugins. Required for the `docling-surya` OCR plugin and any custom Docling plugin discovered through the `docling` entry point. |
-| `INGEST_DOCLING_ENGINE_CACHE_ENABLED` | `true` | `true` | `true` or `false`. | Reuses Docling `DocumentConverter` instances across API jobs for the same input format, pipeline, and effective options. Keep enabled on GPU hosts so models stay loaded instead of reloading per document. |
-| `INGEST_DOCLING_ENGINE_WARMUP_ENABLED` | `false` | `false` | `true` or `false`. | When enabled, the API initializes configured Docling pipelines at startup. This moves first-request model loading to startup. |
-| `INGEST_DOCLING_ENGINE_WARMUP_FORMATS` | `pdf` | `pdf` | Comma-separated subset of supported Docling input formats. | Formats passed to Docling `initialize_pipeline(...)` during warmup. Use only formats you expect to process immediately. |
-| `INGEST_DOCLING_GPU_ENGINE_CONCURRENCY` | `1` | `1` | Integer `>= 1`. | Legacy converter-level concurrency setting. Queued parsing now leases one converter per active Docling parse; use `INGEST_DOCLING_PARSE_CONCURRENCY` to control document concurrency. |
-| `INGEST_DOCLING_GPU_BATCH_MAX_DOCUMENTS` | `5` | `5` | Integer from `1` to `32`. | Legacy explicit-batch parse setting for `parse_files(...)`. Independent queued jobs are no longer coalesced because each job needs isolated progress. |
-| `INGEST_DOCLING_GPU_BATCH_WAIT_MS` | `250` | `250` | Integer `>= 0`. | Legacy wait setting for cross-document batching. Independent queued jobs run through the parse concurrency pool instead of waiting for scheduler batches. |
-| `INGEST_DOCLING_ENGINE_IDLE_TTL_SECONDS` | `0` | `0` | Integer `>= 0`. | Idle time before cached engines are evicted. `0` means never evict, which is the preferred GPU setting when model reload cost is high. |
-| `INGEST_DOCLING_PERF_PAGE_BATCH_SIZE` | unset | `32` | Unset or integer `>= 1`. | Optional global Docling `settings.perf.page_batch_size`. For RemoteLLM, keep it greater than or equal to `INGEST_DOCLING_REMOTE_LLM_CONCURRENCY`. |
-| `INGEST_DOCLING_ALLOWED_FORMATS` | Multi-format list | `pdf,image,docx` | Comma-separated subset of `pdf`, `image`, `docx`, `pptx`, `html`, `md`, `xlsx`, `csv`, `json_docling`, `asciidoc`, `latex`, `vtt`, `xml_jats`, `xml_uspto`, `xml_xbrl`, `mets_gbs`, or `audio`. | Docling `InputFormat` names allowed by `DocumentConverter`. |
 | `INGEST_DOCLING_PIPELINE` | `standard` | `standard` | `standard`, `vlm`, or `auto`. | Default pipeline. `standard` supports all configured formats. Direct `vlm` mode is currently PDF/image only. `auto` currently resolves to standard behavior. |
+
+Docling engine caching is enabled, engine warmup is disabled, idle engine
+eviction is disabled, and Docling page batching is set to `32` in backend
+constants. Docling input formats are derived from
+`INGEST_ALLOWED_UPLOAD_EXTENSIONS`. Docling conversion concurrency and
+RemoteLLM request concurrency both follow `INGEST_PARSER_WORKER_COUNT`.
 
 ## Standard PDF/Image Pipeline Options
 
@@ -164,57 +160,38 @@ when the standard pipeline is selected.
 | `INGEST_DOCLING_PDF_OCR_ENGINE` | `suryaocr` | `suryaocr` | Any non-empty Docling OCR engine id. Common values: `auto`, `suryaocr`, `easyocr`, `rapidocr`, `tesseract`, `tesserocr`, `ocrmac`, `kserve_v2_ocr`, or plugin-provided ids. | OCR engine name passed through Docling's OCR factory. |
 | `INGEST_DOCLING_PDF_OCR_LANGUAGES` | `en` | `en,es` | Comma-separated OCR language codes such as `en`, `es`, or `fr`. | OCR language codes assigned to the selected OCR options when supported by the engine. |
 | `INGEST_DOCLING_PDF_OCR_USE_GPU` | unset | `true` | Unset, `true`, or `false`. | Optional GPU hint for OCR engines with a `use_gpu` option. Leave unset to let Docling or the OCR engine decide. |
-| `INGEST_DOCLING_PDF_DO_TABLE_STRUCTURE` | `true` | `true` | `true` or `false`. | Enables table structure extraction in the standard pipeline. |
-| `INGEST_DOCLING_PDF_LAYOUT_MODEL` | `docling-layout-heron-101` | `docling-layout-heron-101` | `docling-layout-heron`, `docling-layout-heron-101`, `docling-layout-egret-medium`, `docling-layout-egret-large`, `docling-layout-egret-xlarge`, `docling-layout-v2`, or underscore aliases for those names. | Layout model preset used by Docling layout analysis. |
-| `INGEST_DOCLING_PDF_TABLE_STRUCTURE_BACKEND` | `tableformer` | `tableformer` | `tableformer` or `granite_vision`. | Table structure backend. |
-| `INGEST_DOCLING_PDF_TABLE_STRUCTURE_MODE` | `accurate` | `accurate` | `fast` or `accurate`. | TableFormer mode. Accurate mode favors quality over speed. |
-| `INGEST_DOCLING_PDF_TABLE_DO_CELL_MATCHING` | `true` | `true` | `true` or `false`. | Enables cell matching for TableFormer output so detected table cells align with document content. |
-| `INGEST_DOCLING_PDF_TABLE_STRUCTURE_VLM_MODEL` | `granite-vision-4.1-4b` | `granite-vision-4.1-4b` | `granite-vision-4.1-4b` or `ibm-granite/granite-vision-4.1-4b`. | Model identifier used when the table backend is `granite_vision`. It is not used by the default `tableformer` backend. |
-| `INGEST_DOCLING_PDF_DO_PICTURE_CLASSIFICATION` | `true` | `true` | `true` or `false`. | Enables picture classification for detected figures. Disable for faster parses when figure types are not needed. |
-| `INGEST_DOCLING_PDF_PICTURE_CLASSIFIER_PRESET` | `document_figure_classifier_v2` | `document_figure_classifier_v2` | Docling picture-classifier preset string. This project is tested with `document_figure_classifier_v2`. | Picture classifier preset. The project maps this to Docling `DocumentFigureClassifier-v2.5`. |
-| `INGEST_DOCLING_PDF_DO_PICTURE_DESCRIPTION` | `true` | `true` | `true` or `false`. | Enables VLM-based descriptions for detected pictures in the standard pipeline. This is separate from full-page `vlm` pipeline mode. |
-| `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL` | `Qwen/Qwen3-VL-8B-Instruct` | `Qwen/Qwen3-VL-8B-Instruct` | Any non-empty Hugging Face repo id, local model path, or supported service alias such as `granite_vision`. | VLM model used for picture descriptions in the standard pipeline. |
-| `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_RUNTIME` | `transformers` | `remote_llm` | `auto`, `auto_inline`, `transformers`, `remote_llm`, or aliases `remote`, `api`. | Runtime requested for standard-pipeline picture descriptions. Use `remote_llm` for external OpenAI-compatible inference services. |
-| `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_PROMPT` | `Describe this image.` | `"Describe this image."` | Any string. Quote values with spaces when shell-sourcing env files. | Prompt sent to the picture-description model. |
-| `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MAX_NEW_TOKENS` | `1024` | `1024` | Integer `>= 1`. | Maximum tokens generated by the standard-pipeline picture-description model. The default is higher than Docling's engine default to avoid Qwen3 descriptions ending mid-sentence. |
-| `INGEST_DOCLING_PDF_DO_CODE_ENRICHMENT` | `true` | `true` | `true` or `false`. | Enables code enrichment in the standard pipeline when Docling supports it for the input. |
-| `INGEST_DOCLING_PDF_DO_FORMULA_ENRICHMENT` | `true` | `true` | `true` or `false`. | Enables formula enrichment in the standard pipeline when Docling supports it for the input. |
-| `INGEST_DOCLING_PDF_CODE_FORMULA_PRESET` | `codeformulav2` | `codeformulav2` | Docling code/formula preset string. This project is tested with `codeformulav2`. | Code/formula model preset. The project maps this to Docling `CodeFormulaV2`. |
-| `INGEST_DOCLING_PDF_OCR_BATCH_SIZE` | `4` | `32` | Integer `>= 1`. | OCR batch size for the standard PDF/image pipeline. Increase on large GPUs; reduce on CPU or if memory is tight. |
-| `INGEST_DOCLING_PDF_LAYOUT_BATCH_SIZE` | `4` | `32` | Integer `>= 1`. | Layout model batch size. Increase for throughput when GPU memory allows. |
-| `INGEST_DOCLING_PDF_TABLE_BATCH_SIZE` | `4` | `32` | Integer `>= 1`. | Table structure batch size. Increase for throughput when GPU memory allows. |
-| `INGEST_DOCLING_PDF_QUEUE_MAX_SIZE` | `100` | `512` | Integer `>= 1`. | Internal Docling queue size. Larger values can improve pipeline throughput but consume more memory. |
+
+Table structure extraction, TableFormer accurate mode with cell matching,
+picture classification, RemoteLLM picture descriptions, and PDF pipeline batch
+sizes are backend constants. Picture descriptions use
+`INGEST_DOCLING_VLM_MODEL` and a fixed token budget of `2048`.
 
 ## Full VLM Pipeline Options
 
 These settings apply when `pipeline=vlm` is selected for PDF or image inputs.
 They do not control standard-pipeline picture descriptions, which use the
-`INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_*` settings above.
+same RemoteLLM endpoint and `INGEST_DOCLING_VLM_MODEL`.
 
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
-| `INGEST_DOCLING_VLM_MODEL` | `Qwen/Qwen3-VL-8B-Instruct` | `Qwen/Qwen3-VL-8B-Instruct` | Any non-empty Hugging Face repo id, local model path, or supported service alias such as `granite_vision`. | Full-page VLM model repository or identifier. |
+| `INGEST_DOCLING_VLM_MODEL` | `Qwen/Qwen3-VL-8B-Instruct` | `Qwen/Qwen3-VL-8B-Instruct` | Any non-empty model id accepted by the RemoteLLM endpoint. | Full-page VLM model identifier. |
 | `INGEST_DOCLING_VLM_PROMPT` | `Convert this page to markdown.` | `"Convert this page to markdown."` | Any string. Quote values with spaces when shell-sourcing env files. | Prompt for full-page VLM conversion. |
 | `INGEST_DOCLING_VLM_RESPONSE_FORMAT` | `markdown` | `markdown` | `doctags`, `doclang`, `markdown`, `deepseekocr_markdown`, `html`, `otsl`, or `plaintext`. | Expected Docling VLM response format. |
-| `INGEST_DOCLING_VLM_RUNTIME` | `transformers` | `remote_llm` | `auto`, `auto_inline`, `transformers`, `remote_llm`, or aliases `remote`, `api`. | Runtime requested for full-page VLM conversion. Use `remote_llm` for external OpenAI-compatible inference services. |
 | `INGEST_DOCLING_VLM_SCALE` | `2.0` | `2.0` | Float `> 0`. | Page image scale used before VLM inference. Higher values can improve OCR/detail quality but increase memory and latency. |
-| `INGEST_DOCLING_VLM_TORCH_DTYPE` | `bfloat16` | `bfloat16` | Unset or torch dtype string such as `auto`, `float16`, `bfloat16`, or `float32`. | Torch dtype passed to the VLM loader when supported. A100-class GPUs usually work well with `bfloat16`. |
-| `INGEST_DOCLING_VLM_LOAD_IN_8BIT` | `false` | `false` | `true` or `false`. | Requests 8-bit model loading where supported. This can reduce memory use but may require extra dependencies and quality checks. |
-| `INGEST_DOCLING_VLM_MAX_NEW_TOKENS` | `4096` | `4096` | Integer `>= 1`. | Maximum tokens generated by the full-page VLM path. Increase for long pages only after checking memory and output truncation behavior. |
-| `INGEST_DOCLING_VLM_TRUST_REMOTE_CODE` | `false` | `true` | `true` or `false`. | Allows custom Hugging Face model code for local Transformers VLM loaders. Enable only after inspecting and trusting the model repository. |
-| `INGEST_DOCLING_REMOTE_LLM_URL` | `http://localhost:8000/v1/chat/completions` | `http://127.0.0.1:8000/v1/chat/completions` | Non-empty HTTP or HTTPS URL. | OpenAI-compatible chat completions endpoint used when either VLM runtime is `remote_llm`. |
+| `INGEST_DOCLING_REMOTE_LLM_URL` | `http://localhost:8000/v1/chat/completions` | `http://127.0.0.1:8000/v1/chat/completions` | Non-empty HTTP or HTTPS URL. | OpenAI-compatible chat completions endpoint used for full-page VLM and picture-description requests. |
 | `INGEST_DOCLING_REMOTE_LLM_MODEL` | unset | `Qwen/Qwen3-VL-8B-Instruct` | Unset or any model id accepted by the RemoteLLM endpoint. | Optional model id sent in the RemoteLLM request. If unset, full-page VLM uses `INGEST_DOCLING_VLM_MODEL`; picture descriptions use their picture-description model. |
 | `INGEST_DOCLING_REMOTE_LLM_API_KEY` | unset | unset | Unset or any API key string. | Optional API key for the RemoteLLM endpoint. Keep this only in local `.env`, never in committed env files. |
 | `INGEST_DOCLING_REMOTE_LLM_API_KEY_HEADER` | `Authorization` | `Authorization` | Any HTTP header name string. | Header name used for the optional RemoteLLM API key. |
 | `INGEST_DOCLING_REMOTE_LLM_API_KEY_SCHEME` | `Bearer` | `Bearer` | Any string, including empty. | Prefix used before the API key value. Leave empty only if the endpoint expects the raw key. |
 | `INGEST_DOCLING_REMOTE_LLM_TIMEOUT_SECONDS` | `90` | `90` | Float `> 0`. | HTTP timeout for RemoteLLM requests from Docling. Increase for very slow pages or large models. |
-| `INGEST_DOCLING_REMOTE_LLM_CONCURRENCY` | `1` | `8` | Integer `>= 1`. | RemoteLLM request concurrency passed to Docling. Tune this with the inference server's batch capacity. |
-| `INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE` | unset | `8` | Unset or integer `>= 1`. | Docling page batch size used with RemoteLLM. Keep it greater than or equal to RemoteLLM concurrency. |
 | `INGEST_DOCLING_REMOTE_LLM_MAX_TOKENS` | `4096` | `4096` | Integer `>= 1`. | `max_tokens` sent to the RemoteLLM endpoint for full-page VLM conversion. |
 | `INGEST_DOCLING_REMOTE_LLM_TEMPERATURE` | `0` | `0` | Float `>= 0`. | Temperature sent to the RemoteLLM endpoint. Keep `0` for deterministic document conversion. |
 | `INGEST_DOCLING_REMOTE_LLM_PROVIDER` | `openai_compatible` | `openai_compatible` | `openai_compatible` or alias `openai`. | Remote provider type. Current implementation supports OpenAI-compatible chat completions. |
 | `INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED` | `false` | `false` | `true` or `false`. | When `true`, API startup checks the RemoteLLM endpoint and fails fast if it is unreachable. |
 | `INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_TIMEOUT_SECONDS` | `5` | `5` | Float `> 0`. | Timeout for the startup and `/health/remote-llm` checks. |
+
+RemoteLLM request concurrency and page batch size are derived from
+`INGEST_PARSER_WORKER_COUNT`.
 
 ## XBRL Options
 
@@ -234,12 +211,12 @@ These variables are used by `env-cuda-gpu` but are not part of the Pydantic
 | `CUDA_VISIBLE_DEVICES` | `0` | CUDA device id list such as `0`, `1`, or `0,1`; unset means all visible devices. | Limits CUDA-visible GPUs for PyTorch/Docling. Use a comma-separated list for multiple GPUs. |
 | `NVIDIA_VISIBLE_DEVICES` | `0` | NVIDIA device id list, `all`, `none`, or unset. | Docker/NVIDIA runtime device visibility. Useful when running through NVIDIA container tooling. |
 | `NVIDIA_DRIVER_CAPABILITIES` | `compute,utility` | Comma-separated NVIDIA capabilities such as `compute`, `utility`, `graphics`, `video`, `display`, `compat32`, or `all`. | NVIDIA container runtime capabilities needed for compute workloads and device utilities. |
-| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` | PyTorch allocator configuration string. | PyTorch allocator tuning that can reduce fragmentation for large VLM/OCR workloads. |
+| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` | PyTorch allocator configuration string. | PyTorch allocator tuning that can reduce fragmentation for large OCR/layout/table workloads. |
 | `TOKENIZERS_PARALLELISM` | `false` | `true` or `false`. | Disables tokenizer thread-pool warnings and avoids oversubscription in some Hugging Face workloads. |
 
 ## Operational Notes
 
-- API query parameters can override selected runtime choices for one request:
+- API query parameters can override selected parse choices for one request:
   `pipeline`, `chunking_enabled`, and `chunking_strategy`.
 - Direct `pipeline=vlm` mode is supported only for PDF and image inputs in this
   service version.

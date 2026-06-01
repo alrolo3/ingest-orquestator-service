@@ -209,6 +209,26 @@ EXPECTED_ROUTE_STANDARD_METADATA = {
     },
 }
 
+ALL_ROUTE_EXTENSIONS = [
+    ".pdf",
+    ".png",
+    ".docx",
+    ".pptx",
+    ".html",
+    ".md",
+    ".xlsx",
+    ".csv",
+    ".json",
+    ".adoc",
+    ".tex",
+    ".vtt",
+    ".jats",
+    ".uspto",
+    ".xbrl",
+    ".mets",
+    ".mp3",
+]
+
 
 def test_build_format_options_routes_default_formats_without_model_loading() -> None:
     settings = Settings(docling_pdf_ocr_engine="auto")
@@ -235,7 +255,7 @@ def test_build_format_options_routes_default_formats_without_model_loading() -> 
 
 def test_build_format_options_routes_all_configurable_formats_without_model_loading() -> None:
     settings = Settings(
-        docling_allowed_formats=list(EXPECTED_STANDARD_ROUTE_METADATA),
+        allowed_upload_extensions=ALL_ROUTE_EXTENSIONS,
         docling_pdf_ocr_engine="auto",
     )
 
@@ -263,9 +283,8 @@ def test_build_format_options_routes_all_configurable_formats_without_model_load
 
 def test_build_format_options_routes_selected_vlm_format_only() -> None:
     settings = Settings(
-        docling_allowed_formats=["docx", "image", "pdf"],
+        allowed_upload_extensions=[".docx", ".png", ".pdf"],
         docling_pdf_ocr_engine="auto",
-        docling_vlm_runtime="remote_llm",
     )
 
     _allowed_formats, format_options, routes = build_format_options(

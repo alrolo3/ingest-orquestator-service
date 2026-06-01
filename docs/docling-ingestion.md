@@ -7,8 +7,9 @@ Implementation should follow the official API reference:
 
 ## Supported Formats
 
-`INGEST_DOCLING_ALLOWED_FORMATS` controls the Docling `InputFormat` values that
-the service allows. The default configuration enables:
+Docling `InputFormat` values are derived from
+`INGEST_ALLOWED_UPLOAD_EXTENSIONS`; there is no separate Docling allow-list.
+The default upload extension list enables:
 
 ```text
 pdf,image,docx,pptx,html,md,xlsx,csv,json_docling,asciidoc,latex,vtt,xml_jats,xml_uspto,xml_xbrl
@@ -63,21 +64,22 @@ taxonomy-fetch controls.
 
 ## VLM Mode
 
-Full-page VLM conversion is configured separately from picture description:
+Full-page VLM conversion is configured separately from picture description, but
+both paths use the configured RemoteLLM endpoint. The backend does not load VLM
+models in-process.
 
 ```text
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
-INGEST_DOCLING_VLM_RUNTIME=remote_llm
+INGEST_DOCLING_REMOTE_LLM_URL=http://localhost:8000/v1/chat/completions
+INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 ```
 
-Set `INGEST_DOCLING_VLM_RUNTIME=transformers` only when the API process should
-load the VLM directly. For GPU servers, prefer `remote_llm` so Qwen3 lives in a
-single OpenAI-compatible inference endpoint. See
-[Docling RemoteLLM playbook](docling-remote-llm.md).
+Run Qwen3 or equivalent VLM models in a separate OpenAI-compatible inference
+endpoint. See [Docling RemoteLLM playbook](docling-remote-llm.md).
 
-Picture description still uses the standard PDF pipeline enrichment settings,
-for example `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL`.
+Picture descriptions use the same VLM model/runtime configuration and send
+requests through the same RemoteLLM endpoint.
 
 ## RAG Output
 

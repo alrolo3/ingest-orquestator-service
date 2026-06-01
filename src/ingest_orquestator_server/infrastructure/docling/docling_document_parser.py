@@ -32,6 +32,7 @@ from ingest_orquestator_server.infrastructure.docling.docling_result_metadata im
     conversion_result_metadata,
 )
 from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabilities import (
+    RUNTIME_REMOTE_LLM,
     docling_runtime_metadata,
     resolve_picture_description_runtime,
     resolve_vlm_convert_runtime,
@@ -121,10 +122,10 @@ class DoclingDocumentParser:
                     else None,
                     "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
                     "remote_llm_url": settings.docling_remote_llm_url
-                    if resolved_pipeline == "vlm" and settings.docling_vlm_runtime == "remote_llm"
+                    if resolved_pipeline == "vlm"
                     else None,
                     "remote_llm_concurrency": settings.docling_remote_llm_concurrency
-                    if resolved_pipeline == "vlm" and settings.docling_vlm_runtime == "remote_llm"
+                    if resolved_pipeline == "vlm"
                     else None,
                     "accelerator_device": settings.docling_accelerator_device,
                 },
@@ -290,9 +291,7 @@ class DoclingDocumentParser:
             "ocr_languages": settings.docling_pdf_ocr_languages,
             "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
             "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,
-            "vlm_runtime_requested": settings.docling_vlm_runtime
-            if resolved_pipeline == "vlm"
-            else None,
+            "vlm_runtime_requested": RUNTIME_REMOTE_LLM if resolved_pipeline == "vlm" else None,
             "picture_description_model": settings.docling_pdf_picture_description_model
             if settings.docling_pdf_do_picture_description
             else None,
@@ -300,9 +299,7 @@ class DoclingDocumentParser:
             if settings.docling_pdf_do_picture_description
             else None,
             "picture_description_runtime_requested": (
-                settings.docling_pdf_picture_description_runtime
-                if settings.docling_pdf_do_picture_description
-                else None
+                RUNTIME_REMOTE_LLM if settings.docling_pdf_do_picture_description else None
             ),
             "runtime": runtime_metadata,
             "engine": engine_metadata,
@@ -344,9 +341,7 @@ class DoclingDocumentParser:
             "ocr_languages": settings.docling_pdf_ocr_languages,
             "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
             "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,
-            "vlm_runtime_requested": settings.docling_vlm_runtime
-            if resolved_pipeline == "vlm"
-            else None,
+            "vlm_runtime_requested": RUNTIME_REMOTE_LLM if resolved_pipeline == "vlm" else None,
             "picture_description_model": settings.docling_pdf_picture_description_model
             if settings.docling_pdf_do_picture_description
             else None,
@@ -354,9 +349,7 @@ class DoclingDocumentParser:
             if settings.docling_pdf_do_picture_description
             else None,
             "picture_description_runtime_requested": (
-                settings.docling_pdf_picture_description_runtime
-                if settings.docling_pdf_do_picture_description
-                else None
+                RUNTIME_REMOTE_LLM if settings.docling_pdf_do_picture_description else None
             ),
             "runtime": {
                 "active_pipeline_stage": normalized.metadata["docling"]["runtime"].get(

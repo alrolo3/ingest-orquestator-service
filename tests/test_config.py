@@ -49,25 +49,17 @@ def test_env_example_loads() -> None:
     assert settings.confidence_output_enabled is True
     assert settings.docling_accelerator_device == "cuda"
     assert settings.docling_xbrl_enable_local_fetch is True
-    assert settings.docling_pdf_picture_description_runtime == "remote_llm"
-    assert settings.docling_vlm_runtime == "remote_llm"
     assert settings.docling_engine_cache_enabled is True
     assert settings.docling_engine_warmup_enabled is False
     assert settings.docling_engine_warmup_formats == ["pdf"]
-    assert settings.docling_parse_concurrency == 2
-    assert settings.effective_docling_parse_concurrency == 2
-    assert settings.docling_gpu_engine_concurrency == 1
-    assert settings.docling_gpu_batch_max_documents == 5
-    assert settings.docling_gpu_batch_wait_ms == 250
+    assert settings.effective_docling_parse_concurrency == settings.parser_worker_count
     assert settings.docling_engine_idle_ttl_seconds == 0
     assert settings.docling_perf_page_batch_size == 32
     assert settings.docling_remote_llm_url == "http://localhost:8000/v1/chat/completions"
     assert settings.docling_remote_llm_model == "Qwen/Qwen3-VL-8B-Instruct"
-    assert settings.docling_remote_llm_concurrency == 8
-    assert settings.docling_vlm_max_new_tokens == 4096
-    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
-    assert settings.docling_vlm_trust_remote_code is False
-    assert settings.docling_remote_llm_page_batch_size == 8
+    assert settings.docling_remote_llm_concurrency == settings.parser_worker_count
+    assert settings.docling_pdf_picture_description_max_new_tokens == 2048
+    assert settings.docling_remote_llm_page_batch_size == settings.parser_worker_count
     assert settings.queue_backend == "local"
     assert settings.rabbitmq_url == "amqp://guest:guest@localhost:5672/%2F"
     assert settings.dramatiq_parser_queue_name == "ingest_parser_jobs"
@@ -97,22 +89,14 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_xbrl_enable_local_fetch is True
     assert settings.docling_xbrl_enable_remote_fetch is False
     assert settings.docling_vlm_model == "Qwen/Qwen3-VL-8B-Instruct"
-    assert settings.docling_vlm_runtime == "remote_llm"
-    assert settings.docling_pdf_picture_description_model == "Qwen/Qwen3-VL-8B-Instruct"
-    assert settings.docling_pdf_picture_description_runtime == "remote_llm"
+    assert settings.docling_pdf_picture_description_model == settings.docling_vlm_model
     assert settings.docling_engine_cache_enabled is True
     assert settings.docling_engine_warmup_enabled is False
-    assert settings.docling_parse_concurrency == 2
-    assert settings.effective_docling_parse_concurrency == 2
-    assert settings.docling_gpu_engine_concurrency == 1
-    assert settings.docling_gpu_batch_max_documents == 5
-    assert settings.docling_gpu_batch_wait_ms == 250
+    assert settings.effective_docling_parse_concurrency == settings.parser_worker_count
     assert settings.docling_perf_page_batch_size == 32
-    assert settings.docling_remote_llm_concurrency == 8
-    assert settings.docling_vlm_max_new_tokens == 4096
-    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
-    assert settings.docling_remote_llm_page_batch_size == 8
-    assert settings.docling_vlm_trust_remote_code is False
+    assert settings.docling_remote_llm_concurrency == settings.parser_worker_count
+    assert settings.docling_pdf_picture_description_max_new_tokens == 2048
+    assert settings.docling_remote_llm_page_batch_size == settings.parser_worker_count
 
 
 def test_cpu_env_loads() -> None:
@@ -121,24 +105,19 @@ def test_cpu_env_loads() -> None:
     assert settings.docling_accelerator_device == "cpu"
     assert settings.docling_pdf_ocr_engine == "auto"
     assert settings.docling_pdf_ocr_use_gpu is False
-    assert settings.docling_pdf_do_picture_classification is False
-    assert settings.docling_pdf_do_picture_description is False
-    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
-    assert settings.docling_pdf_do_code_enrichment is False
-    assert settings.docling_pdf_do_formula_enrichment is False
-    assert settings.docling_pdf_picture_description_runtime == "transformers"
+    assert settings.docling_pdf_do_picture_classification is True
+    assert settings.docling_pdf_do_picture_description is True
+    assert settings.docling_pdf_picture_description_max_new_tokens == 2048
     assert settings.docling_engine_cache_enabled is True
-    assert settings.docling_gpu_batch_wait_ms == 0
-    assert settings.docling_perf_page_batch_size is None
-    assert settings.docling_pdf_ocr_batch_size == 1
-    assert settings.docling_pdf_queue_max_size == 32
+    assert settings.docling_perf_page_batch_size == 32
+    assert settings.docling_pdf_ocr_batch_size == 32
+    assert settings.docling_pdf_queue_max_size == 512
     assert settings.chunking_strategy == "hybrid"
 
 
 def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     settings = Settings()
 
-    assert settings.docling_parse_concurrency is None
     assert settings.effective_docling_parse_concurrency == settings.parser_worker_count
     assert settings.docling_allow_external_plugins is True
     assert settings.docling_pdf_layout_model == "docling-layout-heron-101"
@@ -147,16 +126,53 @@ def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     assert settings.docling_pdf_table_structure_backend == "tableformer"
     assert settings.docling_pdf_table_structure_mode == "accurate"
     assert settings.docling_pdf_table_do_cell_matching is True
-    assert settings.docling_pdf_table_structure_vlm_model == "granite-vision-4.1-4b"
     assert settings.docling_pdf_do_picture_classification is True
     assert settings.docling_pdf_picture_classifier_preset == "document_figure_classifier_v2"
     assert settings.docling_pdf_do_picture_description is True
-    assert settings.docling_pdf_picture_description_model == "Qwen/Qwen3-VL-8B-Instruct"
-    assert settings.docling_pdf_picture_description_runtime == "transformers"
-    assert settings.docling_pdf_picture_description_max_new_tokens == 1024
-    assert settings.docling_pdf_do_code_enrichment is True
-    assert settings.docling_pdf_do_formula_enrichment is True
-    assert settings.docling_pdf_code_formula_preset == "codeformulav2"
+    assert settings.docling_pdf_picture_description_model == settings.docling_vlm_model
+    assert settings.docling_pdf_picture_description_max_new_tokens == 2048
+    assert settings.docling_remote_llm_concurrency == settings.parser_worker_count
+    assert settings.docling_remote_llm_page_batch_size == settings.parser_worker_count
+
+
+def test_docling_allowed_formats_are_derived_from_backend_upload_extensions() -> None:
+    settings = Settings(allowed_upload_extensions=[".PDF", "md", ".png", ".jpg"])
+
+    assert settings.docling_allowed_formats == ["image", "md", "pdf"]
+
+
+def test_settings_do_not_expose_backend_vlm_loader_settings() -> None:
+    removed_fields = {
+        "docling_vlm_runtime",
+        "docling_vlm_torch_dtype",
+        "docling_vlm_load_in_8bit",
+        "docling_vlm_max_new_tokens",
+        "docling_vlm_trust_remote_code",
+        "docling_pdf_picture_description_runtime",
+        "docling_pdf_table_structure_vlm_model",
+        "docling_pdf_do_code_enrichment",
+        "docling_pdf_do_formula_enrichment",
+        "docling_pdf_code_formula_preset",
+        "docling_allowed_formats",
+        "docling_parse_concurrency",
+        "docling_gpu_engine_concurrency",
+        "docling_gpu_batch_max_documents",
+        "docling_gpu_batch_wait_ms",
+        "docling_pdf_do_table_structure",
+        "docling_pdf_table_structure_backend",
+        "docling_pdf_table_structure_mode",
+        "docling_pdf_table_do_cell_matching",
+        "docling_pdf_do_picture_classification",
+        "docling_pdf_picture_classifier_preset",
+        "docling_pdf_do_picture_description",
+        "docling_pdf_picture_description_model",
+        "docling_pdf_picture_description_prompt",
+        "docling_pdf_picture_description_max_new_tokens",
+        "docling_remote_llm_concurrency",
+        "docling_remote_llm_page_batch_size",
+    }
+
+    assert removed_fields.isdisjoint(Settings.model_fields)
 
 
 def test_settings_parse_docling_ocr_languages_from_string() -> None:
@@ -165,33 +181,16 @@ def test_settings_parse_docling_ocr_languages_from_string() -> None:
     assert settings.docling_pdf_ocr_languages == ["en", "es"]
 
 
-def test_settings_parse_docling_allowed_formats_from_string() -> None:
-    settings = Settings(docling_allowed_formats="pdf, image, docx")
-
-    assert settings.docling_allowed_formats == ["docx", "image", "pdf"]
-
-
-def test_settings_reject_unknown_docling_format() -> None:
-    with pytest.raises(ValidationError):
-        Settings(docling_allowed_formats=["pdf", "unknown"])
-
-
 def test_settings_grouped_config_views() -> None:
-    settings = Settings(
-        docling_pipeline="vlm",
-        docling_vlm_runtime="transformers",
-        docling_parse_concurrency=3,
-    )
+    settings = Settings(docling_pipeline="vlm", parser_worker_count=3)
 
     assert settings.docling_common_config.pipeline == "vlm"
     assert settings.docling_common_config.parse_concurrency == 3
-    assert settings.docling_vlm_config.runtime == "transformers"
     assert settings.docling_common_config.engine_cache_enabled is True
-    assert settings.docling_common_config.gpu_engine_concurrency == 1
     assert settings.docling_vlm_config.remote_llm_url == (
         "http://localhost:8000/v1/chat/completions"
     )
-    assert settings.docling_vlm_config.max_new_tokens == 4096
+    assert settings.docling_vlm_config.remote_llm_max_tokens == 4096
     assert settings.docling_xbrl_config.enable_local_fetch is False
     assert settings.chunking_config.embedding_output_enabled is True
     assert settings.confidence_config.output_enabled is True
@@ -239,34 +238,3 @@ def test_settings_dispatch_config_redacts_password() -> None:
 
     assert config["elastic_password_configured"] is True
     assert "secret" not in str(config)
-
-
-def test_settings_vlm_trust_remote_code_controls_vlm_options() -> None:
-    settings = Settings(docling_vlm_trust_remote_code=True)
-
-    assert settings.docling_vlm_trust_remote_code is True
-    assert settings.docling_vlm_config.trust_remote_code is True
-
-
-def test_settings_reject_unknown_table_structure_backend() -> None:
-    with pytest.raises(ValidationError):
-        Settings(docling_pdf_table_structure_backend="unknown")
-
-
-def test_settings_reject_unknown_vlm_runtime() -> None:
-    with pytest.raises(ValidationError):
-        Settings(docling_vlm_runtime="unknown")
-
-
-@pytest.mark.parametrize(
-    "field_name",
-    ["docling_vlm_runtime", "docling_pdf_picture_description_runtime"],
-)
-def test_settings_reject_legacy_vllm_runtime(field_name: str) -> None:
-    with pytest.raises(ValidationError):
-        Settings(**{field_name: "vllm"})
-
-
-def test_settings_reject_unknown_picture_description_runtime() -> None:
-    with pytest.raises(ValidationError):
-        Settings(docling_pdf_picture_description_runtime="unknown")

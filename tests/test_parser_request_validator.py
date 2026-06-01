@@ -58,7 +58,7 @@ def test_parser_request_validator_rejects_disabled_docling_format(tmp_path: Path
     validator = ParserRequestValidationService(
         {
             "docling": DoclingParserRequestValidator(
-                Settings(storage_dir=tmp_path, docling_allowed_formats=["pdf"])
+                Settings(storage_dir=tmp_path, allowed_upload_extensions=[".pdf"])
             )
         }
     )

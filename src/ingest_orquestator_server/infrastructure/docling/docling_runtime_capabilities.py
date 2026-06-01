@@ -5,10 +5,7 @@ from typing import Any
 
 from ingest_orquestator_server.config.settings import Settings
 
-RUNTIME_AUTO = "auto"
-RUNTIME_AUTO_INLINE = "auto_inline"
 RUNTIME_REMOTE_LLM = "remote_llm"
-RUNTIME_TRANSFORMERS = "transformers"
 
 VLM_CONVERT_STAGE = "vlm_convert"
 PICTURE_DESCRIPTION_STAGE = "picture_description"
@@ -120,11 +117,6 @@ STAGE_RUNTIMES: dict[str, dict[str, Any]] = {
         "runtime": "transformers-image-classification",
         "reason": "Picture classification uses a ViT classifier, not a generative VLM.",
     },
-    "code_formula": {
-        "model": "CodeFormulaV2",
-        "runtime": "transformers",
-        "reason": "Docling catalog lists CodeFormulaV2 with Transformers/MLX only.",
-    },
 }
 
 
@@ -181,7 +173,6 @@ def resolve_vlm_convert_runtime(settings: Settings) -> RuntimeResolution:
     return _resolve_runtime(
         stage=VLM_CONVERT_STAGE,
         model=settings.docling_vlm_model,
-        requested_runtime=settings.docling_vlm_runtime,
         aliases=_VLM_CONVERT_ALIASES,
         presets=VLM_CONVERT_PRESETS,
         response_format=settings.docling_vlm_response_format,
@@ -192,7 +183,6 @@ def resolve_picture_description_runtime(settings: Settings) -> RuntimeResolution
     return _resolve_runtime(
         stage=PICTURE_DESCRIPTION_STAGE,
         model=settings.docling_pdf_picture_description_model,
-        requested_runtime=settings.docling_pdf_picture_description_runtime,
         aliases=_PICTURE_DESCRIPTION_ALIASES,
         presets=PICTURE_DESCRIPTION_PRESETS,
         response_format="plaintext",
@@ -208,8 +198,8 @@ def docling_runtime_metadata(
     picture_resolution = resolve_picture_description_runtime(settings)
     return {
         "policy": {
-            "local_runtimes": [RUNTIME_TRANSFORMERS, RUNTIME_AUTO_INLINE],
             "remote_runtime": RUNTIME_REMOTE_LLM,
+            "backend_vlm_loading": "disabled",
             "remote_llm": {
                 "provider": settings.docling_remote_llm_provider,
                 "url": settings.docling_remote_llm_url,
@@ -235,8 +225,6 @@ def docling_runtime_metadata(
             "table_structure": _table_structure_metadata(settings),
             "picture_classifier": STAGE_RUNTIMES["picture_classifier"]
             | {"model": settings.docling_pdf_picture_classifier_preset},
-            "code_formula": STAGE_RUNTIMES["code_formula"]
-            | {"model": settings.docling_pdf_code_formula_preset},
         },
     }
 
@@ -245,58 +233,31 @@ def _resolve_runtime(
     *,
     stage: str,
     model: str,
-    requested_runtime: str,
     aliases: dict[str, str],
     presets: dict[str, dict[str, Any]],
     response_format: str,
 ) -> RuntimeResolution:
-    original_runtime = requested_runtime.strip().lower().replace("-", "_")
     normalized_model = _normalize_model_key(model)
     preset = aliases.get(normalized_model)
     preset_metadata = presets.get(preset or "")
-    remote_llm_supported = True
-
-    if original_runtime == RUNTIME_AUTO:
-        resolved_runtime = RUNTIME_TRANSFORMERS
-    elif original_runtime == RUNTIME_AUTO_INLINE:
-        resolved_runtime = RUNTIME_AUTO_INLINE
-    elif original_runtime == RUNTIME_REMOTE_LLM:
-        resolved_runtime = RUNTIME_REMOTE_LLM
-    else:
-        resolved_runtime = original_runtime
-
-    fallback_reason = None
-    effective_fallback_runtime = None
 
     return RuntimeResolution(
         stage=stage,
         model=model,
         preset=preset,
-        requested_runtime=original_runtime,
-        resolved_runtime=resolved_runtime,
-        remote_llm_supported=remote_llm_supported,
-        fallback_runtime=effective_fallback_runtime,
-        fallback_reason=fallback_reason,
+        requested_runtime=RUNTIME_REMOTE_LLM,
+        resolved_runtime=RUNTIME_REMOTE_LLM,
+        remote_llm_supported=True,
         response_format=(
             str(preset_metadata.get("response_format"))
             if preset_metadata is not None
             else response_format
         ),
-        mode="remote" if resolved_runtime == RUNTIME_REMOTE_LLM else "inline",
+        mode="remote",
     )
 
 
 def _table_structure_metadata(settings: Settings) -> dict[str, Any]:
-    if settings.docling_pdf_table_structure_backend == "granite_vision":
-        return {
-            "model": settings.docling_pdf_table_structure_vlm_model,
-            "runtime": "transformers",
-            "remote_llm_supported": False,
-            "reason": (
-                "Docling catalog currently lists Granite Vision table structure "
-                "with Transformers in the standard pipeline."
-            ),
-        }
     return STAGE_RUNTIMES["table_structure"] | {
         "model": settings.docling_pdf_table_structure_backend,
     }

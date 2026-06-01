@@ -4,7 +4,6 @@ from typing import Any
 
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.infrastructure.docling.docling_model_options import (
-    build_code_formula_options,
     build_layout_options,
     build_ocr_options,
     build_picture_classification_options,
@@ -15,8 +14,6 @@ from ingest_orquestator_server.infrastructure.docling.docling_model_options impo
 from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabilities import (
     RUNTIME_REMOTE_LLM,
     docling_runtime_metadata,
-    resolve_picture_description_runtime,
-    resolve_vlm_convert_runtime,
 )
 
 
@@ -32,13 +29,9 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
     _configure_docling_perf_page_batch_size(settings)
     pdf_pipeline_options = PdfPipelineOptions()
     pdf_pipeline_options.accelerator_options = build_accelerator_options(settings)
-    picture_description_uses_remote_llm = (
-        settings.docling_pdf_do_picture_description
-        and resolve_picture_description_runtime(settings).resolved_runtime == RUNTIME_REMOTE_LLM
-    )
-    if picture_description_uses_remote_llm:
+    if settings.docling_pdf_do_picture_description:
         _configure_remote_llm_docling_batch_size(settings)
-    pdf_pipeline_options.enable_remote_services = picture_description_uses_remote_llm
+    pdf_pipeline_options.enable_remote_services = settings.docling_pdf_do_picture_description
     pdf_pipeline_options.allow_external_plugins = settings.docling_allow_external_plugins
     pdf_pipeline_options.do_ocr = settings.docling_pdf_do_ocr
     pdf_pipeline_options.ocr_options = build_ocr_options(settings)
@@ -51,9 +44,8 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
     )
     pdf_pipeline_options.do_picture_description = settings.docling_pdf_do_picture_description
     pdf_pipeline_options.picture_description_options = build_picture_description_options(settings)
-    pdf_pipeline_options.do_code_enrichment = settings.docling_pdf_do_code_enrichment
-    pdf_pipeline_options.do_formula_enrichment = settings.docling_pdf_do_formula_enrichment
-    pdf_pipeline_options.code_formula_options = build_code_formula_options(settings)
+    pdf_pipeline_options.do_code_enrichment = False
+    pdf_pipeline_options.do_formula_enrichment = False
     pdf_pipeline_options.ocr_batch_size = settings.docling_pdf_ocr_batch_size
     pdf_pipeline_options.layout_batch_size = settings.docling_pdf_layout_batch_size
     pdf_pipeline_options.table_batch_size = settings.docling_pdf_table_batch_size
@@ -71,13 +63,11 @@ def build_vlm_pipeline_options(settings: Settings) -> Any:
         ) from exc
 
     _configure_docling_perf_page_batch_size(settings)
-    resolution = resolve_vlm_convert_runtime(settings)
-    if resolution.resolved_runtime == RUNTIME_REMOTE_LLM:
-        _configure_remote_llm_docling_batch_size(settings)
+    _configure_remote_llm_docling_batch_size(settings)
 
     return VlmPipelineOptions(
         accelerator_options=build_accelerator_options(settings),
-        enable_remote_services=resolution.resolved_runtime == RUNTIME_REMOTE_LLM,
+        enable_remote_services=True,
         allow_external_plugins=settings.docling_allow_external_plugins,
         images_scale=settings.docling_vlm_scale,
         generate_page_images=True,
@@ -205,9 +195,6 @@ def _common_options(
         "engine_warmup_enabled": settings.docling_engine_warmup_enabled,
         "engine_warmup_formats": settings.docling_engine_warmup_formats,
         "parse_concurrency": settings.effective_docling_parse_concurrency,
-        "gpu_engine_concurrency": settings.docling_gpu_engine_concurrency,
-        "gpu_batch_max_documents": settings.docling_gpu_batch_max_documents,
-        "gpu_batch_wait_ms": settings.docling_gpu_batch_wait_ms,
         "engine_idle_ttl_seconds": settings.docling_engine_idle_ttl_seconds,
         "perf_page_batch_size": settings.docling_perf_page_batch_size,
     }
@@ -265,19 +252,15 @@ def _pdf_options(settings: Settings) -> dict[str, Any]:
         "table_structure_backend": settings.docling_pdf_table_structure_backend,
         "table_structure_mode": settings.docling_pdf_table_structure_mode,
         "table_do_cell_matching": settings.docling_pdf_table_do_cell_matching,
-        "table_structure_vlm_model": settings.docling_pdf_table_structure_vlm_model,
         "do_picture_classification": settings.docling_pdf_do_picture_classification,
         "picture_classifier_preset": settings.docling_pdf_picture_classifier_preset,
         "do_picture_description": settings.docling_pdf_do_picture_description,
         "picture_description_model": settings.docling_pdf_picture_description_model,
-        "picture_description_runtime": settings.docling_pdf_picture_description_runtime,
+        "picture_description_runtime": RUNTIME_REMOTE_LLM,
         "picture_description_prompt": settings.docling_pdf_picture_description_prompt,
         "picture_description_max_new_tokens": (
             settings.docling_pdf_picture_description_max_new_tokens
         ),
-        "do_code_enrichment": settings.docling_pdf_do_code_enrichment,
-        "do_formula_enrichment": settings.docling_pdf_do_formula_enrichment,
-        "code_formula_preset": settings.docling_pdf_code_formula_preset,
         "ocr_batch_size": settings.docling_pdf_ocr_batch_size,
         "layout_batch_size": settings.docling_pdf_layout_batch_size,
         "table_batch_size": settings.docling_pdf_table_batch_size,
@@ -289,13 +272,9 @@ def _pdf_options(settings: Settings) -> dict[str, Any]:
 def _vlm_options(settings: Settings) -> dict[str, Any]:
     return {
         "model": settings.docling_vlm_model,
-        "runtime": settings.docling_vlm_runtime,
+        "runtime": RUNTIME_REMOTE_LLM,
         "response_format": settings.docling_vlm_response_format,
         "scale": settings.docling_vlm_scale,
-        "torch_dtype": settings.docling_vlm_torch_dtype,
-        "load_in_8bit": settings.docling_vlm_load_in_8bit,
-        "max_new_tokens": settings.docling_vlm_max_new_tokens,
-        "trust_remote_code": settings.docling_vlm_trust_remote_code,
         "remote_llm_url": settings.docling_remote_llm_url,
         "remote_llm_model": settings.docling_remote_llm_model,
         "remote_llm_api_key_configured": settings.docling_remote_llm_api_key is not None,

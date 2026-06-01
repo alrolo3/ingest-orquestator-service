@@ -14,7 +14,7 @@ GET /health/remote-llm
 
 Posts a minimal OpenAI-compatible chat completion request to the configured
 RemoteLLM endpoint and returns `ok`, `url`, `model`, `status_code`, and `error`.
-Use this before `pipeline=vlm` tests when `INGEST_DOCLING_VLM_RUNTIME=remote_llm`.
+Use this before `pipeline=vlm` tests to verify the external VLM endpoint.
 
 ## Ingestion Capabilities
 
