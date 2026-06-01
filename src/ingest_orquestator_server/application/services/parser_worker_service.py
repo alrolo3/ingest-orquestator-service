@@ -11,6 +11,7 @@ from ingest_orquestator_server.application.services.document_parse_service impor
 )
 from ingest_orquestator_server.application.services.job_parse_coordinator import (
     JobParseCoordinator,
+    ParseJobResult,
 )
 from ingest_orquestator_server.application.services.parsed_document_dispatch_service import (
     ParsedDocumentDispatchService,
@@ -56,13 +57,14 @@ class ParserWorkerService:
             job_id=job_id,
             worker_count=self._settings.parser_worker_count,
         )
-        self._executor.submit(self.process_job, job_id)
+        self._executor.submit(self._run_submitted_job, job_id)
 
     def recover_active_jobs(self) -> None:
         for job in self._job_repository.list_by_status(
             {
                 IngestionStatus.QUEUED.value,
                 IngestionStatus.PARSER_QUEUED.value,
+                IngestionStatus.RETRYING.value,
                 IngestionStatus.PARSING.value,
                 IngestionStatus.PARSED.value,
                 IngestionStatus.DISPATCH_QUEUED.value,
@@ -74,15 +76,20 @@ class ParserWorkerService:
         ):
             self.submit_job(job.job_id)
 
-    def process_job(self, job_id: str) -> None:
+    def process_job(self, job_id: str) -> ParseJobResult:
         try:
-            self._parse_coordinator.process_job(
+            return self._parse_coordinator.process_job(
                 job_id,
                 preserve_existing_started_at=True,
                 fail_missing_input_before_start=True,
             )
         finally:
             self._release_job(job_id)
+
+    def _run_submitted_job(self, job_id: str) -> None:
+        result = self.process_job(job_id)
+        if result.retry_requested:
+            self.submit_job(job_id)
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=False)

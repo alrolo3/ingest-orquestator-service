@@ -113,6 +113,7 @@ def ingestion_capabilities(
         ],
         "job_statuses": [
             "parser_queued",
+            "retrying",
             "parsing",
             "parsed",
             "dispatch_queued",

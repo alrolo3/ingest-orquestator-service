@@ -171,7 +171,7 @@ def test_parser_worker_marks_missing_input_path_as_failed(tmp_path: Path) -> Non
 
 
 def test_parser_worker_marks_parse_exceptions_as_failed(tmp_path: Path) -> None:
-    settings = Settings(storage_dir=tmp_path)
+    settings = Settings(storage_dir=tmp_path, parser_max_retry_attempts=2)
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)
     input_path = _write_input(tmp_path)
     repository.save(
@@ -191,15 +191,130 @@ def test_parser_worker_marks_parse_exceptions_as_failed(tmp_path: Path) -> None:
     )
 
     try:
-        worker.process_job("job-1")
+        first_result = worker.process_job("job-1")
+        second_result = worker.process_job("job-1")
+        third_result = worker.process_job("job-1")
     finally:
         worker.shutdown()
 
     job = repository.get("job-1")
     assert job is not None
+    assert first_result.retry_requested is True
+    assert second_result.retry_requested is True
+    assert third_result.retry_requested is False
     assert job.status == IngestionStatus.FAILED
     assert job.error == "parse failed"
     assert job.metadata["error_type"] == "ValueError"
+    assert job.metadata["parser_retry"] == {
+        "state": "exhausted",
+        "failure_count": 3,
+        "max_retries": 2,
+        "last_error": "parse failed",
+        "last_error_type": "ValueError",
+    }
+
+
+def test_parser_worker_marks_retrying_job_before_retry_limit(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path, parser_max_retry_attempts=2)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    input_path = _write_input(tmp_path)
+    repository.save(
+        IngestionJob(
+            job_id="job-1",
+            status=IngestionStatus.PARSER_QUEUED,
+            parser="docling",
+            source_file_name=input_path.name,
+            input_path=input_path,
+        )
+    )
+    worker = ParserWorkerService(
+        settings=settings,
+        document_parse_service=FailingDocumentParseService(),
+        job_repository=repository,
+        dispatch_service=_build_dispatch_service(settings, repository),
+    )
+
+    try:
+        result = worker.process_job("job-1")
+    finally:
+        worker.shutdown()
+
+    job = repository.get("job-1")
+    assert job is not None
+    assert result.retry_requested is True
+    assert job.status == IngestionStatus.RETRYING
+    assert job.completed_at is None
+    assert job.error == "parse failed"
+    assert job.metadata["parser_retry"] == {
+        "state": "retrying",
+        "failure_count": 1,
+        "max_retries": 2,
+        "last_error": "parse failed",
+        "last_error_type": "ValueError",
+    }
+
+
+def test_parser_worker_retries_dramatiq_time_limit_exceptions(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path, parser_max_retry_attempts=1)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    input_path = _write_input(tmp_path)
+    repository.save(
+        IngestionJob(
+            job_id="job-1",
+            status=IngestionStatus.PARSER_QUEUED,
+            parser="docling",
+            source_file_name=input_path.name,
+            input_path=input_path,
+        )
+    )
+    worker = ParserWorkerService(
+        settings=settings,
+        document_parse_service=TimeLimitDocumentParseService(),
+        job_repository=repository,
+        dispatch_service=_build_dispatch_service(settings, repository),
+    )
+
+    try:
+        result = worker.process_job("job-1")
+    finally:
+        worker.shutdown()
+
+    job = repository.get("job-1")
+    assert job is not None
+    assert result.retry_requested is True
+    assert job.status == IngestionStatus.RETRYING
+    assert job.error == "Time limit exceeded"
+    assert job.metadata["parser_retry"] == {
+        "state": "retrying",
+        "failure_count": 1,
+        "max_retries": 1,
+        "last_error": "Time limit exceeded",
+        "last_error_type": "TimeLimitExceeded",
+    }
+
+
+def test_parser_worker_resubmits_retrying_submitted_job_after_release(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    worker = _build_worker(settings, repository)
+    worker._parse_coordinator = RetryingParseCoordinator()
+    worker._submitted.add("job-1")
+    resubmitted: list[str] = []
+    worker.submit_job = resubmitted.append  # type: ignore[method-assign]
+
+    try:
+        worker._run_submitted_job("job-1")
+    finally:
+        worker.shutdown()
+
+    assert "job-1" not in worker._submitted
+    assert resubmitted == ["job-1"]
 
 
 def test_parser_worker_releases_submitted_job_when_coordinator_raises(
@@ -265,6 +380,15 @@ class FailingDocumentParseService:
         raise ValueError("parse failed")
 
 
+class TimeLimitExceeded(BaseException):
+    __module__ = "dramatiq.middleware.time_limit"
+
+
+class TimeLimitDocumentParseService:
+    def parse_file(self, **_kwargs):
+        raise TimeLimitExceeded("Time limit exceeded")
+
+
 class RecordingDocumentParseService:
     def __init__(self, tmp_path: Path) -> None:
         self._tmp_path = tmp_path
@@ -314,6 +438,15 @@ class RecordingDocumentParseService:
 class RaisingParseCoordinator:
     def process_job(self, *_args, **_kwargs) -> None:
         raise RuntimeError("unexpected coordinator failure")
+
+
+class RetryingParseCoordinator:
+    def process_job(self, *_args, **_kwargs):
+        from ingest_orquestator_server.application.services.job_parse_coordinator import (
+            ParseJobResult,
+        )
+
+        return ParseJobResult(retry_requested=True)
 
 
 class NoopParsedDocumentDispatchSink:

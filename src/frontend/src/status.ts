@@ -2,6 +2,7 @@ import type { IngestionJob, JobStatus, ProgressUpdate } from "./types";
 
 export const lifecycle: JobStatus[] = [
   "parser_queued",
+  "retrying",
   "parsing",
   "parsed",
   "dispatch_queued",
@@ -71,7 +72,26 @@ export function statusLabel(status?: JobStatus): string {
   if (!status) {
     return "waiting";
   }
+  if (status === "retrying") {
+    return "retrying parser";
+  }
   return status.replaceAll("_", " ");
+}
+
+export function parserRetryMessage(job?: IngestionJob): string | undefined {
+  const retry = job?.metadata?.parser_retry;
+  if (!isRecord(retry)) {
+    return undefined;
+  }
+  const state = stringValue(retry.state);
+  const failureCount = numberValue(retry.failure_count);
+  const maxRetries = numberValue(retry.max_retries);
+  const lastError = stringValue(retry.last_error);
+  if (state !== "retrying" || failureCount === undefined || maxRetries === undefined) {
+    return undefined;
+  }
+  const suffix = lastError ? `: ${lastError}` : "";
+  return `Retrying after parser error ${failureCount}/${maxRetries}${suffix}`;
 }
 
 export function formatBytes(bytes: number): string {
@@ -99,4 +119,12 @@ function bounded(value: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }

@@ -3,6 +3,7 @@ export type JobStatus =
   | "queued"
   | "running"
   | "parser_queued"
+  | "retrying"
   | "parsing"
   | "parsed"
   | "dispatch_queued"

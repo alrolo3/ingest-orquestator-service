@@ -79,6 +79,8 @@ isolated converter state.
   avoid interrupting Docling's internal stage threads mid-conversion. Restart
   both the API publisher process and the Dramatiq worker after changing this
   value because queued messages carry their Dramatiq options.
+- Parser failures are marked `retrying` and republished at the parser queue tail
+  until `INGEST_PARSER_MAX_RETRY_ATTEMPTS` is exhausted.
 - Increase `INGEST_PARSER_WORKER_COUNT` to allow more queued documents to make
   Docling progress concurrently in one process.
 - Reduce `INGEST_PARSER_WORKER_COUNT` when GPU memory or the RemoteLLM endpoint

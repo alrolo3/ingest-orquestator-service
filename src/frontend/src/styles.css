@@ -580,6 +580,12 @@ h1 {
   color: #b42318;
 }
 
+.status-pill.retry {
+  background: #fff7e6;
+  border-color: #f5d08a;
+  color: #8a4b00;
+}
+
 .progress-line {
   background: #e8edf3;
   border-radius: 999px;
@@ -653,8 +659,11 @@ h1 {
 }
 
 .notice {
+  align-items: center;
   border-radius: 8px;
+  display: flex;
   font-size: 13px;
+  gap: 8px;
   padding: 9px 10px;
 }
 
@@ -662,6 +671,12 @@ h1 {
   background: #fff4f2;
   border: 1px solid #ffd1cb;
   color: #b42318;
+}
+
+.notice.retry {
+  background: #fff8ea;
+  border: 1px solid #f4d89b;
+  color: #7a4a00;
 }
 
 .history {

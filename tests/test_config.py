@@ -66,6 +66,7 @@ def test_env_example_loads() -> None:
     assert settings.dramatiq_dispatch_queue_name == "ingest_dispatch_jobs"
     assert settings.dramatiq_parser_time_limit_ms == 14_400_000
     assert settings.dramatiq_dispatch_time_limit_ms == 600_000
+    assert settings.parser_max_retry_attempts == 3
     assert settings.parser_worker_count == 2
     assert settings.dispatch_worker_count == 2
     assert settings.dispatch_queue_max_payload_bytes is None
@@ -203,6 +204,7 @@ def test_settings_grouped_config_views() -> None:
     assert settings.dispatch_config.queue_max_payload_bytes is None
     assert settings.dispatch_config.dramatiq_parser_time_limit_ms == 14_400_000
     assert settings.dispatch_config.dramatiq_dispatch_time_limit_ms == 600_000
+    assert settings.dispatch_config.parser_max_retries == 3
     assert settings.dispatch_config.sink_mode == "local"
     assert settings.dispatch_config.elastic_mapping_version == "v1"
     assert settings.dispatch_config.elastic_password_configured is False
