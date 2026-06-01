@@ -2,7 +2,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, PrivateAttr, field_validator
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ingest_orquestator_server.config.config_groups import (
@@ -139,7 +139,15 @@ class Settings(BaseSettings):
     dramatiq_parser_time_limit_ms: int = Field(default=14_400_000, ge=1)
     dramatiq_dispatch_time_limit_ms: int = Field(default=600_000, ge=1)
     parser_max_retry_attempts: int = Field(default=3, ge=0)
-    parser_worker_count: int = Field(default=2, ge=1)
+    parser_process_count: int = Field(default=2, ge=1)
+    parser_threads_per_process: int = Field(default=1, ge=1)
+    parser_worker_count: int = Field(
+        default=2,
+        ge=1,
+        description="Deprecated alias for parser_process_count.",
+    )
+    dispatch_process_count: int = Field(default=1, ge=1)
+    dispatch_threads_per_process: int = Field(default=2, ge=1)
     dispatch_worker_count: int = Field(default=2, ge=1)
     dispatch_queue_max_size: int = Field(default=100, ge=1)
     dispatch_queue_max_payload_bytes: int | None = Field(default=None, ge=1)
@@ -156,6 +164,32 @@ class Settings(BaseSettings):
     embedding_elastic_verify_certs: bool = True
     embedding_elastic_request_timeout_seconds: float = Field(default=30.0, gt=0)
     embedding_elastic_max_retries: int = Field(default=3, ge=0)
+    docling_perf_page_batch_size: int = Field(
+        default=DOCLING_PERF_PAGE_BATCH_SIZE,
+        ge=1,
+    )
+    docling_pdf_ocr_batch_size: int = Field(
+        default=DOCLING_PDF_OCR_BATCH_SIZE,
+        ge=1,
+    )
+    docling_pdf_layout_batch_size: int = Field(
+        default=DOCLING_PDF_LAYOUT_BATCH_SIZE,
+        ge=1,
+    )
+    docling_pdf_table_batch_size: int = Field(
+        default=DOCLING_PDF_TABLE_BATCH_SIZE,
+        ge=1,
+    )
+    docling_pdf_queue_max_size: int = Field(
+        default=DOCLING_PDF_QUEUE_MAX_SIZE,
+        ge=1,
+    )
+    docling_pdf_batch_polling_interval_seconds: float | None = Field(
+        default=None,
+        gt=0,
+    )
+    docling_remote_llm_concurrency: int = Field(default=2, ge=1)
+    docling_remote_llm_page_batch_size: int | None = Field(default=None, ge=1)
 
     model_config = SettingsConfigDict(
         env_prefix="INGEST_",
@@ -163,6 +197,14 @@ class Settings(BaseSettings):
         extra="ignore",
         enable_decoding=False,
     )
+
+    @model_validator(mode="after")
+    def apply_parser_worker_count_alias(self) -> "Settings":
+        if "parser_process_count" in self.model_fields_set:
+            object.__setattr__(self, "parser_worker_count", self.parser_process_count)
+        elif "parser_worker_count" in self.model_fields_set:
+            object.__setattr__(self, "parser_process_count", self.parser_worker_count)
+        return self
 
     @property
     def docling_pdf_do_ocr(self) -> bool:
@@ -346,6 +388,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "dispatch_queue_max_payload_bytes",
+        "docling_remote_llm_page_batch_size",
         mode="before",
     )
     @classmethod
@@ -353,6 +396,17 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             cleaned = value.strip()
             return int(cleaned) if cleaned else None
+        return value
+
+    @field_validator(
+        "docling_pdf_batch_polling_interval_seconds",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_float(cls, value: object) -> object:
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return float(cleaned) if cleaned else None
         return value
 
     @property
@@ -393,15 +447,11 @@ class Settings(BaseSettings):
 
     @property
     def effective_docling_parse_concurrency(self) -> int:
-        return self.parser_worker_count
+        return self.parser_threads_per_process
 
     @property
     def docling_engine_idle_ttl_seconds(self) -> int:
         return DOCLING_ENGINE_IDLE_TTL_SECONDS
-
-    @property
-    def docling_perf_page_batch_size(self) -> int:
-        return DOCLING_PERF_PAGE_BATCH_SIZE
 
     @property
     def docling_pdf_do_table_structure(self) -> bool:
@@ -434,30 +484,6 @@ class Settings(BaseSettings):
     @property
     def docling_pdf_picture_description_max_new_tokens(self) -> int:
         return DOCLING_PICTURE_DESCRIPTION_MAX_NEW_TOKENS
-
-    @property
-    def docling_pdf_ocr_batch_size(self) -> int:
-        return DOCLING_PDF_OCR_BATCH_SIZE
-
-    @property
-    def docling_pdf_layout_batch_size(self) -> int:
-        return DOCLING_PDF_LAYOUT_BATCH_SIZE
-
-    @property
-    def docling_pdf_table_batch_size(self) -> int:
-        return DOCLING_PDF_TABLE_BATCH_SIZE
-
-    @property
-    def docling_pdf_queue_max_size(self) -> int:
-        return DOCLING_PDF_QUEUE_MAX_SIZE
-
-    @property
-    def docling_remote_llm_concurrency(self) -> int:
-        return self.parser_worker_count
-
-    @property
-    def docling_remote_llm_page_batch_size(self) -> int:
-        return self.parser_worker_count
 
     @property
     def service_config(self) -> ServiceConfig:
@@ -567,7 +593,11 @@ class Settings(BaseSettings):
     @property
     def dispatch_config(self) -> DispatchConfig:
         return DispatchConfig(
+            parser_process_count=self.parser_process_count,
+            parser_threads_per_process=self.parser_threads_per_process,
             parser_worker_count=self.parser_worker_count,
+            dispatch_process_count=self.dispatch_process_count,
+            dispatch_threads_per_process=self.dispatch_threads_per_process,
             dispatch_worker_count=self.dispatch_worker_count,
             queue_backend=self.queue_backend,
             rabbitmq_configured=bool(self.rabbitmq_url),

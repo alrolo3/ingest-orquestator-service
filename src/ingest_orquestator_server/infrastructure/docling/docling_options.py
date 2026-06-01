@@ -19,7 +19,7 @@ from ingest_orquestator_server.infrastructure.docling.docling_runtime_capabiliti
 
 def build_pdf_pipeline_options(settings: Settings) -> Any:
     try:
-        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.datamodel.pipeline_options import ThreadedPdfPipelineOptions
     except ImportError as exc:
         raise RuntimeError(
             "Docling is not installed. Install project dependencies with "
@@ -27,7 +27,7 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
         ) from exc
 
     _configure_docling_perf_page_batch_size(settings)
-    pdf_pipeline_options = PdfPipelineOptions()
+    pdf_pipeline_options = ThreadedPdfPipelineOptions()
     pdf_pipeline_options.accelerator_options = build_accelerator_options(settings)
     if settings.docling_pdf_do_picture_description:
         _configure_remote_llm_docling_batch_size(settings)
@@ -50,6 +50,10 @@ def build_pdf_pipeline_options(settings: Settings) -> Any:
     pdf_pipeline_options.layout_batch_size = settings.docling_pdf_layout_batch_size
     pdf_pipeline_options.table_batch_size = settings.docling_pdf_table_batch_size
     pdf_pipeline_options.queue_max_size = settings.docling_pdf_queue_max_size
+    if settings.docling_pdf_batch_polling_interval_seconds is not None:
+        pdf_pipeline_options.batch_polling_interval_seconds = (
+            settings.docling_pdf_batch_polling_interval_seconds
+        )
     return pdf_pipeline_options
 
 
@@ -261,6 +265,9 @@ def _pdf_options(settings: Settings) -> dict[str, Any]:
         "layout_batch_size": settings.docling_pdf_layout_batch_size,
         "table_batch_size": settings.docling_pdf_table_batch_size,
         "queue_max_size": settings.docling_pdf_queue_max_size,
+        "batch_polling_interval_seconds": (
+            settings.docling_pdf_batch_polling_interval_seconds
+        ),
         "perf_page_batch_size": settings.docling_perf_page_batch_size,
     }
 

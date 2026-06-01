@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -15,7 +15,14 @@ describe("App", () => {
               queue_backend: "local",
               parser_queue_name: "ingest-parser",
               dispatch_queue_name: "ingest-dispatch",
+              parser_process_count: 2,
+              parser_threads_per_process: 1,
+              active_parser_job_count: 1,
+              queued_parser_job_count: 1,
+              stale_parser_job_count: 0,
               parser_worker_count: 2,
+              dispatch_process_count: 1,
+              dispatch_threads_per_process: 3,
               dispatch_worker_count: 3,
               status_counts: { parser_queued: 1, completed: 4 },
               stages: [
@@ -35,10 +42,57 @@ describe("App", () => {
                     },
                   ],
                 },
+                { name: "active_parser_jobs", statuses: ["parsing"], count: 1, jobs: [] },
                 { name: "dispatch_queue", statuses: ["dispatch_queued"], count: 0, jobs: [] },
                 { name: "failed", statuses: ["failed"], count: 0, jobs: [] },
               ],
               dispatch_queue: null,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (String(input).includes("/settings")) {
+          return new Response(
+            JSON.stringify({
+              fields: [
+                {
+                  key: "docling_accelerator_device",
+                  env_var: "INGEST_DOCLING_ACCELERATOR_DEVICE",
+                  label: "Docling Accelerator Device",
+                  group: "Docling runtime",
+                  kind: "text",
+                  value: "cpu",
+                  source: "env",
+                  configured: true,
+                  secret: false,
+                  options: [],
+                },
+                {
+                  key: "embedding_elastic_password",
+                  env_var: "INGEST_EMBEDDING_ELASTIC_PASSWORD",
+                  label: "Embedding Elastic Password",
+                  group: "Dispatch",
+                  kind: "secret",
+                  value: null,
+                  source: "env",
+                  configured: true,
+                  secret: true,
+                  options: [],
+                },
+                {
+                  key: "max_upload_size_mb",
+                  env_var: "INGEST_MAX_UPLOAD_SIZE_MB",
+                  label: "Max Upload Size MB",
+                  group: "Upload",
+                  kind: "integer",
+                  value: 100,
+                  source: "env",
+                  configured: true,
+                  secret: false,
+                  options: [],
+                },
+              ],
+              boot_time_keys: ["storage_dir"],
             }),
             { status: 200, headers: { "Content-Type": "application/json" } },
           );
@@ -136,7 +190,63 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Queue metrics" }));
 
     expect(await screen.findByText("ingest-parser")).toBeInTheDocument();
+    expect(screen.getByText("Parser processes")).toBeInTheDocument();
+    expect(screen.getByText("Active parser jobs")).toBeInTheDocument();
     expect(screen.getByText("example.pdf")).toBeInTheDocument();
+  });
+
+  it("renders and saves the ingestor settings panel", async () => {
+    const fetch = vi.mocked(globalThis.fetch);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingestor settings" }));
+
+    const accelerator = await screen.findByRole("textbox", {
+      name: /Docling Accelerator Device/,
+    });
+    fireEvent.change(accelerator, { target: { value: "cuda" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/v1/ingest/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining("docling_accelerator_device"),
+        }),
+      ),
+    );
+    expect(screen.getByPlaceholderText("Configured")).toHaveAttribute(
+      "placeholder",
+      "Configured",
+    );
+  });
+
+  it("keeps invalid numeric setting drafts for backend validation", async () => {
+    const fetch = vi.mocked(globalThis.fetch);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingestor settings" }));
+
+    const maxUploadSize = await screen.findByRole("textbox", {
+      name: /Max Upload Size MB/,
+    });
+    fireEvent.change(maxUploadSize, { target: { value: "12abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/v1/ingest/settings",
+        expect.objectContaining({ method: "PATCH" }),
+      ),
+    );
+
+    const patchCall = fetch.mock.calls.find(
+      ([url, init]) => String(url).includes("/settings") && init?.method === "PATCH",
+    );
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+      values: { max_upload_size_mb: "12abc" },
+    });
   });
 
   it("renders chunking toggle before parser-dependent strategy options", async () => {

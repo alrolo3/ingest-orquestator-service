@@ -9,7 +9,9 @@ dispatch orchestration.
 ## Current Boundaries
 - Routes validate HTTP concerns and delegate to application services.
 - `FileIngestionService` creates persisted `IngestionJob` records.
-- `ParserWorkerService` executes parser jobs through `JobParseCoordinator`.
+- `ParserWorkerService` submits parser jobs to independent parser processes for
+  the local backend. Dramatiq parser workers use explicit process count and one
+  actor thread per process by default.
 - `DocumentParseService` selects a `DocumentParser` and normalizes parser output.
 - `ParsedDocumentDispatchService` owns output handoff to local storage and Elasticsearch.
 
@@ -18,7 +20,8 @@ dispatch orchestration.
 - Dispatch queue messages contain a serialized parsed-document dispatch item with
   Markdown, metadata, diagnostics, and unified RAG ingestion records.
 - Queue publishers are application ports; RabbitMQ/dramatiq is an infrastructure adapter.
-- Dramatiq actors stay thin and call existing application services.
+- Dramatiq actors stay thin and run one parse workflow from job intake through
+  dispatch-queue enqueue inside the actor process.
 
 ## Compatibility
 - `local` queue backend keeps current in-process behavior for tests and local runs.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
@@ -30,7 +31,7 @@ QUEUE_STAGES = (
         "parser_queue",
         (IngestionStatus.PARSER_QUEUED, IngestionStatus.RETRYING),
     ),
-    QueueStageDefinition("parser_workers", (IngestionStatus.PARSING,)),
+    QueueStageDefinition("active_parser_jobs", (IngestionStatus.PARSING,)),
     QueueStageDefinition("dispatch_queue", (IngestionStatus.DISPATCH_QUEUED,)),
     QueueStageDefinition("dispatcher_workers", (IngestionStatus.DISPATCHING,)),
     QueueStageDefinition(
@@ -67,7 +68,20 @@ class QueueMetricsService:
             queue_backend=self._settings.queue_backend,
             parser_queue_name=self._settings.dramatiq_parser_queue_name,
             dispatch_queue_name=self._settings.dramatiq_dispatch_queue_name,
+            parser_process_count=self._settings.parser_process_count,
+            parser_threads_per_process=self._settings.parser_threads_per_process,
+            active_parser_job_count=status_counts.get(
+                IngestionStatus.PARSING.value,
+                0,
+            ),
+            queued_parser_job_count=(
+                status_counts.get(IngestionStatus.PARSER_QUEUED.value, 0)
+                + status_counts.get(IngestionStatus.RETRYING.value, 0)
+            ),
+            stale_parser_job_count=self._stale_parser_job_count(),
             parser_worker_count=self._settings.parser_worker_count,
+            dispatch_process_count=self._settings.dispatch_process_count,
+            dispatch_threads_per_process=self._settings.dispatch_threads_per_process,
             dispatch_worker_count=self._settings.dispatch_worker_count,
             status_counts=status_counts,
             stages=[
@@ -108,6 +122,20 @@ class QueueMetricsService:
             completed_count=snapshot.completed_count,
             failed_count=snapshot.failed_count,
         )
+
+    def _stale_parser_job_count(self) -> int:
+        timeout = timedelta(milliseconds=self._settings.dramatiq_parser_time_limit_ms)
+        cutoff = datetime.now(UTC) - timeout
+        stale_count = 0
+        for job in self._job_repository.list_by_status(
+            {IngestionStatus.PARSING.value}
+        ):
+            updated_at = job.updated_at
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=UTC)
+            if updated_at < cutoff:
+                stale_count += 1
+        return stale_count
 
     @staticmethod
     def _job_summary(job: IngestionJob) -> QueueJobSummary:

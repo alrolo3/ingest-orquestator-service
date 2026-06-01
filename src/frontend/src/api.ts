@@ -4,6 +4,8 @@ import type {
   IngestionCapabilities,
   IngestionJob,
   IngestionOptions,
+  IngestorSettingsResponse,
+  IngestorSettingsUpdate,
   OutputFiles,
   QueueMetrics,
 } from "./types";
@@ -33,6 +35,23 @@ export async function getCapabilities(
   apiBaseUrl = defaultApiBaseUrl,
 ): Promise<IngestionCapabilities> {
   return requestJson<IngestionCapabilities>(`${apiBaseUrl}/v1/ingest/capabilities`);
+}
+
+export async function getIngestorSettings(
+  apiBaseUrl = defaultApiBaseUrl,
+): Promise<IngestorSettingsResponse> {
+  return requestJson<IngestorSettingsResponse>(`${apiBaseUrl}/v1/ingest/settings`);
+}
+
+export async function updateIngestorSettings(
+  update: IngestorSettingsUpdate,
+  apiBaseUrl = defaultApiBaseUrl,
+): Promise<IngestorSettingsResponse> {
+  return requestJson<IngestorSettingsResponse>(`${apiBaseUrl}/v1/ingest/settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
 }
 
 export async function uploadFiles(

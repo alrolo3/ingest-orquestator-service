@@ -64,8 +64,9 @@ curl -X POST "http://127.0.0.1:8000/v1/ingest/file?pipeline=standard" \
 ```
 
 The API returns immediately with a persisted job, usually in `parser_queued`
-state. Parser workers run Docling outside the request path, then the dispatcher
-stores local artifacts and/or sends one Elasticsearch bulk item per RAG chunk.
+state. Parser processes run Docling outside the request path, then the
+dispatcher stores local artifacts and/or sends one Elasticsearch bulk item per
+RAG chunk.
 
 Batch upload creates one job per file:
 
@@ -134,7 +135,11 @@ INGEST_CHUNKING_STRATEGY=page
 INGEST_CHUNK_MAX_TOKENS=768
 INGEST_CHUNK_TOKENIZER_PATH=/datastore/tokenizers/qwen3-embedding-8b
 INGEST_EMBEDDING_OUTPUT_ENABLED=true
-INGEST_PARSER_WORKER_COUNT=2
+INGEST_PARSER_PROCESS_COUNT=2
+INGEST_PARSER_THREADS_PER_PROCESS=1
+INGEST_PARSER_WORKER_COUNT=2  # Deprecated alias for INGEST_PARSER_PROCESS_COUNT.
+INGEST_DISPATCH_PROCESS_COUNT=1
+INGEST_DISPATCH_THREADS_PER_PROCESS=2
 INGEST_DISPATCH_QUEUE_MAX_SIZE=100
 INGEST_DISPATCH_QUEUE_MAX_PAYLOAD_BYTES=
 INGEST_DISPATCH_MAX_BULK_SIZE=5

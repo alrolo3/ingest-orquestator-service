@@ -25,13 +25,13 @@ services:
       - python
       - -m
       - dramatiq
+      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
       - --processes
-      - "1"
+      - "${INGEST_PARSER_PROCESS_COUNT:-2}"
       - --threads
-      - "${INGEST_PARSER_WORKER_COUNT:-2}"
+      - "${INGEST_PARSER_THREADS_PER_PROCESS:-1}"
       - --queues
       - ingest_parser_jobs
-      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
     env_file:
       - .env
     environment:
@@ -66,13 +66,13 @@ services:
       - python
       - -m
       - dramatiq
+      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
       - --processes
-      - "1"
+      - "${INGEST_DISPATCH_PROCESS_COUNT:-1}"
       - --threads
-      - "${INGEST_DISPATCH_WORKER_COUNT:-2}"
+      - "${INGEST_DISPATCH_THREADS_PER_PROCESS:-2}"
       - --queues
       - ingest_dispatch_jobs
-      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
     env_file:
       - .env
     environment:

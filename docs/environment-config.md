@@ -87,14 +87,19 @@ implementation details.
 
 ## Parsed Document Dispatch And Elastic Handoff
 
-The dispatch queue is mandatory in v1.5. Parser workers enqueue full parsed
+The dispatch queue is mandatory in v1.5. Parser processes enqueue full parsed
 document dispatch items with Markdown, metadata, diagnostics, and RAG records.
 The dispatcher service stores local artifacts, sends Elastic bulk requests, or
 does both according to `INGEST_DISPATCH_SINK_MODE`.
 
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
-| `INGEST_PARSER_WORKER_COUNT` | `2` | `4` | Integer `>= 1`. | Number of parser worker threads that process queued uploaded files. |
+| `INGEST_PARSER_PROCESS_COUNT` | `2` | `2` | Integer `>= 1`. | Number of independent parser processes. Each parser process handles one queued parse workflow at a time when Dramatiq is launched with matching `--processes`. |
+| `INGEST_PARSER_THREADS_PER_PROCESS` | `1` | `1` | Integer `>= 1`. | Dramatiq actor threads per parser process. Keep this at `1` for predictable one-document-per-process GPU deployments. |
+| `INGEST_PARSER_WORKER_COUNT` | `2` | `2` | Integer `>= 1`. | Deprecated compatibility alias for `INGEST_PARSER_PROCESS_COUNT`. If both are set, `INGEST_PARSER_PROCESS_COUNT` wins. |
+| `INGEST_DISPATCH_PROCESS_COUNT` | `1` | `1` | Integer `>= 1`. | Number of independent dispatch worker processes for the Dramatiq dispatch queue. |
+| `INGEST_DISPATCH_THREADS_PER_PROCESS` | `2` | `2` | Integer `>= 1`. | Dramatiq actor threads per dispatch process. |
+| `INGEST_DISPATCH_WORKER_COUNT` | `2` | `2` | Integer `>= 1`. | In-process dispatch service thread count for the local queue backend. |
 | `INGEST_DRAMATIQ_PARSER_TIME_LIMIT_MS` | `14400000` | `14400000` | Integer `>= 1`. | Dramatiq parser actor time limit in milliseconds. The default is 4 hours so long OCR/PDF jobs are not interrupted by Dramatiq's 10 minute middleware default. |
 | `INGEST_DRAMATIQ_DISPATCH_TIME_LIMIT_MS` | `600000` | `600000` | Integer `>= 1`. | Dramatiq dispatch actor time limit in milliseconds. |
 | `INGEST_PARSER_MAX_RETRY_ATTEMPTS` | `3` | `3` | Integer `>= 0`. | Retry budget for parser failures. Retried jobs are marked `retrying` and republished at the parser queue tail before final failure. |
@@ -146,11 +151,11 @@ loading, page completion, assembly, enrichment, and normalization stages.
 | `INGEST_DOCLING_ALLOW_EXTERNAL_PLUGINS` | `true` | `true` | `true` or `false`. | Allows Docling external plugins. Required for the `docling-surya` OCR plugin and any custom Docling plugin discovered through the `docling` entry point. |
 | `INGEST_DOCLING_PIPELINE` | `standard` | `standard` | `standard`, `vlm`, or `auto`. | Default pipeline. `standard` supports all configured formats. Direct `vlm` mode is currently PDF/image only. `auto` currently resolves to standard behavior. |
 
-Docling engine caching is enabled, engine warmup is disabled, idle engine
-eviction is disabled, and Docling page batching is set to `32` in backend
-constants. Docling input formats are derived from
-`INGEST_ALLOWED_UPLOAD_EXTENSIONS`. Docling conversion concurrency and
-RemoteLLM request concurrency both follow `INGEST_PARSER_WORKER_COUNT`.
+Docling engine caching is enabled, engine warmup is disabled, and idle engine
+eviction is disabled. Docling input formats are derived from
+`INGEST_ALLOWED_UPLOAD_EXTENSIONS`. Queue-level document concurrency follows
+`INGEST_PARSER_PROCESS_COUNT`; Docling's own per-document batching and RemoteLLM
+request concurrency are configured separately below.
 
 ## Standard PDF/Image Pipeline Options
 
@@ -165,12 +170,17 @@ when the standard pipeline is selected.
 | `INGEST_DOCLING_PDF_LAYOUT_MODEL` | `docling-layout-heron-101` | `docling-layout-heron-101` | Any Docling layout model key supported by this service, such as `docling-layout-heron-101` or `docling-layout-v2`. | Layout model preset used by Docling layout analysis. |
 | `INGEST_DOCLING_PDF_TABLE_STRUCTURE_BACKEND` | `tableformer` | `tableformer` | `tableformer`. | Table structure backend. |
 | `INGEST_DOCLING_PDF_PICTURE_CLASSIFIER_PRESET` | `document_figure_classifier_v2` | `document_figure_classifier_v2` | Docling picture-classifier preset string. | Picture classifier preset. |
+| `INGEST_DOCLING_PERF_PAGE_BATCH_SIZE` | `32` | `32` | Integer `>= 1`. | Docling page batch size used by Docling's internal pipeline scheduling. |
+| `INGEST_DOCLING_PDF_OCR_BATCH_SIZE` | `32` | `32` | Integer `>= 1`. | OCR stage batch size passed to `ThreadedPdfPipelineOptions`. |
+| `INGEST_DOCLING_PDF_LAYOUT_BATCH_SIZE` | `32` | `32` | Integer `>= 1`. | Layout stage batch size passed to `ThreadedPdfPipelineOptions`. |
+| `INGEST_DOCLING_PDF_TABLE_BATCH_SIZE` | `32` | `32` | Integer `>= 1`. | Table-structure stage batch size passed to `ThreadedPdfPipelineOptions`. |
+| `INGEST_DOCLING_PDF_QUEUE_MAX_SIZE` | `512` | `512` | Integer `>= 1`. | Internal PDF pipeline queue size passed to `ThreadedPdfPipelineOptions`. |
+| `INGEST_DOCLING_PDF_BATCH_POLLING_INTERVAL_SECONDS` | unset | `0.5` | Unset or float `> 0`. | Optional Docling threaded pipeline polling interval. Leave unset to use Docling's default. |
 
 OCR is always enabled and defaults to English. Request-specific OCR languages
 are selected through the ingest API. TableFormer accurate mode with cell
-matching, RemoteLLM picture descriptions, and PDF pipeline batch sizes are
-backend constants. Picture descriptions use `INGEST_DOCLING_VLM_MODEL` and a
-fixed token budget of `2048`.
+matching and RemoteLLM picture descriptions are enabled by default. Picture
+descriptions use `INGEST_DOCLING_VLM_MODEL` and a fixed token budget of `2048`.
 
 ## Full VLM Pipeline Options
 
@@ -190,14 +200,17 @@ same RemoteLLM endpoint and `INGEST_DOCLING_VLM_MODEL`.
 | `INGEST_DOCLING_REMOTE_LLM_API_KEY_HEADER` | `Authorization` | `Authorization` | Any HTTP header name string. | Header name used for the optional RemoteLLM API key. |
 | `INGEST_DOCLING_REMOTE_LLM_API_KEY_SCHEME` | `Bearer` | `Bearer` | Any string, including empty. | Prefix used before the API key value. Leave empty only if the endpoint expects the raw key. |
 | `INGEST_DOCLING_REMOTE_LLM_TIMEOUT_SECONDS` | `90` | `90` | Float `> 0`. | HTTP timeout for RemoteLLM requests from Docling. Increase for very slow pages or large models. |
+| `INGEST_DOCLING_REMOTE_LLM_CONCURRENCY` | `2` | `2` | Integer `>= 1`. | RemoteLLM request concurrency for VLM conversion and picture description. This remains remote-only and does not load a local VLM. |
+| `INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE` | unset | `8` | Unset or integer `>= 1`. | Optional Docling page batch size floor for remote LLM image/page calls. If unset, RemoteLLM concurrency is used. |
 | `INGEST_DOCLING_REMOTE_LLM_MAX_TOKENS` | `4096` | `4096` | Integer `>= 1`. | `max_tokens` sent to the RemoteLLM endpoint for full-page VLM conversion. |
 | `INGEST_DOCLING_REMOTE_LLM_TEMPERATURE` | `0` | `0` | Float `>= 0`. | Temperature sent to the RemoteLLM endpoint. Keep `0` for deterministic document conversion. |
 | `INGEST_DOCLING_REMOTE_LLM_PROVIDER` | `openai_compatible` | `openai_compatible` | `openai_compatible` or alias `openai`. | Remote provider type. Current implementation supports OpenAI-compatible chat completions. |
 | `INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED` | `false` | `false` | `true` or `false`. | When `true`, API startup checks the RemoteLLM endpoint and fails fast if it is unreachable. |
 | `INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_TIMEOUT_SECONDS` | `5` | `5` | Float `> 0`. | Timeout for the startup and `/health/remote-llm` checks. |
 
-RemoteLLM request concurrency and page batch size are derived from
-`INGEST_PARSER_WORKER_COUNT`.
+RemoteLLM request concurrency is independent from parser process count. Increase
+`INGEST_DOCLING_REMOTE_LLM_CONCURRENCY` only when the external inference server
+can accept the additional parallel requests.
 
 ## XBRL Options
 

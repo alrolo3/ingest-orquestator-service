@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -103,6 +104,72 @@ def test_ingest_capabilities_exposes_ui_safe_options(tmp_path: Path) -> None:
         assert body["output_types"] == ["metadata", "markdown", "rag", "html"]
         assert "secret" not in response.text
         assert "password" not in response.text.lower()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_ingestor_settings_api_persists_overrides_and_updates_capabilities(tmp_path: Path) -> None:
+    settings = Settings(
+        storage_dir=tmp_path,
+        max_upload_size_mb=100,
+        docling_accelerator_device="cpu",
+        embedding_elastic_password="env-secret",
+    )
+    from ingest_orquestator_server.config.settings import get_settings
+
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    try:
+        client = TestClient(app)
+        response = client.patch(
+            "/v1/ingest/settings",
+            json={
+                "values": {
+                    "docling_accelerator_device": "cuda",
+                    "max_upload_size_mb": 256,
+                    "embedding_elastic_password": "sqlite-secret",
+                }
+            },
+        )
+        assert response.status_code == 200
+        body = response.json()
+        fields_by_key = {field["key"]: field for field in body["fields"]}
+        assert fields_by_key["docling_accelerator_device"]["value"] == "cuda"
+        assert fields_by_key["docling_accelerator_device"]["source"] == "sqlite"
+        assert fields_by_key["embedding_elastic_password"]["value"] is None
+        assert fields_by_key["embedding_elastic_password"]["configured"] is True
+        assert "sqlite-secret" not in response.text
+
+        capabilities = client.get("/v1/ingest/capabilities").json()
+        assert capabilities["max_upload_size_mb"] == 256
+        assert capabilities["runtime"]["docling_accelerator_device"] == "cuda"
+
+        reset_response = client.patch(
+            "/v1/ingest/settings",
+            json={"reset_keys": ["docling_accelerator_device"]},
+        )
+        reset_fields = {field["key"]: field for field in reset_response.json()["fields"]}
+        assert reset_fields["docling_accelerator_device"]["value"] == "cpu"
+        assert reset_fields["docling_accelerator_device"]["source"] == "env"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_ingestor_settings_api_rejects_invalid_runtime_setting(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    from ingest_orquestator_server.config.settings import get_settings
+
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    try:
+        client = TestClient(app)
+        response = client.patch(
+            "/v1/ingest/settings",
+            json={"values": {"docling_accelerator_device": "gpu"}},
+        )
+
+        assert response.status_code == 400
+        assert "docling_accelerator_device" in response.text
     finally:
         app.dependency_overrides.clear()
 
@@ -767,7 +834,13 @@ def test_ingest_file_enqueues_parsed_document_handoff_internally(
 
 
 def test_queue_metrics_endpoint_reports_persisted_job_stages(tmp_path: Path) -> None:
-    settings = Settings(storage_dir=tmp_path)
+    settings = Settings(
+        storage_dir=tmp_path,
+        parser_process_count=4,
+        parser_threads_per_process=1,
+        dispatch_process_count=2,
+        dispatch_threads_per_process=3,
+    )
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)
     repository.save(
         IngestionJob(
@@ -775,6 +848,24 @@ def test_queue_metrics_endpoint_reports_persisted_job_stages(tmp_path: Path) -> 
             status=IngestionStatus.PARSER_QUEUED,
             parser="docling",
             source_file_name="parser.pdf",
+        )
+    )
+    repository.save(
+        IngestionJob(
+            job_id="active-parser-1",
+            status=IngestionStatus.PARSING,
+            parser="docling",
+            source_file_name="active.pdf",
+        )
+    )
+    repository.save(
+        IngestionJob(
+            job_id="stale-parser-1",
+            status=IngestionStatus.PARSING,
+            parser="docling",
+            source_file_name="stale.pdf",
+            updated_at=datetime.now(UTC)
+            - timedelta(milliseconds=settings.dramatiq_parser_time_limit_ms + 1),
         )
     )
     repository.save(
@@ -807,8 +898,17 @@ def test_queue_metrics_endpoint_reports_persisted_job_stages(tmp_path: Path) -> 
         body = response.json()
         stages = {stage["name"]: stage for stage in body["stages"]}
         assert body["queue_backend"] == "local"
+        assert body["parser_process_count"] == 4
+        assert body["parser_threads_per_process"] == 1
+        assert body["parser_worker_count"] == 4
+        assert body["dispatch_process_count"] == 2
+        assert body["dispatch_threads_per_process"] == 3
+        assert body["active_parser_job_count"] == 2
+        assert body["queued_parser_job_count"] == 1
+        assert body["stale_parser_job_count"] == 1
         assert body["status_counts"]["parser_queued"] == 1
         assert stages["parser_queue"]["count"] == 1
+        assert stages["active_parser_jobs"]["count"] == 2
         assert stages["dispatch_queue"]["count"] == 1
         assert stages["dispatch_queue"]["jobs"][0]["job_id"] == "dispatch-1"
         assert stages["processed"]["count"] == 1

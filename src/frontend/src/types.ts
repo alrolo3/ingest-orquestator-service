@@ -59,6 +59,43 @@ export interface IngestionCapabilities {
   job_statuses: JobStatus[];
 }
 
+export type IngestorSettingKind =
+  | "boolean"
+  | "integer"
+  | "number"
+  | "text"
+  | "list"
+  | "secret"
+  | "select";
+
+export interface IngestorSettingOption {
+  value: string;
+  label: string;
+}
+
+export interface IngestorSettingField {
+  key: string;
+  env_var: string;
+  label: string;
+  group: string;
+  kind: IngestorSettingKind;
+  value: unknown;
+  source: "env" | "sqlite";
+  configured: boolean;
+  secret: boolean;
+  options: IngestorSettingOption[];
+}
+
+export interface IngestorSettingsResponse {
+  fields: IngestorSettingField[];
+  boot_time_keys: string[];
+}
+
+export interface IngestorSettingsUpdate {
+  values?: Record<string, unknown>;
+  reset_keys?: string[];
+}
+
 export interface IngestionOptions {
   parser: string;
   pipeline: Pipeline;
@@ -187,7 +224,14 @@ export interface QueueMetrics {
   queue_backend: string;
   parser_queue_name: string;
   dispatch_queue_name: string;
+  parser_process_count: number;
+  parser_threads_per_process: number;
+  active_parser_job_count: number;
+  queued_parser_job_count: number;
+  stale_parser_job_count: number;
   parser_worker_count: number;
+  dispatch_process_count: number;
+  dispatch_threads_per_process: number;
   dispatch_worker_count: number;
   status_counts: Record<string, number>;
   stages: QueueStageMetrics[];

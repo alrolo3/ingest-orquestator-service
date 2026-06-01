@@ -15,8 +15,8 @@ def test_parser_actor_requeues_retrying_job_at_queue_tail(monkeypatch) -> None:
 
     monkeypatch.setattr(
         dramatiq_actors,
-        "build_parser_worker_service",
-        lambda: RetryingWorkerService(),
+        "run_parser_job",
+        RetryingParserJobRunner(),
     )
     monkeypatch.setattr(
         dramatiq_actors,
@@ -29,28 +29,27 @@ def test_parser_actor_requeues_retrying_job_at_queue_tail(monkeypatch) -> None:
     assert publisher.parser_job_ids == ["job-1"]
 
 
-def test_parser_actor_limits_concurrent_jobs_to_parser_worker_count(monkeypatch) -> None:
+def test_parser_actor_does_not_apply_in_process_slot_limit(monkeypatch) -> None:
     dramatiq_actors = _import_dramatiq_actors(monkeypatch)
-    worker = BlockingWorkerService()
+    runner = BlockingParserJobRunner()
 
-    monkeypatch.setattr(dramatiq_actors, "_parser_actor_slots", threading.BoundedSemaphore(1))
     monkeypatch.setattr(
         dramatiq_actors,
-        "build_parser_worker_service",
-        lambda: worker,
+        "run_parser_job",
+        runner,
     )
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         first = executor.submit(dramatiq_actors._process_parser_job, "job-1")
-        assert worker.first_started.wait(timeout=1)
+        assert runner.first_started.wait(timeout=1)
         second = executor.submit(dramatiq_actors._process_parser_job, "job-2")
-        assert not worker.second_started.wait(timeout=0.05)
-        worker.release.set()
+        assert runner.second_started.wait(timeout=1)
+        runner.release.set()
         first.result(timeout=1)
         second.result(timeout=1)
 
-    assert worker.max_active == 1
-    assert worker.job_ids == ["job-1", "job-2"]
+    assert runner.max_active == 2
+    assert runner.job_ids == ["job-1", "job-2"]
 
 
 def _import_dramatiq_actors(monkeypatch):
@@ -71,8 +70,8 @@ def _import_dramatiq_actors(monkeypatch):
     )
 
 
-class RetryingWorkerService:
-    def process_job(self, job_id: str) -> ParseJobResult:
+class RetryingParserJobRunner:
+    def __call__(self, job_id: str) -> ParseJobResult:
         assert job_id == "job-1"
         return ParseJobResult(retry_requested=True)
 
@@ -85,7 +84,7 @@ class RecordingPublisher:
         self.parser_job_ids.append(job_id)
 
 
-class BlockingWorkerService:
+class BlockingParserJobRunner:
     def __init__(self) -> None:
         self.first_started = threading.Event()
         self.second_started = threading.Event()
@@ -95,7 +94,7 @@ class BlockingWorkerService:
         self.job_ids: list[str] = []
         self.lock = threading.Lock()
 
-    def process_job(self, job_id: str) -> ParseJobResult:
+    def __call__(self, job_id: str) -> ParseJobResult:
         with self.lock:
             self.active += 1
             self.max_active = max(self.max_active, self.active)

@@ -13,6 +13,9 @@ from ingest_orquestator_server.api.dependencies import (
 from ingest_orquestator_server.api.routes.capabilities import router as capabilities_router
 from ingest_orquestator_server.api.routes.health import router as health_router
 from ingest_orquestator_server.api.routes.ingestion import router as ingestion_router
+from ingest_orquestator_server.api.routes.ingestor_settings import (
+    router as ingestor_settings_router,
+)
 from ingest_orquestator_server.config.settings import get_settings
 from ingest_orquestator_server.infrastructure.docling.remote_llm_health import (
     RemoteLlmHealthChecker,
@@ -39,6 +42,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(capabilities_router)
+    app.include_router(ingestor_settings_router)
     app.include_router(ingestion_router)
     return app
 

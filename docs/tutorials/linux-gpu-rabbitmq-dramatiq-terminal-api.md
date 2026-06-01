@@ -195,19 +195,37 @@ curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}/outputs/embedding"
 
 ## 7. Scale Worker Concurrency
 
-For one GPU, prefer one parser worker process with multiple threads so Docling
-engine and model caches can be reused inside the process:
+For one GPU, keep parser actor threads at `1` and scale document throughput with
+parser processes. Each parser process handles one queued parse workflow and can
+use Docling's own threaded PDF pipeline stages for that document:
 
 ```bash
-INGEST_PARSER_WORKER_COUNT=2 INGEST_DISPATCH_WORKER_COUNT=2 \
+INGEST_PARSER_PROCESS_COUNT=2 INGEST_PARSER_THREADS_PER_PROCESS=1 \
+INGEST_DISPATCH_PROCESS_COUNT=1 INGEST_DISPATCH_THREADS_PER_PROCESS=2 \
   docker compose -f docker-compose-queues.yml up -d --build
 ```
 
-The parser worker container runs Dramatiq with one process and
-`${INGEST_PARSER_WORKER_COUNT:-2}` threads. Keep the process count at `1` per GPU
-unless you intend to duplicate Docling engine pools. Set
-`INGEST_PARSER_WORKER_COUNT` to the number of documents allowed to make Docling
-progress at once, and size the RemoteLLM endpoint for that concurrency.
+The parser worker container runs Dramatiq with
+`${INGEST_PARSER_PROCESS_COUNT:-2}` processes and
+`${INGEST_PARSER_THREADS_PER_PROCESS:-1}` thread per process. More parser
+processes improve isolation and document throughput but duplicate Docling engine
+pools and increase memory use. RemoteLLM request concurrency is controlled
+separately with `INGEST_DOCLING_REMOTE_LLM_CONCURRENCY`.
+
+The equivalent direct Dramatiq commands are:
+
+```bash
+python -m dramatiq ingest_orquestator_server.infrastructure.queue.dramatiq_actors \
+  --processes "${INGEST_PARSER_PROCESS_COUNT:-2}" \
+  --threads "${INGEST_PARSER_THREADS_PER_PROCESS:-1}" \
+  --queues ingest_parser_jobs
+
+python -m dramatiq ingest_orquestator_server.infrastructure.queue.dramatiq_actors \
+  --processes "${INGEST_DISPATCH_PROCESS_COUNT:-1}" \
+  --threads "${INGEST_DISPATCH_THREADS_PER_PROCESS:-2}" \
+  --queues ingest_dispatch_jobs
+```
+
 Parser jobs use `INGEST_DRAMATIQ_PARSER_TIME_LIMIT_MS`; keep it above the
 worst-case OCR duration for your largest PDFs so Dramatiq does not interrupt
 Docling while its page-stage threads are active. Restart both the API process
@@ -217,11 +235,15 @@ Parser failures are republished at the parser queue tail while
 `INGEST_PARSER_MAX_RETRY_ATTEMPTS` has remaining budget; the job metadata records
 the retry state and last parser error.
 
-If GPU memory or the RemoteLLM endpoint is tight, reduce parser threads in
-`.env`:
+Dramatiq's CLI does not expose RabbitMQ prefetch in this version. RabbitMQ may
+show reserved/unacknowledged messages separately from active parser jobs; the
+API queue metrics therefore reports configured parser processes, active parser
+jobs, queued parser jobs, and stale parsing jobs as separate values.
+
+If GPU memory is tight, reduce parser processes in `.env`:
 
 ```text
-INGEST_PARSER_WORKER_COUNT=1
+INGEST_PARSER_PROCESS_COUNT=1
 ```
 
 ## 8. Stop Or Restart

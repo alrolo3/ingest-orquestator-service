@@ -28,7 +28,7 @@ def test_remote_llm_docling_options_build() -> None:
     settings = Settings(
         docling_vlm_model="granite_vision",
         docling_remote_llm_url="http://localhost:8000/v1/chat/completions",
-        parser_worker_count=8,
+        docling_remote_llm_concurrency=8,
     )
 
     vlm_resolution = resolve_vlm_convert_runtime(settings)

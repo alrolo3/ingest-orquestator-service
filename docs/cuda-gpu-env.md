@@ -141,10 +141,13 @@ The environment chooses:
 - picture description defaults to `Qwen/Qwen3-VL-8B-Instruct` through RemoteLLM
 - OCR/layout/table batch sizes set to `32`
 - queue size set to `512`
+- parser document concurrency set to two independent parser processes with one
+  actor thread per process
 
 These values are aggressive for an A100 80GB. If GPU memory spikes or the
-process becomes less stable under concurrent requests, reduce the three batch
-sizes from `32` to `16`.
+process becomes less stable under concurrent requests, reduce
+`INGEST_PARSER_PROCESS_COUNT` first, then reduce the three Docling batch sizes
+from `32` to `16`.
 
 ## RemoteLLM
 
@@ -163,9 +166,10 @@ INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED=true
 ```
 
-RemoteLLM and Docling conversion concurrency are derived from
-`INGEST_PARSER_WORKER_COUNT`, so parser queue backpressure is the single
-document-level concurrency control.
+RemoteLLM request concurrency is controlled by
+`INGEST_DOCLING_REMOTE_LLM_CONCURRENCY`. Parser document concurrency is
+controlled separately by `INGEST_PARSER_PROCESS_COUNT`; each parser process can
+use Docling's threaded PDF pipeline stages for its assigned document.
 
 See [Docling RemoteLLM playbook](docling-remote-llm.md) and
 [Docling model runtime matrix](docling-model-runtime-matrix.md). For API-side

@@ -9,6 +9,7 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
+  Save,
   Server,
   Settings2,
   UploadCloud,
@@ -19,9 +20,11 @@ import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState
 import {
   defaultApiBaseUrl,
   getCapabilities,
+  getIngestorSettings,
   getJobs,
   getQueueMetrics,
   outputUrl,
+  updateIngestorSettings,
   uploadFiles,
 } from "./api";
 import { createLocalId } from "./id";
@@ -43,6 +46,9 @@ import type {
   IngestionCapabilities,
   IngestionJob,
   IngestionOptions,
+  IngestorSettingField,
+  IngestorSettingsResponse,
+  IngestorSettingsUpdate,
   JobStatus,
   ParserChunkingCapabilities,
   QueueMetrics,
@@ -52,6 +58,7 @@ import type {
 
 const persistedJobsKey = "ingest-orquestator.frontend.jobs";
 const jobPollingIntervalMs = 5000;
+type ActiveView = "documents" | "metrics" | "settings";
 
 const defaultOptions: IngestionOptions = {
   parser: "docling",
@@ -73,13 +80,35 @@ function App() {
   const [jobs, setJobs] = useState<TrackedJob[]>(() => restoreJobs());
   const [options, setOptions] = useState<IngestionOptions>(() => restoreOptions());
   const [submitting, setSubmitting] = useState(false);
-  const [activeView, setActiveView] = useState<"documents" | "metrics">("documents");
+  const [activeView, setActiveView] = useState<ActiveView>("documents");
   const [queueMetrics, setQueueMetrics] = useState<QueueMetrics | null>(null);
   const [queueMetricsError, setQueueMetricsError] = useState<string | null>(null);
+  const [ingestorSettings, setIngestorSettings] = useState<IngestorSettingsResponse | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "completed" | "failed">(
     "all",
   );
   const jobsRef = useRef(jobs);
+
+  function applyCapabilities(data: IngestionCapabilities) {
+    setCapabilities(data);
+    setCapabilityError(null);
+    setOptions((current) => ({
+      ...current,
+      parser: current.parser || data.default_parser,
+      pipeline: current.pipeline || data.default_pipeline,
+      chunkingEnabled: current.chunkingEnabled ?? data.chunking.enabled,
+      chunkingStrategy: defaultChunkingStrategyForParser(
+        data,
+        current.parser || data.default_parser,
+        current.chunkingStrategy,
+      ),
+      dispatchSinkMode: current.dispatchSinkMode || data.default_dispatch_sink_mode,
+      ocrLanguages:
+        current.ocrLanguages?.length > 0 ? current.ocrLanguages : data.ocr.default_languages,
+    }));
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -88,22 +117,7 @@ function App() {
         if (ignore) {
           return;
         }
-        setCapabilities(data);
-        setCapabilityError(null);
-        setOptions((current) => ({
-          ...current,
-          parser: current.parser || data.default_parser,
-          pipeline: current.pipeline || data.default_pipeline,
-          chunkingEnabled: current.chunkingEnabled ?? data.chunking.enabled,
-          chunkingStrategy: defaultChunkingStrategyForParser(
-            data,
-            current.parser || data.default_parser,
-            current.chunkingStrategy,
-          ),
-          dispatchSinkMode: current.dispatchSinkMode || data.default_dispatch_sink_mode,
-          ocrLanguages:
-            current.ocrLanguages?.length > 0 ? current.ocrLanguages : data.ocr.default_languages,
-        }));
+        applyCapabilities(data);
       })
       .catch((error: Error) => {
         if (!ignore) {
@@ -195,6 +209,28 @@ function App() {
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+    };
+  }, [activeView, apiBaseUrl]);
+
+  useEffect(() => {
+    if (activeView !== "settings") {
+      return;
+    }
+    let cancelled = false;
+    getIngestorSettings(apiBaseUrl)
+      .then((settings) => {
+        if (!cancelled) {
+          setIngestorSettings(settings);
+          setSettingsError(null);
+        }
+      })
+      .catch((error: Error) => {
+        if (!cancelled) {
+          setSettingsError(error.message);
+        }
+      });
+    return () => {
+      cancelled = true;
     };
   }, [activeView, apiBaseUrl]);
 
@@ -325,6 +361,30 @@ function App() {
     }
   }
 
+  async function refreshIngestorSettings() {
+    try {
+      const settings = await getIngestorSettings(apiBaseUrl);
+      setIngestorSettings(settings);
+      setSettingsError(null);
+    } catch (error) {
+      setSettingsError((error as Error).message);
+    }
+  }
+
+  async function saveIngestorSettings(update: IngestorSettingsUpdate) {
+    setSavingSettings(true);
+    try {
+      const settings = await updateIngestorSettings(update, apiBaseUrl);
+      setIngestorSettings(settings);
+      setSettingsError(null);
+      applyCapabilities(await getCapabilities(apiBaseUrl));
+    } catch (error) {
+      setSettingsError((error as Error).message);
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
   return (
     <main>
       <header className="app-header">
@@ -350,11 +410,19 @@ function App() {
               <BarChart3 size={16} aria-hidden="true" />
               Queue metrics
             </button>
+            <button
+              className={activeView === "settings" ? "active" : ""}
+              type="button"
+              onClick={() => setActiveView("settings")}
+            >
+              <Settings2 size={16} aria-hidden="true" />
+              Ingestor settings
+            </button>
           </nav>
           <div className="server-strip">
             <Server size={18} aria-hidden="true" />
             <span>{apiBaseUrl}</span>
-            <StatusDot ok={!capabilityError && !queueMetricsError} />
+            <StatusDot ok={!capabilityError && !queueMetricsError && !settingsError} />
           </div>
         </div>
       </header>
@@ -430,11 +498,19 @@ function App() {
             )}
           </section>
         </section>
-      ) : (
+      ) : activeView === "metrics" ? (
         <QueueMetricsView
           error={queueMetricsError}
           metrics={queueMetrics}
           onRefresh={refreshQueueMetrics}
+        />
+      ) : (
+        <IngestorSettingsView
+          error={settingsError}
+          settings={ingestorSettings}
+          saving={savingSettings}
+          onRefresh={refreshIngestorSettings}
+          onSave={saveIngestorSettings}
         />
       )}
     </main>
@@ -876,7 +952,7 @@ function QueueMetricsView({
   const stageCount = (name: string) => stages.find((stage) => stage.name === name)?.count ?? 0;
   const active =
     stageCount("parser_queue") +
-    stageCount("parser_workers") +
+    stageCount("active_parser_jobs") +
     stageCount("dispatch_queue") +
     stageCount("dispatcher_workers");
 
@@ -908,8 +984,31 @@ function QueueMetricsView({
             <RuntimeCell label="Backend" value={metrics.queue_backend} />
             <RuntimeCell label="Parser queue" value={metrics.parser_queue_name} />
             <RuntimeCell label="Dispatch queue" value={metrics.dispatch_queue_name} />
-            <RuntimeCell label="Parser workers" value={String(metrics.parser_worker_count)} />
-            <RuntimeCell label="Dispatch workers" value={String(metrics.dispatch_worker_count)} />
+            <RuntimeCell label="Parser processes" value={String(metrics.parser_process_count)} />
+            <RuntimeCell
+              label="Parser threads/process"
+              value={String(metrics.parser_threads_per_process)}
+            />
+            <RuntimeCell
+              label="Active parser jobs"
+              value={String(metrics.active_parser_job_count)}
+            />
+            <RuntimeCell
+              label="Queued parser jobs"
+              value={String(metrics.queued_parser_job_count)}
+            />
+            <RuntimeCell
+              label="Stale parser jobs"
+              value={String(metrics.stale_parser_job_count)}
+            />
+            <RuntimeCell
+              label="Dispatch processes"
+              value={String(metrics.dispatch_process_count)}
+            />
+            <RuntimeCell
+              label="Dispatch threads/process"
+              value={String(metrics.dispatch_threads_per_process)}
+            />
             {metrics.dispatch_queue ? (
               <RuntimeCell
                 label="In-memory dispatch"
@@ -931,6 +1030,182 @@ function QueueMetricsView({
         </div>
       )}
     </section>
+  );
+}
+
+function IngestorSettingsView({
+  error,
+  onRefresh,
+  onSave,
+  saving,
+  settings,
+}: {
+  error: string | null;
+  onRefresh: () => void;
+  onSave: (update: IngestorSettingsUpdate) => Promise<void>;
+  saving: boolean;
+  settings: IngestorSettingsResponse | null;
+}) {
+  const [draft, setDraft] = useState<Record<string, string | boolean>>({});
+
+  useEffect(() => {
+    if (!settings) {
+      return;
+    }
+    setDraft(Object.fromEntries(settings.fields.map((field) => [field.key, draftValue(field)])));
+  }, [settings]);
+
+  const groupedFields = useMemo(() => groupSettingFields(settings?.fields ?? []), [settings]);
+  const changedValues = settings ? buildChangedSettings(settings.fields, draft) : {};
+  const hasChanges = Object.keys(changedValues).length > 0;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!hasChanges || saving) {
+      return;
+    }
+    await onSave({ values: changedValues });
+  }
+
+  return (
+    <form className="settings-page" aria-label="Ingestor settings" onSubmit={submit}>
+      <div className="dashboard-toolbar">
+        <div>
+          <h2>Ingestor settings</h2>
+        </div>
+        <div className="toolbar-actions">
+          <button className="icon-button" type="button" onClick={onRefresh}>
+            <RefreshCw size={16} aria-hidden="true" />
+            Refresh
+          </button>
+          <button className="submit-button" disabled={!hasChanges || saving} type="submit">
+            {saving ? <Loader2 className="spin" size={16} aria-hidden="true" /> : null}
+            <Save size={16} aria-hidden="true" />
+            Save settings
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="notice danger">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      {settings ? (
+        <div className="settings-groups">
+          {groupedFields.map(([group, fields]) => (
+            <section className="settings-group" key={group}>
+              <h3>{group}</h3>
+              <div className="settings-field-grid">
+                {fields.map((field) => (
+                  <SettingControl
+                    field={field}
+                    key={field.key}
+                    value={draft[field.key] ?? draftValue(field)}
+                    onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+                    onReset={() => onSave({ reset_keys: [field.key] })}
+                    saving={saving}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <Settings2 size={22} aria-hidden="true" />
+          <span>Loading ingestor settings.</span>
+        </div>
+      )}
+    </form>
+  );
+}
+
+function SettingControl({
+  field,
+  onChange,
+  onReset,
+  saving,
+  value,
+}: {
+  field: IngestorSettingField;
+  onChange: (value: string | boolean) => void;
+  onReset: () => void;
+  saving: boolean;
+  value: string | boolean;
+}) {
+  const sourceClass = field.source === "sqlite" ? "sqlite" : "env";
+  const label = (
+    <>
+      <span>{field.label}</span>
+      <small>
+        {field.env_var}
+        <strong className={`source-badge ${sourceClass}`}>{field.source}</strong>
+      </small>
+    </>
+  );
+
+  return (
+    <div className="setting-row">
+      {field.kind === "boolean" ? (
+        <label className="toggle setting-toggle">
+          <input
+            checked={Boolean(value)}
+            type="checkbox"
+            onChange={(event) => onChange(event.target.checked)}
+          />
+          <span>{field.label}</span>
+        </label>
+      ) : field.kind === "select" ? (
+        <label className="field setting-field">
+          {label}
+          <select
+            disabled={saving}
+            value={String(value)}
+            onChange={(event) => onChange(event.target.value)}
+          >
+            {field.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : field.kind === "list" ? (
+        <label className="field setting-field">
+          {label}
+          <textarea
+            disabled={saving}
+            value={String(value)}
+            onChange={(event) => onChange(event.target.value)}
+            rows={3}
+          />
+        </label>
+      ) : (
+        <label className="field setting-field">
+          {label}
+          <input
+            disabled={saving}
+            inputMode={field.kind === "integer" || field.kind === "number" ? "decimal" : undefined}
+            placeholder={field.kind === "secret" && field.configured ? "Configured" : undefined}
+            type={field.kind === "secret" ? "password" : "text"}
+            value={String(value)}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </label>
+      )}
+      <button
+        aria-label={`Reset ${field.label}`}
+        className="tiny-button setting-reset"
+        disabled={saving || field.source !== "sqlite"}
+        type="button"
+        onClick={onReset}
+      >
+        <RotateCcw size={14} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -1068,6 +1343,68 @@ function FilterButton({
 
 function StatusDot({ ok }: { ok: boolean }) {
   return <span className={`status-dot ${ok ? "ok" : "bad"}`} />;
+}
+
+function groupSettingFields(fields: IngestorSettingField[]): [string, IngestorSettingField[]][] {
+  const groups = new Map<string, IngestorSettingField[]>();
+  for (const field of fields) {
+    groups.set(field.group, [...(groups.get(field.group) ?? []), field]);
+  }
+  return [...groups.entries()];
+}
+
+function draftValue(field: IngestorSettingField): string | boolean {
+  if (field.kind === "boolean") {
+    return Boolean(field.value);
+  }
+  if (field.kind === "secret") {
+    return "";
+  }
+  if (field.kind === "list" && Array.isArray(field.value)) {
+    return field.value.join(", ");
+  }
+  return field.value === null || field.value === undefined ? "" : String(field.value);
+}
+
+function buildChangedSettings(
+  fields: IngestorSettingField[],
+  draft: Record<string, string | boolean>,
+): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  for (const field of fields) {
+    const nextValue = draft[field.key] ?? draftValue(field);
+    const originalValue = draftValue(field);
+    if (field.kind === "secret" && nextValue === "") {
+      continue;
+    }
+    if (nextValue === originalValue) {
+      continue;
+    }
+    values[field.key] = parseSettingDraftValue(field, nextValue);
+  }
+  return values;
+}
+
+function parseSettingDraftValue(field: IngestorSettingField, value: string | boolean): unknown {
+  if (field.kind === "boolean") {
+    return Boolean(value);
+  }
+  if (field.kind === "integer") {
+    const text = String(value).trim();
+    return text === "" || !/^-?\d+$/.test(text) ? text : Number.parseInt(text, 10);
+  }
+  if (field.kind === "number") {
+    const text = String(value).trim();
+    const numericValue = Number(text);
+    return text === "" || !Number.isFinite(numericValue) ? text : numericValue;
+  }
+  if (field.kind === "list") {
+    return String(value)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return value;
 }
 
 function restoreOptions(): IngestionOptions {

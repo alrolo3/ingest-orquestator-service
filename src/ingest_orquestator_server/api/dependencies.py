@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import Annotated
 
 from fastapi import Depends
@@ -11,6 +12,9 @@ from ingest_orquestator_server.application.services.document_parse_service impor
 )
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
+)
+from ingest_orquestator_server.application.services.ingestor_settings_service import (
+    IngestorSettingsService,
 )
 from ingest_orquestator_server.application.services.job_query_service import JobQueryService
 from ingest_orquestator_server.application.services.output_retrieval_service import (
@@ -62,8 +66,36 @@ from ingest_orquestator_server.infrastructure.queue import DramatiqJobQueuePubli
 from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_repository import (
     SqliteIngestionJobRepository,
 )
+from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestor_settings_repository import (
+    SqliteIngestorSettingsRepository,
+)
 
-SettingsDependency = Annotated[Settings, Depends(get_settings)]
+BaseSettingsDependency = Annotated[Settings, Depends(get_settings)]
+
+
+def get_ingestor_settings_repository(
+    settings: BaseSettingsDependency,
+) -> SqliteIngestorSettingsRepository:
+    return SqliteIngestorSettingsRepository(settings.jobs_db_path)
+
+
+def get_ingestor_settings_service(
+    settings: BaseSettingsDependency,
+    repository: Annotated[
+        SqliteIngestorSettingsRepository,
+        Depends(get_ingestor_settings_repository),
+    ],
+) -> IngestorSettingsService:
+    return IngestorSettingsService(base_settings=settings, repository=repository)
+
+
+def get_effective_settings(
+    service: Annotated[IngestorSettingsService, Depends(get_ingestor_settings_service)],
+) -> Settings:
+    return service.effective_settings()
+
+
+SettingsDependency = Annotated[Settings, Depends(get_effective_settings)]
 
 _parsed_document_dispatch_queue_service: ParsedDocumentDispatchQueueService | None = None
 _parsed_document_dispatch_queue_key: tuple[int, int, int | None] | None = None
@@ -72,7 +104,7 @@ _parsed_document_dispatch_key: (
     tuple[str, int, int, int | None, int, str, str, str, str] | None
 ) = None
 _parser_worker_service: ParserWorkerService | None = None
-_parser_worker_key: tuple[int, int, str] | None = None
+_parser_worker_key: str | None = None
 _job_queue_publisher: JobQueuePublisher | None = None
 _job_queue_key: tuple[str, str, str, str] | None = None
 _docling_engine_registry: DoclingEngineRegistry | None = None
@@ -216,6 +248,8 @@ def get_parsed_document_dispatch_service(
         _parsed_document_dispatch_service is None
         or _parsed_document_dispatch_key != key
     ):
+        if _parsed_document_dispatch_service is not None:
+            _parsed_document_dispatch_service.stop()
         _parsed_document_dispatch_service = ParsedDocumentDispatchService(
             settings=settings,
             queue_service=queue_service,
@@ -232,31 +266,27 @@ def get_parsed_document_dispatch_service(
 
 def get_parser_worker_service(
     settings: SettingsDependency,
-    document_parse_service: Annotated[
-        DocumentParseService,
-        Depends(get_document_parse_service),
-    ],
     job_repository: Annotated[
         SqliteIngestionJobRepository,
         Depends(get_job_repository),
     ],
-    dispatch_service: Annotated[
-        ParsedDocumentDispatchService,
-        Depends(get_parsed_document_dispatch_service),
-    ],
 ) -> ParserWorkerService:
-    global _parser_worker_key, _parser_worker_service
-    key = (
-        settings.parser_worker_count,
-        settings.effective_docling_parse_concurrency,
-        settings.queue_backend,
+    from ingest_orquestator_server.infrastructure.queue.dramatiq_runtime import (
+        run_parser_job,
     )
+
+    global _parser_worker_key, _parser_worker_service
+    key = _settings_dependency_key(settings)
     if _parser_worker_service is None or _parser_worker_key != key:
+        if _parser_worker_service is not None:
+            _parser_worker_service.shutdown()
         _parser_worker_service = ParserWorkerService(
             settings=settings,
-            document_parse_service=document_parse_service,
             job_repository=job_repository,
-            dispatch_service=dispatch_service,
+            job_runner=partial(
+                run_parser_job,
+                settings_data=settings.model_dump(mode="python"),
+            ),
         )
         if settings.queue_backend == "local":
             _parser_worker_service.recover_active_jobs()

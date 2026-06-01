@@ -43,7 +43,14 @@ class QueueMetrics(BaseModel):
     queue_backend: str
     parser_queue_name: str
     dispatch_queue_name: str
+    parser_process_count: int
+    parser_threads_per_process: int
+    active_parser_job_count: int
+    queued_parser_job_count: int
+    stale_parser_job_count: int
     parser_worker_count: int
+    dispatch_process_count: int
+    dispatch_threads_per_process: int
     dispatch_worker_count: int
     status_counts: dict[str, int]
     stages: list[QueueStageMetrics]

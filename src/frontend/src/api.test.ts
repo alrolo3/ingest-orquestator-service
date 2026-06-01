@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildIngestQuery, getJobs, getQueueMetrics } from "./api";
+import {
+  buildIngestQuery,
+  getIngestorSettings,
+  getJobs,
+  getQueueMetrics,
+  updateIngestorSettings,
+} from "./api";
 import type { IngestionOptions } from "./types";
 
 afterEach(() => {
@@ -62,7 +68,14 @@ describe("getQueueMetrics", () => {
           queue_backend: "local",
           parser_queue_name: "parser",
           dispatch_queue_name: "dispatch",
+          parser_process_count: 2,
+          parser_threads_per_process: 1,
+          active_parser_job_count: 0,
+          queued_parser_job_count: 0,
+          stale_parser_job_count: 0,
           parser_worker_count: 2,
+          dispatch_process_count: 1,
+          dispatch_threads_per_process: 2,
           dispatch_worker_count: 2,
           status_counts: {},
           stages: [],
@@ -82,6 +95,49 @@ describe("getQueueMetrics", () => {
       "http://api.test/v1/ingest/queue/metrics?limit=10",
       undefined,
     );
+  });
+});
+
+describe("ingestor settings API", () => {
+  it("loads persistent ingestor settings", async () => {
+    const fetch = vi.fn(async () => {
+      return new Response(JSON.stringify({ fields: [], boot_time_keys: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await getIngestorSettings("http://api.test");
+
+    expect(fetch).toHaveBeenCalledWith("http://api.test/v1/ingest/settings", undefined);
+  });
+
+  it("patches changed ingestor setting values and resets", async () => {
+    const fetch = vi.fn(async () => {
+      return new Response(JSON.stringify({ fields: [], boot_time_keys: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await updateIngestorSettings(
+      {
+        values: { docling_accelerator_device: "cuda" },
+        reset_keys: ["max_upload_size_mb"],
+      },
+      "http://api.test",
+    );
+
+    expect(fetch).toHaveBeenCalledWith("http://api.test/v1/ingest/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        values: { docling_accelerator_device: "cuda" },
+        reset_keys: ["max_upload_size_mb"],
+      }),
+    });
   });
 });
 

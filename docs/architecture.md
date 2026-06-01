@@ -51,9 +51,10 @@ src/ingest_orquestator_server/
 ## Current MVP Behavior
 
 The API is asynchronous. Upload requests create one persisted job per file and
-return immediately with `parser_queued` status. A configurable parser worker
-pool runs Docling or another parser off the request thread, then enqueues the
-full parsed document result in the mandatory process-local dispatch queue.
+return immediately with `parser_queued` status. Parser queue concurrency is
+configured as independent parser processes; each process runs one document parse
+workflow and can use Docling's internal per-document concurrency before
+enqueuing the full parsed document result in the mandatory dispatch queue.
 
 `ParsedDocumentDispatchService` is the dispatcher coordinator. It drains up to the
 configured number of parsed-document dispatch items per batch, stores local

@@ -114,8 +114,9 @@ Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let 
 OCR is always enabled and defaults to English. Request-specific OCR languages
 are selected through the ingest API. Docling engine caching, warmup behavior,
 table mode/cell matching, picture descriptions, and pipeline batch sizes are
-backend constants. Docling and RemoteLLM concurrency both follow
-`INGEST_PARSER_WORKER_COUNT`.
+explicit settings. Parser document concurrency follows
+`INGEST_PARSER_PROCESS_COUNT`; RemoteLLM concurrency follows
+`INGEST_DOCLING_REMOTE_LLM_CONCURRENCY`.
 
 Use `pipeline=vlm` only for PDF and image inputs.
 For details, see [`docs/docling-ingestion.md`](docling-ingestion.md).

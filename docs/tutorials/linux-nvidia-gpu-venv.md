@@ -132,8 +132,8 @@ INGEST_DOCLING_REMOTE_LLM_URL=http://127.0.0.1:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 ```
 
-Docling conversion concurrency and RemoteLLM request concurrency follow
-`INGEST_PARSER_WORKER_COUNT`.
+Parser document concurrency follows `INGEST_PARSER_PROCESS_COUNT`. RemoteLLM
+request concurrency follows `INGEST_DOCLING_REMOTE_LLM_CONCURRENCY`.
 
 ## 7. Optional: Enable FlashAttention-2
 
@@ -194,11 +194,10 @@ Create a local `.env` from the checked-in GPU environment:
 cp env-cuda-gpu .env
 ```
 
-For non-A100 GPUs, start with fewer parser workers if memory or the RemoteLLM
-endpoint is constrained:
+For non-A100 GPUs, start with fewer parser processes if memory is constrained:
 
 ```text
-INGEST_PARSER_WORKER_COUNT=1
+INGEST_PARSER_PROCESS_COUNT=1
 ```
 
 ## 9. Verify GPU Packages

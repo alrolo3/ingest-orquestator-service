@@ -118,7 +118,7 @@ def test_docling_scheduler_allows_conversions_up_to_parse_concurrency(
     controller = ControlledConversionController()
     settings = Settings(
         allowed_upload_extensions=[".md"],
-        parser_worker_count=2,
+        parser_threads_per_process=2,
     )
     scheduler = DoclingConversionScheduler(
         engine_registry=DoclingEngineRegistry(
@@ -160,7 +160,7 @@ def test_docling_scheduler_bounds_conversions_to_parse_concurrency(
     controller = ControlledConversionController()
     settings = Settings(
         allowed_upload_extensions=[".md"],
-        parser_worker_count=1,
+        parser_threads_per_process=1,
     )
     scheduler = DoclingConversionScheduler(
         engine_registry=DoclingEngineRegistry(
@@ -201,7 +201,7 @@ def test_docling_parser_progress_callbacks_are_isolated_for_concurrent_jobs(
     controller = ControlledConversionController()
     settings = Settings(
         allowed_upload_extensions=[".md"],
-        parser_worker_count=2,
+        parser_threads_per_process=2,
         progress_log_interval_seconds=0,
     )
     scheduler = DoclingConversionScheduler(
@@ -250,7 +250,7 @@ def test_docling_scheduler_failed_conversion_does_not_poison_active_conversions(
     controller = ControlledConversionController(fail_names={"failed.md"})
     settings = Settings(
         allowed_upload_extensions=[".md"],
-        parser_worker_count=2,
+        parser_threads_per_process=2,
     )
     scheduler = DoclingConversionScheduler(
         engine_registry=DoclingEngineRegistry(

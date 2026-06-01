@@ -10,6 +10,9 @@ from ingest_orquestator_server.infrastructure.docling.docling_options import (
 def test_build_pdf_pipeline_options_selects_standard_pipeline_models() -> None:
     options = build_pdf_pipeline_options(Settings(docling_pdf_ocr_engine="auto"))
 
+    from docling.datamodel.pipeline_options import ThreadedPdfPipelineOptions
+
+    assert isinstance(options, ThreadedPdfPipelineOptions)
     assert options.layout_options.model_spec.repo_id == "docling-project/docling-layout-heron-101"
     assert options.ocr_options.kind == "auto"
     assert options.table_structure_options.kind == "docling_tableformer"
@@ -48,7 +51,7 @@ def test_build_pdf_pipeline_options_can_select_remote_picture_description() -> N
             docling_pdf_ocr_engine="auto",
             docling_vlm_model="granite_vision",
             docling_remote_llm_url="http://llm.example/v1/chat/completions",
-            parser_worker_count=4,
+            docling_remote_llm_concurrency=4,
         )
     )
 
@@ -63,6 +66,33 @@ def test_build_pdf_pipeline_options_can_select_remote_picture_description() -> N
     }
     assert options.picture_description_options.concurrency == 4
     assert options.picture_description_options.provenance == "granite_vision (remote_llm)"
+
+
+def test_build_pdf_pipeline_options_passes_docling_internal_concurrency_settings() -> None:
+    options = build_pdf_pipeline_options(
+        Settings(
+            docling_pdf_ocr_engine="auto",
+            docling_pdf_ocr_batch_size=8,
+            docling_pdf_layout_batch_size=9,
+            docling_pdf_table_batch_size=10,
+            docling_pdf_queue_max_size=64,
+            docling_pdf_batch_polling_interval_seconds=0.25,
+            docling_perf_page_batch_size=11,
+            docling_remote_llm_concurrency=3,
+            docling_remote_llm_page_batch_size=12,
+        )
+    )
+
+    assert options.ocr_batch_size == 8
+    assert options.layout_batch_size == 9
+    assert options.table_batch_size == 10
+    assert options.queue_max_size == 64
+    assert options.batch_polling_interval_seconds == 0.25
+    assert options.picture_description_options.concurrency == 3
+
+    from docling.datamodel.settings import settings as docling_settings
+
+    assert docling_settings.perf.page_batch_size == 12
 
 
 def test_build_pdf_pipeline_options_uses_remote_for_custom_picture_model() -> None:

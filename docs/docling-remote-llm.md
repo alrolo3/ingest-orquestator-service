@@ -22,9 +22,11 @@ This project maps that to:
 ```text
 INGEST_DOCLING_REMOTE_LLM_URL=http://localhost:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=2
 ```
 
-RemoteLLM request concurrency follows `INGEST_PARSER_WORKER_COUNT`.
+RemoteLLM request concurrency follows `INGEST_DOCLING_REMOTE_LLM_CONCURRENCY`.
+Parser processes still call this remote endpoint; they do not load a local VLM.
 
 ## Start An External vLLM Server
 
@@ -57,6 +59,8 @@ Put these values in `.env`:
 INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_REMOTE_LLM_URL=http://127.0.0.1:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
+INGEST_DOCLING_REMOTE_LLM_CONCURRENCY=2
+INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE=
 INGEST_DOCLING_REMOTE_LLM_MAX_TOKENS=4096
 INGEST_DOCLING_REMOTE_LLM_TEMPERATURE=0
 INGEST_DOCLING_REMOTE_LLM_HEALTH_CHECK_ENABLED=true
@@ -66,8 +70,8 @@ Standard-pipeline picture descriptions use the same VLM model and RemoteLLM
 endpoint. Their token budget is the backend constant `2048`.
 
 Docling recommends setting its page batch size at least as high as remote VLM
-concurrency. The service derives both from `INGEST_PARSER_WORKER_COUNT` when
-RemoteLLM is active.
+concurrency. The service uses `INGEST_DOCLING_REMOTE_LLM_CONCURRENCY` as the
+page batch-size floor when `INGEST_DOCLING_REMOTE_LLM_PAGE_BATCH_SIZE` is unset.
 
 ## Health Checks
 

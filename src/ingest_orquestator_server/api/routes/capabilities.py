@@ -2,12 +2,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from ingest_orquestator_server.api.dependencies import get_docling_conversion_scheduler
+from ingest_orquestator_server.api.dependencies import (
+    SettingsDependency,
+    get_docling_conversion_scheduler,
+)
 from ingest_orquestator_server.application.services.ingestion_request_options import (
     DEFAULT_OCR_LANGUAGE_OPTIONS,
     DISPATCH_SINK_MODES,
 )
-from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_engine import (
     DoclingConversionScheduler,
 )
@@ -20,7 +22,7 @@ router = APIRouter(prefix="/v1/ingest")
 
 @router.get("/capabilities")
 def ingestion_capabilities(
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: SettingsDependency,
 ) -> dict[str, object]:
     """Return UI-safe ingestion options without loading parser models."""
 
@@ -94,8 +96,12 @@ def ingestion_capabilities(
         },
         "runtime": {
             "dispatch_sink_mode": settings.dispatch_sink_mode,
+            "parser_process_count": settings.parser_process_count,
+            "parser_threads_per_process": settings.parser_threads_per_process,
             "parser_worker_count": settings.parser_worker_count,
             "docling_parse_concurrency": settings.effective_docling_parse_concurrency,
+            "dispatch_process_count": settings.dispatch_process_count,
+            "dispatch_threads_per_process": settings.dispatch_threads_per_process,
             "dispatch_max_bulk_size": settings.dispatch_max_bulk_size,
             "embedding_output_enabled": settings.embedding_output_enabled,
             "elastic_index": settings.embedding_elastic_index,

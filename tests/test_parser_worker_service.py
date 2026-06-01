@@ -297,6 +297,29 @@ def test_parser_worker_retries_dramatiq_time_limit_exceptions(
     }
 
 
+def test_parser_worker_submits_process_local_job_runner_without_parent_parser_runtime(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path, parser_process_count=2)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    executor = RecordingExecutor()
+
+    worker = ParserWorkerService(
+        settings=settings,
+        job_repository=repository,
+        job_runner=recording_parse_job_runner,
+        executor=executor,
+    )
+
+    try:
+        worker.submit_job("job-1")
+    finally:
+        worker.shutdown()
+
+    assert worker._parse_coordinator is None
+    assert executor.submissions == [(recording_parse_job_runner, ("job-1",))]
+
+
 def test_parser_worker_resubmits_retrying_submitted_job_after_release(
     tmp_path: Path,
 ) -> None:
@@ -447,6 +470,33 @@ class RetryingParseCoordinator:
         )
 
         return ParseJobResult(retry_requested=True)
+
+
+def recording_parse_job_runner(job_id: str):
+    from ingest_orquestator_server.application.services.job_parse_coordinator import (
+        ParseJobResult,
+    )
+
+    assert job_id
+    return ParseJobResult()
+
+
+class RecordingFuture:
+    def add_done_callback(self, _callback) -> None:
+        return None
+
+
+class RecordingExecutor:
+    def __init__(self) -> None:
+        self.submissions: list[tuple[object, tuple[str, ...]]] = []
+        self.shutdown_called = False
+
+    def submit(self, fn, *args):
+        self.submissions.append((fn, args))
+        return RecordingFuture()
+
+    def shutdown(self, **_kwargs) -> None:
+        self.shutdown_called = True
 
 
 class NoopParsedDocumentDispatchSink:
