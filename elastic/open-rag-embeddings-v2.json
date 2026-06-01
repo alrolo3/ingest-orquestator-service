@@ -151,7 +151,7 @@
     }
   },
   "pipeline": {
-    "description": "Populate semantic_text fields for each normalized RAG chunk.",
+    "description": "Populate semantic_text fields for each normalized RAG chunk and neutralize shell-style placeholders before custom inference templating.",
     "processors": [
       {
         "set": {
@@ -160,17 +160,9 @@
         }
       },
       {
-        "set": {
-          "field": "content_semantic",
-          "copy_from": "content",
-          "ignore_empty_value": true
-        }
-      },
-      {
-        "set": {
-          "field": "title_semantic",
-          "copy_from": "title",
-          "ignore_empty_value": true
+        "script": {
+          "lang": "painless",
+          "source": "if (ctx.content != null) { ctx.content_semantic = ctx.content.replace('${', '$ {'); } if (ctx.title != null) { ctx.title_semantic = ctx.title.replace('${', '$ {'); }"
         }
       }
     ]
