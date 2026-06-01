@@ -10,23 +10,20 @@ from ingest_orquestator_server.application.ports.parse_output_writer import Pars
 from ingest_orquestator_server.application.services.document_chunking_service import (
     DocumentChunkingService,
 )
-from ingest_orquestator_server.application.services.embedding_record_service import (
-    EmbeddingRecordService,
+from ingest_orquestator_server.application.services.rag_ingestion_record_service import (
+    RagIngestionRecordService,
 )
-from ingest_orquestator_server.models.document_chunk import DocumentChunk
-from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
 from ingest_orquestator_server.models.parse_output import ParseOutput
 from ingest_orquestator_server.models.parse_progress import ParseProgressCallback
+from ingest_orquestator_server.models.parsed_document_content import ParsedDocumentContent
 
 
 @dataclass(frozen=True)
 class DocumentParseResult:
-    parse_output: ParseOutput
+    content: ParsedDocumentContent
     outputs: OutputFiles | None
-    chunks: list[DocumentChunk]
-    embedding_records: list[EmbeddingRecord]
     diagnostics: ParseDiagnostics
 
 
@@ -37,14 +34,13 @@ class DocumentParseService:
         parser_registry: ParserRegistry,
         output_writer: ParseOutputWriter,
         chunking_service: DocumentChunkingService,
-        embedding_record_service: EmbeddingRecordService | None = None,
+        rag_record_service: RagIngestionRecordService | None = None,
         embedding_output_enabled: bool = True,
     ) -> None:
         self._parser_registry = parser_registry
         self._output_writer = output_writer
         self._chunking_service = chunking_service
-        self._embedding_record_service = embedding_record_service or EmbeddingRecordService()
-        self._embedding_output_enabled = embedding_output_enabled
+        self._rag_record_service = rag_record_service or RagIngestionRecordService()
 
     def parse_file(
         self,
@@ -56,17 +52,22 @@ class DocumentParseService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        ocr_languages: list[str] | None = None,
+        include_html: bool = False,
         progress_callback: ParseProgressCallback | None = None,
     ) -> DocumentParseResult:
         parser = self._parser_registry.get(parser_name)
         started_at = datetime.now(UTC)
         started = perf_counter()
-        parse_output = parser.parse(
-            file_path,
-            document_id=document_id,
-            pipeline=pipeline,
-            progress_callback=progress_callback,
-        )
+        parse_kwargs = {
+            "document_id": document_id,
+            "pipeline": pipeline,
+            "include_html": include_html,
+            "progress_callback": progress_callback,
+        }
+        if ocr_languages is not None:
+            parse_kwargs["ocr_languages"] = ocr_languages
+        parse_output = parser.parse(file_path, **parse_kwargs)
         return self._build_parse_result(
             parse_output,
             parser_name=parser_name,
@@ -74,6 +75,7 @@ class DocumentParseService:
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
+            include_html=include_html,
             started_at=started_at,
             started=started,
         )
@@ -87,6 +89,8 @@ class DocumentParseService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        ocr_languages: list[str] | None = None,
+        include_html: bool = False,
     ) -> list[DocumentParseResult]:
         parser = self._parser_registry.get(parser_name)
         parse_many = getattr(parser, "parse_many", None)
@@ -99,16 +103,18 @@ class DocumentParseService:
                     pipeline=pipeline,
                     chunking_enabled=chunking_enabled,
                     chunking_strategy=chunking_strategy,
+                    ocr_languages=ocr_languages,
+                    include_html=include_html,
                 )
                 for file_path in file_paths
             ]
 
         started_at = datetime.now(UTC)
         started = perf_counter()
-        parse_outputs = parse_many(
-            file_paths,
-            pipeline=pipeline,
-        )
+        parse_many_kwargs = {"pipeline": pipeline, "include_html": include_html}
+        if ocr_languages is not None:
+            parse_many_kwargs["ocr_languages"] = ocr_languages
+        parse_outputs = parse_many(file_paths, **parse_many_kwargs)
         return [
             self._build_parse_result(
                 parse_output,
@@ -117,6 +123,7 @@ class DocumentParseService:
                 pipeline=pipeline,
                 chunking_enabled=chunking_enabled,
                 chunking_strategy=chunking_strategy,
+                include_html=include_html,
                 started_at=started_at,
                 started=started,
             )
@@ -132,9 +139,12 @@ class DocumentParseService:
         pipeline: str | None,
         chunking_enabled: bool | None,
         chunking_strategy: str | None,
+        include_html: bool,
         started_at: datetime,
         started: float,
     ) -> DocumentParseResult:
+        if parse_output.normalized_document is None:
+            raise RuntimeError("Parser output did not include a normalized document.")
         chunking_is_enabled = self._chunking_service.is_enabled(
             chunking_enabled=chunking_enabled,
         )
@@ -142,21 +152,24 @@ class DocumentParseService:
             chunking_strategy=chunking_strategy,
         )
         chunks = self._chunking_service.chunk(
-            parse_output.document,
-            docling_document=parse_output.docling_document,
+            parse_output.normalized_document,
+            chunking_document=parse_output.chunking_document,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
         )
-        embedding_records = (
-            self._embedding_record_service.build_records(
-                document=parse_output.document,
-                chunks=chunks,
-            )
-            if self._embedding_output_enabled and chunks
-            else []
+        pipeline_name = parse_output.metadata.get("pipeline")
+        input_format = parse_output.metadata.get("input_format")
+        rag_records = self._rag_record_service.build_records(
+            document=parse_output.normalized_document,
+            chunks=chunks,
+            job_id=parse_output.document_id,
+            parser=parser_name,
+            pipeline=str(pipeline_name) if pipeline_name is not None else pipeline,
+            input_format=str(input_format) if input_format is not None else None,
+            confidence_summary=parse_output.confidence_summary,
+            warnings=parse_output.warnings,
         )
         completed_at = datetime.now(UTC)
-        docling_metadata = parse_output.document.metadata.get("docling", {})
         diagnostics = ParseDiagnostics(
             parser=parser_name,
             started_at=started_at,
@@ -164,28 +177,13 @@ class DocumentParseService:
             duration_ms=round((perf_counter() - started) * 1000),
             chunk_count=len(chunks),
             metadata={
-                "source_file_name": parse_output.document.source_file_name,
-                "page_count": parse_output.document.page_count,
-                "element_count": len(parse_output.document.elements),
-                "input_format": docling_metadata.get("input_format"),
-                "pipeline": docling_metadata.get("pipeline") or pipeline,
-                "route": docling_metadata.get("route"),
-                "ocr_engine": docling_metadata.get("ocr_engine"),
-                "vlm_model": docling_metadata.get("vlm_model"),
-                "vlm_runtime": docling_metadata.get("vlm_runtime"),
-                "vlm_runtime_requested": docling_metadata.get("vlm_runtime_requested"),
-                "picture_description_model": docling_metadata.get("picture_description_model"),
-                "picture_description_runtime": docling_metadata.get("picture_description_runtime"),
-                "picture_description_runtime_requested": docling_metadata.get(
-                    "picture_description_runtime_requested"
-                ),
-                "runtime": docling_metadata.get("runtime"),
-                "engine": docling_metadata.get("engine"),
+                **parse_output.metadata,
                 "chunking_enabled": chunking_is_enabled,
                 "chunking_strategy": chunks[0].metadata.get("chunker_strategy")
                 if chunks
                 else requested_chunking_strategy,
-                "embedding_record_count": len(embedding_records),
+                "rag_record_count": len(rag_records),
+                "include_html": include_html,
                 "conversion_status": parse_output.conversion_status,
                 "conversion_errors": parse_output.conversion_errors,
                 "conversion_timings": parse_output.conversion_timings,
@@ -194,38 +192,48 @@ class DocumentParseService:
                 "warnings": parse_output.warnings,
             },
         )
+        content = ParsedDocumentContent(
+            document_id=parse_output.document_id,
+            markdown=parse_output.markdown,
+            html=parse_output.html,
+            metadata={
+                **diagnostics.metadata,
+                "document_id": parse_output.document_id,
+                "job_id": parse_output.document_id,
+                "parser": parser_name,
+                "title": parse_output.title,
+                "source_file_name": parse_output.source_file_name,
+                "page_count": parse_output.normalized_document.page_count,
+                "timings": {
+                    "started_at": started_at.isoformat(),
+                    "completed_at": completed_at.isoformat(),
+                    "duration_ms": diagnostics.duration_ms,
+                },
+            },
+            rag_records=rag_records,
+        )
         outputs = None
         if output_root is not None:
             outputs = self.write_parse_result(
-                parse_output=parse_output,
+                content=content,
                 output_root=output_root,
-                chunks=chunks,
-                embedding_records=embedding_records,
                 diagnostics=diagnostics,
-                chunking_enabled=chunking_is_enabled,
             )
         return DocumentParseResult(
-            parse_output=parse_output,
+            content=content,
             outputs=outputs,
-            chunks=chunks,
-            embedding_records=embedding_records,
             diagnostics=diagnostics,
         )
 
     def write_parse_result(
         self,
         *,
-        parse_output: ParseOutput,
+        content: ParsedDocumentContent,
         output_root: Path,
-        chunks: list[DocumentChunk],
-        embedding_records: list[EmbeddingRecord],
         diagnostics: ParseDiagnostics,
-        chunking_enabled: bool | None = None,
     ) -> OutputFiles:
         return self._output_writer.write(
-            parse_output,
+            content,
             output_root,
-            chunks=chunks if chunking_enabled is not False else None,
-            embedding_records=embedding_records if embedding_records else None,
             diagnostics=diagnostics,
         )

@@ -70,9 +70,11 @@ class DoclingDocumentParser:
         *,
         document_id: str | None = None,
         pipeline: str | None = None,
+        ocr_languages: list[str] | None = None,
+        include_html: bool = False,
         progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
-        settings = self._settings
+        settings = self._effective_settings(ocr_languages)
         source_path = file_path.expanduser().resolve()
         if not source_path.is_file():
             raise FileNotFoundError(f"Input file does not exist: {source_path}")
@@ -108,6 +110,9 @@ class DoclingDocumentParser:
                 details={
                     "ocr_enabled": settings.docling_pdf_do_ocr,
                     "ocr_engine": settings.docling_pdf_ocr_engine
+                    if settings.docling_pdf_do_ocr
+                    else None,
+                    "ocr_languages": settings.docling_pdf_ocr_languages
                     if settings.docling_pdf_do_ocr
                     else None,
                     "picture_description_enabled": settings.docling_pdf_do_picture_description,
@@ -166,6 +171,7 @@ class DoclingDocumentParser:
             input_format=input_format,
             resolved_pipeline=resolved_pipeline,
             engine_metadata=engine_metadata,
+            include_html=include_html,
             progress_callback=progress_callback,
         )
 
@@ -174,8 +180,10 @@ class DoclingDocumentParser:
         file_paths: Iterable[Path],
         *,
         pipeline: str | None = None,
+        ocr_languages: list[str] | None = None,
+        include_html: bool = False,
     ) -> list[ParseOutput]:
-        settings = self._settings
+        settings = self._effective_settings(ocr_languages)
         source_paths = [path.expanduser().resolve() for path in file_paths]
         for source_path in source_paths:
             if not source_path.is_file():
@@ -220,6 +228,7 @@ class DoclingDocumentParser:
                     input_format=input_format,
                     resolved_pipeline=group_pipeline,
                     engine_metadata=engine_metadata,
+                    include_html=include_html,
                 )
 
         return [output for output in indexed_outputs if output is not None]
@@ -234,6 +243,7 @@ class DoclingDocumentParser:
         input_format: str,
         resolved_pipeline: str,
         engine_metadata: dict[str, Any] | None = None,
+        include_html: bool = False,
         progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
         document = result.document
@@ -253,7 +263,7 @@ class DoclingDocumentParser:
         raw_docling = document.export_to_dict()
         raw_markdown = document.export_to_markdown()
         raw_text = document.export_to_text()
-        raw_html = self._try_export_html(document)
+        raw_html = self._try_export_html(document) if include_html else None
         mime_type = mimetypes.guess_type(source_path.name)[0]
         resolved_document_id = document_id or str(uuid4())
         runtime_metadata = docling_runtime_metadata(settings, pipeline=resolved_pipeline)
@@ -277,6 +287,7 @@ class DoclingDocumentParser:
                 pipeline=resolved_pipeline,
             ),
             "ocr_engine": settings.docling_pdf_ocr_engine,
+            "ocr_languages": settings.docling_pdf_ocr_languages,
             "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
             "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,
             "vlm_runtime_requested": settings.docling_vlm_runtime
@@ -319,17 +330,55 @@ class DoclingDocumentParser:
             ),
         )
 
+        safe_metadata = {
+            "source_file_name": normalized.source_file_name,
+            "page_count": normalized.page_count,
+            "element_count": len(normalized.elements),
+            "input_format": input_format,
+            "pipeline": resolved_pipeline,
+            "route": route_metadata_for(
+                input_format=input_format,
+                pipeline=resolved_pipeline,
+            ),
+            "ocr_engine": settings.docling_pdf_ocr_engine,
+            "ocr_languages": settings.docling_pdf_ocr_languages,
+            "vlm_model": settings.docling_vlm_model if resolved_pipeline == "vlm" else None,
+            "vlm_runtime": vlm_resolution.resolved_runtime if resolved_pipeline == "vlm" else None,
+            "vlm_runtime_requested": settings.docling_vlm_runtime
+            if resolved_pipeline == "vlm"
+            else None,
+            "picture_description_model": settings.docling_pdf_picture_description_model
+            if settings.docling_pdf_do_picture_description
+            else None,
+            "picture_description_runtime": picture_resolution.resolved_runtime
+            if settings.docling_pdf_do_picture_description
+            else None,
+            "picture_description_runtime_requested": (
+                settings.docling_pdf_picture_description_runtime
+                if settings.docling_pdf_do_picture_description
+                else None
+            ),
+            "runtime": {
+                "active_pipeline_stage": normalized.metadata["docling"]["runtime"].get(
+                    "active_pipeline_stage"
+                ),
+                "stages": normalized.metadata["docling"]["runtime"].get("stages"),
+            },
+            "engine": engine_metadata,
+        }
+
         return ParseOutput(
-            document=normalized,
-            raw_docling=raw_docling,
-            raw_markdown=raw_markdown,
-            raw_text=raw_text,
-            raw_html=raw_html,
-            docling_document=document,
+            document_id=normalized.document_id,
+            source_file_name=normalized.source_file_name,
+            title=normalized.title,
+            markdown=raw_markdown,
+            html=raw_html,
+            metadata={key: value for key, value in safe_metadata.items() if value is not None},
+            normalized_document=normalized,
+            chunking_document=document,
             conversion_status=result_metadata.get("status"),
             conversion_errors=result_metadata.get("errors") or [],
             conversion_timings=result_metadata.get("timings") or {},
-            confidence=result_metadata.get("confidence"),
             confidence_summary=result_metadata.get("confidence_summary") or {},
             warnings=result_metadata.get("warnings") or [],
         )
@@ -347,6 +396,7 @@ class DoclingDocumentParser:
         if self._conversion_scheduler is not None:
             return self._conversion_scheduler.convert(
                 source_path,
+                settings=settings,
                 input_format=input_format,
                 pipeline=pipeline,
             )
@@ -373,6 +423,7 @@ class DoclingDocumentParser:
         if self._conversion_scheduler is not None:
             return self._conversion_scheduler.convert_all(
                 source_paths,
+                settings=settings,
                 input_format=input_format,
                 pipeline=pipeline,
             )
@@ -399,6 +450,13 @@ class DoclingDocumentParser:
             return export_to_html()
         except Exception:
             return None
+
+    def _effective_settings(self, ocr_languages: list[str] | None) -> Settings:
+        if ocr_languages is None:
+            return self._settings
+        return self._settings.model_copy(
+            update={"docling_pdf_ocr_languages": list(ocr_languages)}
+        )
 
     @staticmethod
     def _report_progress(

@@ -79,12 +79,13 @@ single OpenAI-compatible inference endpoint. See
 Picture description still uses the standard PDF pipeline enrichment settings,
 for example `INGEST_DOCLING_PDF_PICTURE_DESCRIPTION_MODEL`.
 
-## Embedding Output
+## RAG Output
 
-Every completed parse writes `embedding_input.jsonl` when
-`INGEST_EMBEDDING_OUTPUT_ENABLED=true`. Each line contains one embedding record
-with the chunk text plus metadata such as source file, parser, pipeline, input
-format, page span, and element ids/types.
+Every completed local dispatch writes `rag_chunks.jsonl`. When chunking is
+enabled, each line contains one chunk-level RAG ingestion record. When chunking
+is disabled, the file contains one document-level record with the full Markdown
+content. This file is the source of truth for Elastic indexing and downstream
+RAG/wiki ingestion.
 
 ## Chunking
 
@@ -108,12 +109,8 @@ embedding database will split the parsed document itself.
 
 ## Confidence Scores
 
-When `INGEST_CONFIDENCE_OUTPUT_ENABLED=true`, Docling conversion confidence is
-stored in:
-
-- `manifest.json` diagnostics.
-- `confidence.json`.
-- embedding record metadata summary.
+Docling conversion confidence is stored in `document_metadata.json` and in each
+RAG record's metadata when Docling reports scores.
 
 Set `INGEST_CONFIDENCE_MIN_DOCUMENT_SCORE=0.8` to emit a warning when Docling's
 mean score is below the threshold. Set `INGEST_CONFIDENCE_WARN_ONLY=false` to

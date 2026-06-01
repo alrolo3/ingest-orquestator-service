@@ -38,7 +38,7 @@ class DocumentChunkingService:
         self,
         document: ParsedDocument,
         *,
-        docling_document: Any | None = None,
+        chunking_document: Any | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
     ) -> list[DocumentChunk]:
@@ -46,11 +46,11 @@ class DocumentChunkingService:
             return []
 
         strategy = self.strategy(chunking_strategy=chunking_strategy)
-        if strategy in {"hybrid", "line_based"} and docling_document is not None:
+        if strategy in {"hybrid", "line_based"} and chunking_document is not None:
             try:
                 return self._docling_chunks(
                     document,
-                    docling_document=docling_document,
+                    docling_document=chunking_document,
                     strategy=strategy,
                     settings=self._settings,
                 )

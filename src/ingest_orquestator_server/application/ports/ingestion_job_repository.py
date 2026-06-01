@@ -17,3 +17,9 @@ class IngestionJobRepository(Protocol):
 
     def list_by_status(self, statuses: set[str]) -> list[IngestionJob]:
         """Return jobs with any of the requested status values."""
+
+    def count_by_status(self) -> dict[str, int]:
+        """Return persisted job counts grouped by status value."""
+
+    def list_recent_by_status(self, statuses: set[str], *, limit: int) -> list[IngestionJob]:
+        """Return recent jobs with any of the requested status values."""

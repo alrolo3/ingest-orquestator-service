@@ -78,7 +78,13 @@
         "document_id": {
           "type": "keyword"
         },
+        "job_id": {
+          "type": "keyword"
+        },
         "chunk_id": {
+          "type": "keyword"
+        },
+        "record_type": {
           "type": "keyword"
         },
         "source_file_name": {

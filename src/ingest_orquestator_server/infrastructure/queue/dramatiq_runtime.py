@@ -42,10 +42,10 @@ def build_parser_worker_service() -> Any:
         get_docling_conversion_scheduler,
         get_docling_engine_registry,
         get_document_parse_service,
-        get_embedding_dispatch_service,
-        get_embedding_queue_service,
         get_job_queue_publisher,
         get_job_repository,
+        get_parsed_document_dispatch_queue_service,
+        get_parsed_document_dispatch_service,
         get_parser_registry,
         get_parser_worker_service,
     )
@@ -57,9 +57,9 @@ def build_parser_worker_service() -> Any:
     parser_registry = get_parser_registry(settings, scheduler)
     parse_service = get_document_parse_service(settings, parser_registry)
     job_repository = get_job_repository(settings)
-    dispatch_service = get_embedding_dispatch_service(
+    dispatch_service = get_parsed_document_dispatch_service(
         settings,
-        get_embedding_queue_service(settings),
+        get_parsed_document_dispatch_queue_service(settings),
         job_repository,
         get_job_queue_publisher(settings),
     )
@@ -73,17 +73,17 @@ def build_parser_worker_service() -> Any:
 
 def build_dispatch_service() -> Any:
     from ingest_orquestator_server.api.dependencies import (
-        get_embedding_dispatch_service,
-        get_embedding_queue_service,
         get_job_repository,
+        get_parsed_document_dispatch_queue_service,
+        get_parsed_document_dispatch_service,
     )
     from ingest_orquestator_server.config.settings import get_settings
 
     settings = get_settings()
     job_repository = get_job_repository(settings)
-    return get_embedding_dispatch_service(
+    return get_parsed_document_dispatch_service(
         settings,
-        get_embedding_queue_service(settings),
+        get_parsed_document_dispatch_queue_service(settings),
         job_repository,
         None,
     )

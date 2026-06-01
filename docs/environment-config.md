@@ -78,42 +78,43 @@ This is the upload gate. Docling format support is controlled separately by
 | `INGEST_CHUNK_SIZE_CHARS` | `1200` | `1200` | Integer `>= 100`. | Character chunk size used only by `legacy_char` or by fallback behavior if Docling chunking fails. |
 | `INGEST_CHUNK_OVERLAP_CHARS` | `150` | `150` | Integer `>= 0`. | Character overlap used only by `legacy_char` or fallback behavior. |
 
-## Embedding Output
+## RAG Output Compatibility
 
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
-| `INGEST_EMBEDDING_OUTPUT_ENABLED` | `true` | `true` | `true` or `false`. | Writes `embedding_input.jsonl` from generated chunks. Each record includes chunk text plus document, page, parser, pipeline, element, and provenance metadata for downstream embedding. |
+| `INGEST_EMBEDDING_OUTPUT_ENABLED` | `true` | `true` | `true` or `false`. | Compatibility setting retained for deployments that already define it. The service now writes the unified RAG ingestion file `rag_chunks.jsonl` instead of a separate `embedding_input.jsonl`. |
 
-## Embedding Queue And Elastic Handoff
+## Parsed Document Dispatch And Elastic Handoff
 
 The dispatch queue is mandatory in v1.5. Parser workers enqueue full parsed
-documents, and the dispatcher service stores local artifacts, sends Elastic bulk
-requests, or does both according to `INGEST_DISPATCH_SINK_MODE`.
+document dispatch items with Markdown, metadata, diagnostics, and RAG records.
+The dispatcher service stores local artifacts, sends Elastic bulk requests, or
+does both according to `INGEST_DISPATCH_SINK_MODE`.
 
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
 | `INGEST_PARSER_WORKER_COUNT` | `2` | `4` | Integer `>= 1`. | Number of parser worker threads that process queued uploaded files. |
-| `INGEST_DISPATCH_QUEUE_MAX_SIZE` | `100` | `100` | Integer `>= 1`. | Maximum number of full parsed document results waiting in the process-local dispatch queue. |
-| `INGEST_DISPATCH_QUEUE_MAX_PAYLOAD_BYTES` | unset | `104857600` | Unset or integer `>= 1`. | Optional maximum serialized size for one full parsed document queue payload. Leave unset for no per-item limit; set it to fail oversized documents explicitly instead of allowing unbounded memory growth. |
-| `INGEST_DISPATCH_MAX_BULK_SIZE` | `5` | `5` | Integer from `1` to `5`. | Maximum number of full documents drained by the dispatcher in one batch. Elastic still receives one bulk item per generated chunk. |
+| `INGEST_DISPATCH_QUEUE_MAX_SIZE` | `100` | `100` | Integer `>= 1`. | Maximum number of parsed document dispatch items waiting in the process-local dispatch queue. |
+| `INGEST_DISPATCH_QUEUE_MAX_PAYLOAD_BYTES` | unset | `104857600` | Unset or integer `>= 1`. | Optional maximum serialized size for one parsed document dispatch payload. Leave unset for no per-item limit; set it to fail oversized documents explicitly instead of allowing unbounded memory growth. |
+| `INGEST_DISPATCH_MAX_BULK_SIZE` | `5` | `5` | Integer from `1` to `5`. | Maximum number of parsed documents drained by the dispatcher in one batch. Elastic receives one bulk item per RAG record. |
 | `INGEST_DISPATCH_IDLE_INTERVAL_SECONDS` | `0.5` | `0.5` | Float `> 0`. | Dispatcher worker sleep interval while the queue is empty. |
 | `INGEST_DISPATCH_SINK_MODE` | `local` | `local_and_elastic` | `local`, `elastic`, or `local_and_elastic`. | Dispatch target mode. |
 | `INGEST_DISPATCH_MAX_RETRIES` | `3` | `3` | Integer `>= 0`. | Retry budget for dispatcher sink failures before a job is marked `failed`. |
 | `INGEST_EMBEDDING_ELASTIC_URL` | unset | `https://elastic.example:9200` | Unset or Elasticsearch URL string. | Base URL for Elasticsearch. Required when the dispatch sink mode includes Elastic. |
 | `INGEST_EMBEDDING_ELASTIC_USERNAME` | unset | `elastic-user` | Unset or any username string. | Optional basic-auth username for the remote endpoint. |
 | `INGEST_EMBEDDING_ELASTIC_PASSWORD` | unset | local secret | Unset or any password string. | Optional basic-auth password. This is never included in grouped config metadata; only a boolean `elastic_password_configured` is exposed. |
-| `INGEST_EMBEDDING_ELASTIC_INDEX` | `ingest-embedding-input` | `open-rag-embeddings-v2` | Non-empty Elasticsearch index name. | Target Elasticsearch index for chunk documents sent through the official bulk helper. |
+| `INGEST_EMBEDDING_ELASTIC_INDEX` | `ingest-embedding-input` | `open-rag-embeddings-v2` | Non-empty Elasticsearch index name. | Target Elasticsearch index for RAG records sent through the official bulk helper. |
 | `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION` | `v1` | `v2` | `v1`, `dense_vector`, `dense_vector_v1`, `v2`, `semantic_text`, or `semantic_text_v2`. | Dispatcher output schema. `v1` embeds `content` and `title` through a dense-vector ingest pipeline. `v2` uses the index default pipeline to copy `content` and `title` into `semantic_text` fields for inference and keeps those semantic fields in `_source`. |
 | `INGEST_EMBEDDING_ELASTIC_PIPELINE` | unset | `qwen3_embeddings_pipeline` | Unset or any Elasticsearch ingest pipeline name. | Optional Elasticsearch ingest pipeline name for dispatcher bulk actions. Use this for v1 dense-vector embedding fields. Leave blank for v2 because `elastic/open-rag-embeddings-v2.json` sets `index.default_pipeline=open_rag_embeddings_v2_semantic_pipeline`. |
 | `INGEST_EMBEDDING_ELASTIC_VERIFY_CERTS` | `true` | `false` | `true` or `false`. | Enables TLS certificate verification. Keep `true` outside local lab environments. |
 | `INGEST_EMBEDDING_ELASTIC_REQUEST_TIMEOUT_SECONDS` | `30` | `30` | Float `> 0`. | Timeout for Elasticsearch bulk helper requests. |
 | `INGEST_EMBEDDING_ELASTIC_MAX_RETRIES` | `3` | `3` | Integer `>= 0`. | Elasticsearch client retry count for bulk request transport retries. |
 
-## Confidence Output
+## Confidence Metadata
 
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
-| `INGEST_CONFIDENCE_OUTPUT_ENABLED` | `true` | `true` | `true` or `false`. | Writes `confidence.json` and embeds Docling confidence summaries in manifests when Docling reports scores. |
+| `INGEST_CONFIDENCE_OUTPUT_ENABLED` | `true` | `true` | `true` or `false`. | Retained for compatibility. Confidence summaries are now embedded in `document_metadata.json` and RAG record metadata when Docling reports scores. |
 | `INGEST_CONFIDENCE_MIN_DOCUMENT_SCORE` | unset | `0.8` | Unset or float from `0` to `1`. | Optional minimum acceptable document score. When set, documents below the threshold create warnings or failures depending on `INGEST_CONFIDENCE_WARN_ONLY`. |
 | `INGEST_CONFIDENCE_WARN_ONLY` | `true` | `true` | `true` or `false`. | When `true`, low confidence is reported as warnings. When `false`, low confidence is treated as an ingestion problem. |
 

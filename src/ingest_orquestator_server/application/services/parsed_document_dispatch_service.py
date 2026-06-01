@@ -5,41 +5,44 @@ from datetime import UTC, datetime
 from threading import Event, Lock, Thread
 from time import perf_counter, sleep
 
-from ingest_orquestator_server.application.ports.embedding_dispatcher import (
-    EmbeddingDispatcher,
-)
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
 )
 from ingest_orquestator_server.application.ports.job_queue import DispatchJobQueue
 from ingest_orquestator_server.application.ports.parse_output_writer import ParseOutputWriter
+from ingest_orquestator_server.application.ports.parsed_document_dispatch_sink import (
+    ParsedDocumentDispatchSink,
+)
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseResult,
 )
-from ingest_orquestator_server.application.services.embedding_queue_service import (
-    EmbeddingQueueError,
-    EmbeddingQueueService,
+from ingest_orquestator_server.application.services.ingestion_request_options import (
+    dispatch_sink_mode_from_metadata,
+)
+from ingest_orquestator_server.application.services.parsed_document_dispatch_queue_service import (
+    ParsedDocumentDispatchQueueError,
+    ParsedDocumentDispatchQueueService,
 )
 from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.config.settings import Settings
-from ingest_orquestator_server.models.embedding_queue import (
-    EmbeddingDispatchRunResult,
-    EmbeddingQueueItem,
-)
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
 from ingest_orquestator_server.models.output_files import OutputFiles
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    ParsedDocumentDispatchItem,
+    ParsedDocumentDispatchRunResult,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class EmbeddingDispatchService:
+class ParsedDocumentDispatchService:
     def __init__(
         self,
         *,
         settings: Settings,
-        queue_service: EmbeddingQueueService,
-        dispatcher: EmbeddingDispatcher,
+        queue_service: ParsedDocumentDispatchQueueService,
+        dispatcher: ParsedDocumentDispatchSink,
         job_repository: IngestionJobRepository,
         output_writer: ParseOutputWriter,
         dispatch_job_queue: DispatchJobQueue | None = None,
@@ -70,10 +73,7 @@ class EmbeddingDispatchService:
                 )
                 thread.start()
                 self._threads.append(thread)
-            log_stage(
-                "dispatch.worker.started",
-                worker_count=len(self._threads),
-            )
+            log_stage("dispatch.worker.started", worker_count=len(self._threads))
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -108,7 +108,7 @@ class EmbeddingDispatchService:
             log_stage(
                 "dispatch.queue.failed",
                 job_id=job.job_id,
-                document_id=parse_result.parse_output.document.document_id,
+                document_id=parse_result.content.document_id,
                 reason=str(exc),
             )
             logger.warning(
@@ -179,24 +179,23 @@ class EmbeddingDispatchService:
             queue_id=item.queue_id,
             source_file_name=item.source_file_name,
             record_count=item.record_count,
-            chunk_count=len(item.chunks),
-            sink_mode=self._settings.dispatch_sink_mode,
+            sink_mode=self._sink_mode_for_item(item),
         )
         return queued_job
 
     def enqueue_job(self, job: IngestionJob) -> IngestionJob:
-        raise EmbeddingQueueError(
+        raise ParsedDocumentDispatchQueueError(
             "Dispatch queue requires the full parsed document. Use enqueue_parse_result()."
         )
 
-    def run_once(self) -> EmbeddingDispatchRunResult:
+    def run_once(self) -> ParsedDocumentDispatchRunResult:
         submitted_document_count = self.dispatch_next_batch()
-        return EmbeddingDispatchRunResult(
+        return ParsedDocumentDispatchRunResult(
             queue_status=self._queue_service.snapshot(),
             submitted_document_count=submitted_document_count,
         )
 
-    def drain(self) -> EmbeddingDispatchRunResult:
+    def drain(self) -> ParsedDocumentDispatchRunResult:
         result = self.run_once()
         while result.queue_status.queued_count > 0 or result.queue_status.in_flight_count > 0:
             result = self.run_once()
@@ -208,14 +207,16 @@ class EmbeddingDispatchService:
             return 0
         return self._dispatch_batch(batch, update_queue=True)
 
-
-    def dispatch_item(self, item: EmbeddingQueueItem) -> int:
+    def dispatch_item(self, item: ParsedDocumentDispatchItem) -> int:
         return self._dispatch_batch([item], update_queue=False)
 
-    def _dispatch_batch(self, batch: list[EmbeddingQueueItem], *, update_queue: bool) -> int:
+    def _dispatch_batch(
+        self, batch: list[ParsedDocumentDispatchItem], *, update_queue: bool
+    ) -> int:
         started = perf_counter()
         for item in batch:
             self._save_item_state(item, IngestionStatus.DISPATCHING)
+        sink_modes = self._sink_modes(batch)
         log_stage(
             "dispatch.started",
             queue_ids=[item.queue_id for item in batch],
@@ -223,12 +224,24 @@ class EmbeddingDispatchService:
             document_ids=[item.document_id for item in batch],
             document_bulk_size=len(batch),
             record_count=sum(item.record_count for item in batch),
-            sink_mode=self._settings.dispatch_sink_mode,
+            sink_mode=sink_modes[0] if len(sink_modes) == 1 else "mixed",
+            sink_modes=sink_modes,
         )
 
         try:
-            local_outputs = self._store_local(batch) if self._should_store_local else {}
-            result = self._dispatcher.submit_batch(batch) if self._should_dispatch_elastic else None
+            local_items = [
+                item
+                for item in batch
+                if self._should_store_local_for(self._sink_mode_for_item(item))
+            ]
+            elastic_items = [
+                item
+                for item in batch
+                if self._should_dispatch_elastic_for(self._sink_mode_for_item(item))
+            ]
+            elastic_queue_ids = {item.queue_id for item in elastic_items}
+            local_outputs = self._store_local(local_items) if local_items else {}
+            result = self._dispatcher.submit_batch(elastic_items) if elastic_items else None
         except Exception as exc:
             retry = any(item.attempts <= self._settings.dispatch_max_retries for item in batch)
             updated_items = (
@@ -257,7 +270,9 @@ class EmbeddingDispatchService:
             outputs = local_outputs.get(item.queue_id)
             metadata = {
                 "local_outputs": outputs.model_dump(mode="json") if outputs is not None else None,
-                "elastic_response": result.raw_response if result is not None else None,
+                "elastic_response": result.raw_response
+                if result is not None and item.queue_id in elastic_queue_ids
+                else None,
             }
             self._save_item_state(
                 item,
@@ -266,24 +281,34 @@ class EmbeddingDispatchService:
                 raw_response=metadata,
             )
         completed_items = self._queue_service.mark_completed(batch) if update_queue else batch
+        accepted_document_count = (
+            (result.accepted_document_count if result is not None else 0)
+            + sum(
+                1
+                for item in batch
+                if self._should_store_local_for(self._sink_mode_for_item(item))
+                and not self._should_dispatch_elastic_for(self._sink_mode_for_item(item))
+            )
+        )
         log_stage(
             "dispatch.completed",
             queue_ids=[item.queue_id for item in completed_items],
             job_ids=[item.job_id for item in completed_items],
             document_ids=[item.document_id for item in completed_items],
-            accepted_document_count=(result.accepted_document_count if result else len(batch)),
-            accepted_chunk_count=(result.accepted_chunk_count if result else 0),
-            sink_mode=self._settings.dispatch_sink_mode,
+            accepted_document_count=accepted_document_count,
+            accepted_record_count=(result.accepted_record_count if result else 0),
+            sink_mode=sink_modes[0] if len(sink_modes) == 1 else "mixed",
+            sink_modes=sink_modes,
             elapsed_ms=round((perf_counter() - started) * 1000),
         )
-        return result.accepted_document_count if result else len(batch)
+        return accepted_document_count
 
     def queue_status(self):
         return self._queue_service.snapshot()
 
     def _save_item_state(
         self,
-        item: EmbeddingQueueItem,
+        item: ParsedDocumentDispatchItem,
         status: IngestionStatus,
         *,
         error: str | None = None,
@@ -316,14 +341,15 @@ class EmbeddingDispatchService:
     def _dispatch_metadata(
         self,
         state: str,
-        queue_items: list[EmbeddingQueueItem],
+        queue_items: list[ParsedDocumentDispatchItem],
         error: str | None = None,
         raw_response: dict | None = None,
     ) -> dict:
+        sink_mode = self._sink_mode_for_items(queue_items)
         handoff = {
             "enabled": True,
             "state": state,
-            "sink_mode": self._settings.dispatch_sink_mode,
+            "sink_mode": sink_mode,
             "queue_ids": [item.queue_id for item in queue_items],
             "document_bulk_size": len(queue_items),
             "record_count": sum(item.record_count for item in queue_items),
@@ -336,22 +362,48 @@ class EmbeddingDispatchService:
             handoff["error"] = error
         return {"dispatch_handoff": handoff}
 
-    @property
-    def _should_store_local(self) -> bool:
-        return self._settings.dispatch_sink_mode in {"local", "local_and_elastic"}
+    def _sink_mode_for_item(self, item: ParsedDocumentDispatchItem) -> str:
+        return dispatch_sink_mode_from_metadata(
+            item.metadata,
+            default=self._settings.dispatch_sink_mode,
+        )
 
-    @property
-    def _should_dispatch_elastic(self) -> bool:
-        return self._settings.dispatch_sink_mode in {"elastic", "local_and_elastic"}
+    def _sink_mode_for_items(self, items: list[ParsedDocumentDispatchItem]) -> str:
+        sink_modes = self._sink_modes(items)
+        if len(sink_modes) == 1:
+            return sink_modes[0]
+        return "mixed"
 
-    def _store_local(self, batch: list[EmbeddingQueueItem]) -> dict[str, OutputFiles]:
+    def _sink_modes(self, items: list[ParsedDocumentDispatchItem]) -> list[str]:
+        if not items:
+            return [self._settings.dispatch_sink_mode]
+        return sorted({self._sink_mode_for_item(item) for item in items})
+
+    @staticmethod
+    def _should_store_local_for(sink_mode: str) -> bool:
+        return sink_mode in {"local", "local_and_elastic"}
+
+    @staticmethod
+    def _should_dispatch_elastic_for(sink_mode: str) -> bool:
+        return sink_mode in {"elastic", "local_and_elastic"}
+
+    def _store_local(self, batch: list[ParsedDocumentDispatchItem]) -> dict[str, OutputFiles]:
         outputs_by_queue_id: dict[str, OutputFiles] = {}
         for item in batch:
+            content = item.content.model_copy(
+                update={
+                    "metadata": item.content.metadata
+                    | {
+                        "dispatch": {
+                            "sink_mode": self._sink_mode_for_item(item),
+                            "queue_id": item.queue_id,
+                        }
+                    }
+                }
+            )
             outputs = self._output_writer.write(
-                item.parse_output,
+                content,
                 self._settings.outputs_dir,
-                chunks=item.chunks if item.chunks else None,
-                embedding_records=item.embedding_records if item.embedding_records else None,
                 diagnostics=item.diagnostics,
             )
             outputs_by_queue_id[item.queue_id] = outputs

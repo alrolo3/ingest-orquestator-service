@@ -127,5 +127,5 @@ class DispatchConfig(BaseModel):
     elastic_max_retries: int
 
 
-class EmbeddingQueueConfig(DispatchConfig):
-    """Backward-compatible grouped config name for existing callers."""
+class ParsedDocumentDispatchQueueConfig(DispatchConfig):
+    """Grouped config for parsed document dispatch queues."""

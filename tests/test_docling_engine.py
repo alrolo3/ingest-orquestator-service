@@ -19,6 +19,7 @@ class CountingDoclingConverterFactory:
     def __init__(self) -> None:
         self.create_count = 0
         self.converter = FakeDoclingConverter()
+        self.ocr_languages: list[list[str]] = []
 
     def create(
         self,
@@ -27,8 +28,9 @@ class CountingDoclingConverterFactory:
         pipeline: str = "standard",
         input_format: str | None = None,
     ) -> Any:
-        _ = settings, pipeline, input_format
+        _ = pipeline, input_format
         self.create_count += 1
+        self.ocr_languages.append(list(settings.docling_pdf_ocr_languages))
         return self.converter
 
 
@@ -122,11 +124,37 @@ def test_docling_parser_records_engine_metadata_when_scheduler_is_used(
         conversion_scheduler=scheduler,
     ).parse(input_file)
 
-    engine = output.document.metadata["docling"]["engine"]
+    assert output.normalized_document is not None
+    engine = output.normalized_document.metadata["docling"]["engine"]
     assert engine["engine_key"].startswith("md:standard:")
     assert engine["initialize_count"] == 1
     assert engine["conversion_count"] == 1
-    assert output.document.metadata["docling"]["input_format"] == "md"
+    assert output.normalized_document.metadata["docling"]["input_format"] == "md"
+
+
+def test_docling_engine_registry_reuses_converter_for_same_ocr_languages(
+    tmp_path: Path,
+) -> None:
+    input_file = _write_markdown(tmp_path / "example.md")
+    settings = Settings(
+        docling_allowed_formats=["md"],
+        docling_gpu_batch_wait_ms=0,
+    )
+    factory = CountingDoclingConverterFactory()
+    scheduler = DoclingConversionScheduler(
+        engine_registry=DoclingEngineRegistry(
+            settings=settings,
+            converter_factory=factory,
+        ),
+    )
+    parser = DoclingDocumentParser(settings=settings, conversion_scheduler=scheduler)
+
+    parser.parse(input_file, ocr_languages=["en"])
+    parser.parse(input_file, ocr_languages=["en"])
+    parser.parse(input_file, ocr_languages=["es"])
+
+    assert factory.create_count == 2
+    assert factory.ocr_languages == [["en"], ["es"]]
 
 
 def _write_markdown(path: Path) -> Path:

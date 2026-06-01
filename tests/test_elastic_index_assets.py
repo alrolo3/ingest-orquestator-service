@@ -20,7 +20,9 @@ def test_open_rag_embedding_index_asset_maps_chunk_documents() -> None:
     assert properties["title_embedding"]["index_options"]["type"] == "int8_hnsw"
     assert properties["record_id"]["type"] == "keyword"
     assert properties["document_id"]["type"] == "keyword"
+    assert properties["job_id"]["type"] == "keyword"
     assert properties["chunk_id"]["type"] == "keyword"
+    assert properties["record_type"]["type"] == "keyword"
     assert properties["confidence"]["properties"]["mean_score"]["type"] == "float"
     for field_name in [
         "raw_text",
@@ -80,7 +82,9 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
 
     assert properties["record_id"]["type"] == "keyword"
     assert properties["document_id"]["type"] == "keyword"
+    assert properties["job_id"]["type"] == "keyword"
     assert properties["chunk_id"]["type"] == "keyword"
+    assert properties["record_type"]["type"] == "keyword"
     for field_name in [
         "raw_text",
         "schema_version",

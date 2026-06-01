@@ -70,7 +70,7 @@ For this deployment, the host API must talk to RabbitMQ through localhost:
 
 ```bash
 export INGEST_QUEUE_BACKEND=dramatiq
-export INGEST_RABBITMQ_URL=amqp://guest:guest@localhost:5672//
+export INGEST_RABBITMQ_URL=amqp://guest:guest@localhost:5672/%2F
 export INGEST_STORAGE_DIR=.data
 ```
 
@@ -146,7 +146,7 @@ source .env
 set +a
 
 export INGEST_QUEUE_BACKEND=dramatiq
-export INGEST_RABBITMQ_URL=amqp://guest:guest@localhost:5672//
+export INGEST_RABBITMQ_URL=amqp://guest:guest@localhost:5672/%2F
 export INGEST_STORAGE_DIR=.data
 
 python -m uvicorn ingest_orquestator_server.main:app --host 0.0.0.0 --port 8000

@@ -9,20 +9,20 @@ from uuid import uuid4
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseResult,
 )
-from ingest_orquestator_server.models.embedding_queue import (
-    EmbeddingQueueItem,
-    EmbeddingQueueItemStatus,
-    EmbeddingQueueSnapshot,
-)
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    ParsedDocumentDispatchItem,
+    ParsedDocumentDispatchItemStatus,
+    ParsedDocumentDispatchQueueSnapshot,
+)
 
 
-class EmbeddingQueueError(RuntimeError):
+class ParsedDocumentDispatchQueueError(RuntimeError):
     pass
 
 
-class EmbeddingQueueService:
-    """Process-local mandatory full-document dispatch queue."""
+class ParsedDocumentDispatchQueueService:
+    """Process-local queue for parsed document dispatch handoff items."""
 
     def __init__(
         self,
@@ -41,7 +41,7 @@ class EmbeddingQueueService:
         self._max_size = max_size
         self._max_payload_bytes = max_payload_bytes
         self._queue: Queue[str] = Queue(maxsize=max_size)
-        self._items: dict[str, EmbeddingQueueItem] = {}
+        self._items: dict[str, ParsedDocumentDispatchItem] = {}
         self._job_index: dict[str, str] = {}
         self._lock = Lock()
 
@@ -53,10 +53,23 @@ class EmbeddingQueueService:
         self,
         job: IngestionJob,
         parse_result: DocumentParseResult,
-    ) -> EmbeddingQueueItem:
-        payload_bytes = self._estimate_payload_bytes(parse_result)
+    ) -> ParsedDocumentDispatchItem:
+        content = parse_result.content.model_copy(
+            update={
+                "metadata": parse_result.content.metadata
+                | {
+                    "job_id": job.job_id,
+                    "source_file_name": job.source_file_name,
+                    "parser": job.parser,
+                    "requested_dispatch_sink_mode": job.metadata.get(
+                        "requested_dispatch_sink_mode"
+                    ),
+                }
+            }
+        )
+        payload_bytes = self._estimate_payload_bytes(content, parse_result)
         if self._max_payload_bytes is not None and payload_bytes > self._max_payload_bytes:
-            raise EmbeddingQueueError(
+            raise ParsedDocumentDispatchQueueError(
                 "Dispatch queue payload is too large "
                 f"({payload_bytes} bytes > {self._max_payload_bytes} bytes)."
             )
@@ -65,23 +78,24 @@ class EmbeddingQueueService:
             if existing_id is not None:
                 return self._items[existing_id]
 
-            item = EmbeddingQueueItem(
+            item = ParsedDocumentDispatchItem(
                 queue_id=str(uuid4()),
                 job_id=job.job_id,
-                document_id=parse_result.parse_output.document.document_id,
+                document_id=content.document_id,
                 source_file_name=job.source_file_name,
-                parse_output=parse_result.parse_output,
-                chunks=parse_result.chunks,
-                embedding_records=parse_result.embedding_records,
+                content=content,
                 diagnostics=parse_result.diagnostics,
                 output_dir=job.outputs.output_dir if job.outputs is not None else None,
-                record_count=len(parse_result.embedding_records),
+                record_count=len(content.rag_records),
                 metadata={
                     "parser": job.parser,
                     "input_format": parse_result.diagnostics.metadata.get("input_format"),
                     "pipeline": parse_result.diagnostics.metadata.get("pipeline"),
                     "source_file_name": job.source_file_name,
                     "payload_bytes": payload_bytes,
+                    "requested_dispatch_sink_mode": job.metadata.get(
+                        "requested_dispatch_sink_mode"
+                    ),
                 },
             )
             self._items[item.queue_id] = item
@@ -91,19 +105,21 @@ class EmbeddingQueueService:
             except Full as exc:
                 self._items.pop(item.queue_id, None)
                 self._job_index.pop(job.job_id, None)
-                raise EmbeddingQueueError(
+                raise ParsedDocumentDispatchQueueError(
                     f"Dispatch queue is full ({self._max_size} items)."
                 ) from exc
             return item
 
-    def enqueue_job(self, job: IngestionJob) -> EmbeddingQueueItem:
-        raise EmbeddingQueueError(
+    def enqueue_job(self, job: IngestionJob) -> ParsedDocumentDispatchItem:
+        raise ParsedDocumentDispatchQueueError(
             "Queue items must contain the full parsed document. Use enqueue_parse_result()."
         )
 
-    def dequeue_batch(self, max_items: int | None = None) -> list[EmbeddingQueueItem]:
+    def dequeue_batch(
+        self, max_items: int | None = None
+    ) -> list[ParsedDocumentDispatchItem]:
         limit = min(max_items or self._max_bulk_size, self._max_bulk_size)
-        batch: list[EmbeddingQueueItem] = []
+        batch: list[ParsedDocumentDispatchItem] = []
         with self._lock:
             while len(batch) < limit:
                 try:
@@ -111,11 +127,11 @@ class EmbeddingQueueService:
                 except Empty:
                     break
                 item = self._items.get(queue_id)
-                if item is None or item.status != EmbeddingQueueItemStatus.QUEUED:
+                if item is None or item.status != ParsedDocumentDispatchItemStatus.QUEUED:
                     continue
                 updated = item.model_copy(
                     update={
-                        "status": EmbeddingQueueItemStatus.DISPATCHING,
+                        "status": ParsedDocumentDispatchItemStatus.DISPATCHING,
                         "attempts": item.attempts + 1,
                         "updated_at": datetime.now(UTC),
                     }
@@ -124,13 +140,15 @@ class EmbeddingQueueService:
                 batch.append(updated)
         return batch
 
-    def mark_completed(self, items: list[EmbeddingQueueItem]) -> list[EmbeddingQueueItem]:
-        updated_items: list[EmbeddingQueueItem] = []
+    def mark_completed(
+        self, items: list[ParsedDocumentDispatchItem]
+    ) -> list[ParsedDocumentDispatchItem]:
+        updated_items: list[ParsedDocumentDispatchItem] = []
         with self._lock:
             for item in items:
                 updated = item.model_copy(
                     update={
-                        "status": EmbeddingQueueItemStatus.COMPLETED,
+                        "status": ParsedDocumentDispatchItemStatus.COMPLETED,
                         "last_error": None,
                         "updated_at": datetime.now(UTC),
                     }
@@ -141,16 +159,18 @@ class EmbeddingQueueService:
 
     def mark_batch_failed(
         self,
-        items: list[EmbeddingQueueItem],
+        items: list[ParsedDocumentDispatchItem],
         *,
         error: str,
         retry: bool,
-    ) -> list[EmbeddingQueueItem]:
-        updated_items: list[EmbeddingQueueItem] = []
+    ) -> list[ParsedDocumentDispatchItem]:
+        updated_items: list[ParsedDocumentDispatchItem] = []
         with self._lock:
             for item in items:
                 status = (
-                    EmbeddingQueueItemStatus.QUEUED if retry else EmbeddingQueueItemStatus.FAILED
+                    ParsedDocumentDispatchItemStatus.QUEUED
+                    if retry
+                    else ParsedDocumentDispatchItemStatus.FAILED
                 )
                 updated = item.model_copy(
                     update={
@@ -165,29 +185,29 @@ class EmbeddingQueueService:
                 updated_items.append(updated)
         return updated_items
 
-    def snapshot(self) -> EmbeddingQueueSnapshot:
+    def snapshot(self) -> ParsedDocumentDispatchQueueSnapshot:
         with self._lock:
             queued = [
                 item
                 for item in self._items.values()
-                if item.status == EmbeddingQueueItemStatus.QUEUED
+                if item.status == ParsedDocumentDispatchItemStatus.QUEUED
             ]
             in_flight = [
                 item
                 for item in self._items.values()
-                if item.status == EmbeddingQueueItemStatus.DISPATCHING
+                if item.status == ParsedDocumentDispatchItemStatus.DISPATCHING
             ]
             completed = [
                 item
                 for item in self._items.values()
-                if item.status == EmbeddingQueueItemStatus.COMPLETED
+                if item.status == ParsedDocumentDispatchItemStatus.COMPLETED
             ]
             failed = [
                 item
                 for item in self._items.values()
-                if item.status == EmbeddingQueueItemStatus.FAILED
+                if item.status == ParsedDocumentDispatchItemStatus.FAILED
             ]
-            return EmbeddingQueueSnapshot(
+            return ParsedDocumentDispatchQueueSnapshot(
                 max_bulk_size=self._max_bulk_size,
                 max_size=self._max_size,
                 max_payload_bytes=self._max_payload_bytes,
@@ -202,16 +222,12 @@ class EmbeddingQueueService:
             )
 
     @staticmethod
-    def _estimate_payload_bytes(parse_result: DocumentParseResult) -> int:
+    def _estimate_payload_bytes(
+        content,
+        parse_result: DocumentParseResult,
+    ) -> int:
         payload = {
-            "parse_output": parse_result.parse_output.model_dump(
-                mode="python",
-                exclude={"docling_document"},
-            ),
-            "chunks": [chunk.model_dump(mode="json") for chunk in parse_result.chunks],
-            "embedding_records": [
-                record.model_dump(mode="json") for record in parse_result.embedding_records
-            ],
+            "content": content.model_dump(mode="json"),
             "diagnostics": parse_result.diagnostics.model_dump(mode="json"),
         }
         return len(json.dumps(payload, default=str).encode("utf-8"))

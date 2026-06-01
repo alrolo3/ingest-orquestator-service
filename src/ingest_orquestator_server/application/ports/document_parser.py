@@ -16,6 +16,8 @@ class DocumentParser(Protocol):
         *,
         document_id: str | None = None,
         pipeline: str | None = None,
+        ocr_languages: list[str] | None = None,
+        include_html: bool = False,
         progress_callback: ParseProgressCallback | None = None,
     ) -> ParseOutput:
-        """Parse a source file into raw and normalized output."""
+        """Parse a source file into a parser-agnostic output."""

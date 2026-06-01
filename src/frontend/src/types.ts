@@ -15,6 +15,7 @@ export type JobStatus =
 
 export type Pipeline = "standard" | "vlm" | "auto";
 export type ChunkingStrategy = "hybrid" | "line_based" | "legacy_char";
+export type DispatchSinkMode = "local" | "elastic" | "local_and_elastic";
 
 export interface CapabilityOption {
   value: string;
@@ -31,6 +32,14 @@ export interface IngestionCapabilities {
   pipelines: CapabilityOption[];
   default_parser: string;
   default_pipeline: Pipeline;
+  default_dispatch_sink_mode: DispatchSinkMode;
+  dispatchers: CapabilityOption[];
+  ocr: {
+    enabled: boolean;
+    engine: string;
+    default_languages: string[];
+    languages: CapabilityOption[];
+  };
   chunking: {
     enabled: boolean;
     default_strategy: ChunkingStrategy;
@@ -46,21 +55,26 @@ export interface IngestionOptions {
   pipeline: Pipeline;
   chunkingEnabled: boolean;
   chunkingStrategy: ChunkingStrategy;
+  dispatchSinkMode: DispatchSinkMode;
+  ocrLanguages: string[];
   asyncMode: boolean;
   includeDocument: boolean;
+  includeHtml: boolean;
 }
 
 export interface OutputFiles {
   output_dir: string;
-  raw_docling_json: string;
-  normalized_json: string;
   markdown: string;
-  text: string;
+  document_metadata_json?: string | null;
+  rag_chunks_jsonl?: string | null;
   html?: string | null;
+  raw_docling_json?: string | null;
+  normalized_json?: string | null;
+  text?: string | null;
   chunks_json?: string | null;
   embedding_input_jsonl?: string | null;
   confidence_json?: string | null;
-  manifest_json: string;
+  manifest_json?: string | null;
 }
 
 export interface IngestResponse {
@@ -127,4 +141,46 @@ export interface TrackedJob {
   job?: IngestionJob;
   upload_error?: string;
   retained_file?: File;
+}
+
+export interface QueueJobSummary {
+  job_id: string;
+  status: JobStatus;
+  parser: string;
+  source_file_name?: string | null;
+  document_id?: string | null;
+  metadata: Record<string, unknown>;
+  error?: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface QueueStageMetrics {
+  name: string;
+  statuses: JobStatus[];
+  count: number;
+  jobs: QueueJobSummary[];
+}
+
+export interface DispatchQueueCounts {
+  max_bulk_size: number;
+  max_size: number;
+  max_payload_bytes?: number | null;
+  queued_count: number;
+  in_flight_count: number;
+  completed_count: number;
+  failed_count: number;
+}
+
+export interface QueueMetrics {
+  queue_backend: string;
+  parser_queue_name: string;
+  dispatch_queue_name: string;
+  parser_worker_count: number;
+  dispatch_worker_count: number;
+  status_counts: Record<string, number>;
+  stages: QueueStageMetrics[];
+  dispatch_queue?: DispatchQueueCounts | null;
 }

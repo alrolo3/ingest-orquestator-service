@@ -10,14 +10,17 @@ from ingest_orquestator_server.application.ports.ingestion_job_repository import
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
-from ingest_orquestator_server.application.services.embedding_dispatch_service import (
-    EmbeddingDispatchService,
-)
 from ingest_orquestator_server.application.services.ingestion_job_metadata import (
     build_error_metadata,
 )
+from ingest_orquestator_server.application.services.ingestion_request_options import (
+    ocr_languages_from_metadata,
+)
 from ingest_orquestator_server.application.services.job_progress_reporter import (
     JobProgressReporter,
+)
+from ingest_orquestator_server.application.services.parsed_document_dispatch_service import (
+    ParsedDocumentDispatchService,
 )
 from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.config.settings import Settings
@@ -32,6 +35,8 @@ class RequestedParseOptions:
     pipeline: object
     chunking_enabled: object
     chunking_strategy: object
+    ocr_languages: list[str] | None
+    include_html: bool
 
 
 class JobParseCoordinator:
@@ -43,7 +48,7 @@ class JobParseCoordinator:
         settings: Settings,
         document_parse_service: DocumentParseService,
         job_repository: IngestionJobRepository,
-        dispatch_service: EmbeddingDispatchService | None,
+        dispatch_service: ParsedDocumentDispatchService | None,
         include_validation_error_metadata: bool = False,
     ) -> None:
         self._document_parse_service = document_parse_service
@@ -116,6 +121,8 @@ class JobParseCoordinator:
                 pipeline=self._optional_string(requested.pipeline),
                 chunking_enabled=self._optional_bool(requested.chunking_enabled),
                 chunking_strategy=self._optional_string(requested.chunking_strategy),
+                ocr_languages=requested.ocr_languages,
+                include_html=requested.include_html,
                 progress_callback=self._progress_reporter.callback_for(job_id),
             )
         except Exception as exc:
@@ -140,7 +147,7 @@ class JobParseCoordinator:
         parsed_job = latest_job.model_copy(
             update={
                 "status": IngestionStatus.PARSED,
-                "document_id": parse_result.parse_output.document.document_id,
+                "document_id": parse_result.content.document_id,
                 "metadata": latest_job.metadata | parse_result.diagnostics.metadata,
                 "updated_at": datetime.now(UTC),
             }
@@ -158,11 +165,11 @@ class JobParseCoordinator:
 
         completed_fields = {
             "job_id": job_id,
-            "document_id": parse_result.parse_output.document.document_id,
-            "page_count": parse_result.parse_output.document.page_count,
-            "element_count": len(parse_result.parse_output.document.elements),
-            "chunk_count": len(parse_result.chunks),
-            "embedding_record_count": len(parse_result.embedding_records),
+            "document_id": parse_result.content.document_id,
+            "page_count": parse_result.content.metadata.get("page_count"),
+            "element_count": parse_result.content.metadata.get("element_count"),
+            "chunk_count": parse_result.diagnostics.chunk_count,
+            "rag_record_count": len(parse_result.content.rag_records),
             "duration_ms": parse_result.diagnostics.duration_ms,
         }
         if log_completed_context:
@@ -215,6 +222,8 @@ class JobParseCoordinator:
             pipeline=job.metadata.get("requested_pipeline"),
             chunking_enabled=job.metadata.get("requested_chunking_enabled"),
             chunking_strategy=job.metadata.get("requested_chunking_strategy"),
+            ocr_languages=ocr_languages_from_metadata(job.metadata),
+            include_html=bool(job.metadata.get("requested_include_html")),
         )
 
     @staticmethod

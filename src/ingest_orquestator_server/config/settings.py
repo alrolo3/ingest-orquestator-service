@@ -13,7 +13,7 @@ from ingest_orquestator_server.config.config_groups import (
     DoclingOcrConfig,
     DoclingVlmConfig,
     DoclingXbrlConfig,
-    EmbeddingQueueConfig,
+    ParsedDocumentDispatchQueueConfig,
     ProgressConfig,
     ServiceConfig,
     StorageConfig,
@@ -657,8 +657,8 @@ class Settings(BaseSettings):
         )
 
     @property
-    def embedding_queue_config(self) -> EmbeddingQueueConfig:
-        return EmbeddingQueueConfig(**self.dispatch_config.model_dump())
+    def parsed_document_dispatch_queue_config(self) -> ParsedDocumentDispatchQueueConfig:
+        return ParsedDocumentDispatchQueueConfig(**self.dispatch_config.model_dump())
 
 
 @lru_cache

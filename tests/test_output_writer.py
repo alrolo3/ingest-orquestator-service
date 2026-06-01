@@ -5,41 +5,45 @@ from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writ
     LocalParseOutputWriter,
 )
 from ingest_orquestator_server.models import (
-    DocumentChunk,
-    EmbeddingRecord,
-    ParsedDocument,
+    ParsedDocumentContent,
     ParseDiagnostics,
-    ParseOutput,
+    RagIngestionRecord,
+    RagRecordType,
 )
 
 
-def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
-    parse_output = ParseOutput(
-        document=ParsedDocument(
-            document_id="doc-1",
-            source_file_name="example.pdf",
-            source_path="/tmp/example.pdf",
-            markdown="# Hello",
-            text="Hello",
-        ),
-        raw_docling={"name": "example"},
-        raw_markdown="# Hello",
-        raw_text="Hello",
-        raw_html="<h1>Hello</h1>",
-        confidence={"mean_score": 0.94},
-        confidence_summary={"mean_score": 0.94},
-        warnings=[],
+def test_write_parse_output_writes_minimal_rag_artifacts(tmp_path: Path) -> None:
+    content = ParsedDocumentContent(
+        document_id="doc-1",
+        markdown="# Hello",
+        html="<h1>Hello</h1>",
+        metadata={
+            "job_id": "job-1",
+            "source_file_name": "example.pdf",
+            "input_format": "pdf",
+            "parser": "docling",
+            "pipeline": "standard",
+            "page_count": 1,
+            "confidence_summary": {"mean_score": 0.94},
+            "warnings": [],
+        },
+        rag_records=[
+            RagIngestionRecord(
+                record_id="doc-1:rag:1",
+                document_id="doc-1",
+                job_id="job-1",
+                content="Hello",
+                title="Example",
+                source_file_name="example.pdf",
+                input_format="pdf",
+                parser="docling",
+                pipeline="standard",
+                chunk_id="doc-1:1",
+                record_type=RagRecordType.CHUNK,
+                metadata={"page_count": 1},
+            )
+        ],
     )
-
-    chunks = [
-        DocumentChunk(
-            chunk_id="doc-1:1",
-            document_id="doc-1",
-            page_start=1,
-            page_end=1,
-            text="Hello",
-        )
-    ]
     diagnostics = ParseDiagnostics(
         parser="docling",
         started_at=datetime.now(UTC),
@@ -48,36 +52,22 @@ def test_write_parse_output_writes_expected_artifacts(tmp_path: Path) -> None:
         chunk_count=1,
     )
 
-    outputs = LocalParseOutputWriter().write(
-        parse_output,
-        tmp_path,
-        chunks=chunks,
-        embedding_records=[
-            EmbeddingRecord(
-                record_id="doc-1:embedding:1",
-                document_id="doc-1",
-                chunk_id="doc-1:1",
-                text="Hello",
-                metadata={"source_file_name": "example.pdf"},
-            )
-        ],
-        diagnostics=diagnostics,
-    )
+    outputs = LocalParseOutputWriter().write(content, tmp_path, diagnostics=diagnostics)
 
     assert outputs.output_dir.exists()
-    assert outputs.raw_docling_json.read_text(encoding="utf-8")
-    assert outputs.normalized_json.read_text(encoding="utf-8")
     assert outputs.markdown.read_text(encoding="utf-8") == "# Hello"
-    assert outputs.text.read_text(encoding="utf-8") == "Hello"
-    assert outputs.html is not None
-    assert outputs.html.read_text(encoding="utf-8") == "<h1>Hello</h1>"
-    assert outputs.chunks_json is not None
-    assert outputs.chunks_json.exists()
-    assert outputs.embedding_input_jsonl is not None
-    assert '"record_id":"doc-1:embedding:1"' in outputs.embedding_input_jsonl.read_text(
+    assert outputs.document_metadata_json is not None
+    assert '"input_format": "pdf"' in outputs.document_metadata_json.read_text(
         encoding="utf-8"
     )
-    assert outputs.confidence_json is not None
-    assert '"mean_score": 0.94' in outputs.confidence_json.read_text(encoding="utf-8")
-    assert outputs.manifest_json.exists()
-    assert "diagnostics" in outputs.manifest_json.read_text(encoding="utf-8")
+    assert outputs.rag_chunks_jsonl is not None
+    assert '"record_id":"doc-1:rag:1"' in outputs.rag_chunks_jsonl.read_text(
+        encoding="utf-8"
+    )
+    assert outputs.html is not None
+    assert outputs.html.read_text(encoding="utf-8") == "<h1>Hello</h1>"
+    assert outputs.raw_docling_json is None
+    assert outputs.normalized_json is None
+    assert outputs.text is None
+    assert outputs.embedding_input_jsonl is None
+    assert outputs.confidence_json is None

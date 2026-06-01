@@ -17,11 +17,13 @@ from ingest_orquestator_server.infrastructure.queue import DramatiqJobQueuePubli
 from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_repository import (
     SqliteIngestionJobRepository,
 )
-from ingest_orquestator_server.models.embedding_queue import EmbeddingQueueItem
 from ingest_orquestator_server.models.ingestion_status import IngestionStatus
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
-from ingest_orquestator_server.models.parse_output import ParseOutput
-from ingest_orquestator_server.models.parsed_document import ParsedDocument
+from ingest_orquestator_server.models.parsed_document_content import ParsedDocumentContent
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    ParsedDocumentDispatchItem,
+)
+from ingest_orquestator_server.models.rag_ingestion import RagIngestionRecord
 
 
 class FakeUpload:
@@ -107,20 +109,35 @@ def test_dramatiq_job_queue_publisher_sends_actor_messages() -> None:
     assert dispatch_actor.messages[0][0]["job_id"] == "job-1"
 
 
-def _dispatch_item() -> EmbeddingQueueItem:
-    return EmbeddingQueueItem(
+def _dispatch_item() -> ParsedDocumentDispatchItem:
+    return ParsedDocumentDispatchItem(
         queue_id="queue-1",
         job_id="job-1",
         document_id="document-1",
-        parse_output=ParseOutput(
-            document=ParsedDocument(
-                document_id="document-1",
-                source_file_name="example.md",
-                source_path="example.md",
-            ),
-            raw_docling={},
-            raw_markdown="# Example",
-            raw_text="Example",
+        source_file_name="example.md",
+        content=ParsedDocumentContent(
+            document_id="document-1",
+            markdown="# Example",
+            metadata={
+                "input_format": "md",
+                "parser": "docling",
+                "pipeline": "standard",
+                "source_file_name": "example.md",
+            },
+            rag_records=[
+                RagIngestionRecord(
+                    record_id="record-1",
+                    document_id="document-1",
+                    job_id="job-1",
+                    content="# Example",
+                    title="example.md",
+                    source_file_name="example.md",
+                    input_format="md",
+                    parser="docling",
+                    pipeline="standard",
+                    record_type="document",
+                )
+            ],
         ),
         diagnostics=ParseDiagnostics(
             parser="docling",

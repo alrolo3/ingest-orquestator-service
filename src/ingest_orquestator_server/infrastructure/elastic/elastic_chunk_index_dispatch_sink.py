@@ -7,13 +7,14 @@ from typing import Any
 from elasticsearch import Elasticsearch, TransportError, helpers
 
 from ingest_orquestator_server.config.settings import Settings
-from ingest_orquestator_server.models.embedding_queue import (
-    EmbeddingDispatchResult,
-    EmbeddingQueueItem,
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    DispatchSinkResult,
+    ParsedDocumentDispatchItem,
 )
+from ingest_orquestator_server.models.rag_ingestion import RagIngestionRecord
 
 
-class ElasticEmbeddingDispatchError(RuntimeError):
+class ElasticChunkIndexDispatchError(RuntimeError):
     pass
 
 
@@ -29,10 +30,10 @@ INDEXED_CONFIDENCE_FIELDS = (
     "mean_grade",
     "low_grade",
 )
-REQUIRED_INDEX_FIELDS = {"record_id", "document_id", "chunk_id", "content", "title"}
+REQUIRED_INDEX_FIELDS = {"record_id", "document_id", "content", "title", "record_type"}
 
 
-class ElasticEmbeddingDispatcher:
+class ElasticChunkIndexDispatchSink:
     def __init__(
         self,
         settings: Settings,
@@ -44,15 +45,15 @@ class ElasticEmbeddingDispatcher:
         self._client = client
         self._bulk_helper = bulk_helper
 
-    def submit_batch(self, items: list[EmbeddingQueueItem]) -> EmbeddingDispatchResult:
+    def submit_batch(self, items: list[ParsedDocumentDispatchItem]) -> DispatchSinkResult:
         if not items:
-            raise ElasticEmbeddingDispatchError("Cannot submit an empty embedding batch.")
+            raise ElasticChunkIndexDispatchError("Cannot submit an empty RAG record batch.")
 
-        documents = [document for item in items for document in self._chunk_documents(item)]
+        documents = [document for item in items for document in self._record_documents(item)]
         if not documents:
-            return EmbeddingDispatchResult(
+            return DispatchSinkResult(
                 accepted_document_count=len(items),
-                accepted_chunk_count=0,
+                accepted_record_count=0,
                 raw_response={
                     "client": "elasticsearch",
                     "mode": "bulk",
@@ -63,43 +64,45 @@ class ElasticEmbeddingDispatcher:
             )
         return self._submit_bulk(documents, document_count=len(items))
 
-    def _chunk_documents(self, item: EmbeddingQueueItem) -> list[dict[str, Any]]:
-        records = [record.model_dump(mode="json") for record in item.embedding_records]
-        return [self._chunk_document(item, record) for record in records]
+    def _record_documents(self, item: ParsedDocumentDispatchItem) -> list[dict[str, Any]]:
+        return [self._record_document(item, record) for record in item.content.rag_records]
 
-    def _chunk_document(self, item: EmbeddingQueueItem, record: dict[str, Any]) -> dict[str, Any]:
-        metadata = record.get("metadata")
-        if not isinstance(metadata, dict):
-            metadata = {}
-        else:
-            metadata = dict(metadata)
-
-        content = str(record.get("text") or "")
-        document_id = str(record.get("document_id") or item.document_id)
-        chunk_id = str(record.get("chunk_id") or record.get("record_id") or item.queue_id)
-        record_id = str(record.get("record_id") or f"{document_id}:{chunk_id}")
-        page_start = metadata.get("page_start")
-        page_end = metadata.get("page_end")
-        title = str(metadata.get("title") or item.source_file_name or document_id)
-        confidence = self._indexable_confidence(metadata.get("confidence"))
-
+    def _record_document(
+        self,
+        item: ParsedDocumentDispatchItem,
+        record: RagIngestionRecord,
+    ) -> dict[str, Any]:
+        metadata = dict(record.metadata)
+        confidence = self._indexable_confidence(
+            metadata.get("confidence_summary") or item.content.metadata.get("confidence_summary")
+        )
         document = {
-            "record_id": record_id,
-            "document_id": document_id,
-            "chunk_id": chunk_id,
-            "content": content,
-            "source_file_name": metadata.get("source_file_name") or item.source_file_name,
-            "title": title,
-            "input_format": metadata.get("input_format") or item.metadata.get("input_format"),
-            "parser": metadata.get("parser") or item.metadata.get("parser"),
-            "pipeline": metadata.get("pipeline") or item.metadata.get("pipeline"),
+            "record_id": record.record_id,
+            "document_id": record.document_id,
+            "job_id": record.job_id,
+            "chunk_id": record.chunk_id,
+            "record_type": record.record_type.value,
+            "content": record.content,
+            "source_file_name": record.source_file_name or item.source_file_name,
+            "title": record.title or item.source_file_name or record.document_id,
+            "input_format": record.input_format or item.metadata.get("input_format"),
+            "parser": record.parser or item.metadata.get("parser"),
+            "pipeline": record.pipeline or item.metadata.get("pipeline"),
             "chunker_strategy": metadata.get("chunker_strategy"),
-            "page_start": page_start,
-            "page_end": page_end,
+            "page_start": record.page_start,
+            "page_end": record.page_end,
             "element_types": metadata.get("element_types", []),
             "confidence": confidence,
+            "metadata": self._safe_record_metadata(metadata),
         }
         return self._drop_empty_optional_fields(document)
+
+    def _safe_record_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in metadata.items()
+            if key not in {"source_path", "raw_text"} and not self._is_empty_optional_value(value)
+        }
 
     def _indexable_confidence(self, value: Any) -> dict[str, Any]:
         if not isinstance(value, dict):
@@ -125,7 +128,7 @@ class ElasticEmbeddingDispatcher:
         documents: list[dict[str, Any]],
         *,
         document_count: int,
-    ) -> EmbeddingDispatchResult:
+    ) -> DispatchSinkResult:
         actions = [self._bulk_action(document) for document in documents]
         try:
             successful, errors = self._bulk_helper(
@@ -136,22 +139,22 @@ class ElasticEmbeddingDispatcher:
                 request_timeout=self._settings.embedding_elastic_request_timeout_seconds,
             )
         except TransportError as exc:
-            raise ElasticEmbeddingDispatchError(
+            raise ElasticChunkIndexDispatchError(
                 f"Elastic bulk request failed: {self._safe_exception_message(exc)}"
             ) from exc
         except Exception as exc:
-            raise ElasticEmbeddingDispatchError(
+            raise ElasticChunkIndexDispatchError(
                 f"Elastic bulk request failed: {self._safe_exception_message(exc)}"
             ) from exc
 
         if errors:
-            raise ElasticEmbeddingDispatchError(
+            raise ElasticChunkIndexDispatchError(
                 f"Elastic bulk request returned item errors: {self._safe_payload(errors)}"
             )
 
-        return EmbeddingDispatchResult(
+        return DispatchSinkResult(
             accepted_document_count=document_count,
-            accepted_chunk_count=int(successful),
+            accepted_record_count=int(successful),
             raw_response={
                 "client": "elasticsearch",
                 "mode": "bulk",
@@ -187,7 +190,7 @@ class ElasticEmbeddingDispatcher:
         if self._client is not None:
             return self._client
         if self._settings.embedding_elastic_url is None:
-            raise ElasticEmbeddingDispatchError(
+            raise ElasticChunkIndexDispatchError(
                 "INGEST_EMBEDDING_ELASTIC_URL must be configured when "
                 "INGEST_DISPATCH_SINK_MODE includes elastic."
             )

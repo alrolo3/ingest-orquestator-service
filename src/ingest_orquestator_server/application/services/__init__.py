@@ -5,13 +5,6 @@ from ingest_orquestator_server.application.services.document_parse_service impor
     DocumentParseResult,
     DocumentParseService,
 )
-from ingest_orquestator_server.application.services.embedding_dispatch_service import (
-    EmbeddingDispatchService,
-)
-from ingest_orquestator_server.application.services.embedding_queue_service import (
-    EmbeddingQueueError,
-    EmbeddingQueueService,
-)
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
 )
@@ -19,6 +12,13 @@ from ingest_orquestator_server.application.services.job_query_service import Job
 from ingest_orquestator_server.application.services.output_retrieval_service import (
     OutputRetrievalService,
     OutputType,
+)
+from ingest_orquestator_server.application.services.parsed_document_dispatch_queue_service import (
+    ParsedDocumentDispatchQueueError,
+    ParsedDocumentDispatchQueueService,
+)
+from ingest_orquestator_server.application.services.parsed_document_dispatch_service import (
+    ParsedDocumentDispatchService,
 )
 from ingest_orquestator_server.application.services.parser_worker_service import (
     ParserWorkerService,
@@ -33,13 +33,13 @@ __all__ = [
     "DocumentChunkingService",
     "DocumentParseResult",
     "DocumentParseService",
-    "EmbeddingDispatchService",
-    "EmbeddingQueueError",
-    "EmbeddingQueueService",
     "FileIngestionService",
     "JobQueryService",
     "OutputRetrievalService",
     "OutputType",
     "ParserWorkerService",
+    "ParsedDocumentDispatchQueueError",
+    "ParsedDocumentDispatchQueueService",
+    "ParsedDocumentDispatchService",
     "StorageCleanupService",
 ]

@@ -5,6 +5,7 @@ import type {
   IngestionJob,
   IngestionOptions,
   OutputFiles,
+  QueueMetrics,
 } from "./types";
 
 export const defaultApiBaseUrl =
@@ -16,8 +17,13 @@ export function buildIngestQuery(options: IngestionOptions): string {
   params.set("pipeline", options.pipeline);
   params.set("chunking_enabled", String(options.chunkingEnabled));
   params.set("chunking_strategy", options.chunkingStrategy);
+  params.set("dispatch_sink_mode", options.dispatchSinkMode);
+  if (options.ocrLanguages.length > 0) {
+    params.set("ocr_languages", options.ocrLanguages.join(","));
+  }
   params.set("async_mode", String(options.asyncMode));
   params.set("include_document", String(options.includeDocument));
+  params.set("include_html", String(options.includeHtml));
   return params.toString();
 }
 
@@ -77,6 +83,15 @@ export async function getJobs(
   const params = new URLSearchParams();
   params.set("ids", jobIds.join(","));
   return requestJson<IngestionJob[]>(`${apiBaseUrl}/v1/ingest/jobs?${params.toString()}`);
+}
+
+export async function getQueueMetrics(
+  apiBaseUrl = defaultApiBaseUrl,
+  limit = 20,
+): Promise<QueueMetrics> {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  return requestJson<QueueMetrics>(`${apiBaseUrl}/v1/ingest/queue/metrics?${params.toString()}`);
 }
 
 export async function listOutputs(

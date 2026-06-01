@@ -3,11 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from ingest_orquestator_server.infrastructure.filesystem.json_file_writer import JsonFileWriter
-from ingest_orquestator_server.models.document_chunk import DocumentChunk
-from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
-from ingest_orquestator_server.models.parse_output import ParseOutput
+from ingest_orquestator_server.models.parsed_document_content import ParsedDocumentContent
 
 
 class LocalParseOutputWriter:
@@ -16,85 +14,42 @@ class LocalParseOutputWriter:
 
     def write(
         self,
-        parse_output: ParseOutput,
+        content: ParsedDocumentContent,
         output_root: Path,
         *,
-        chunks: list[DocumentChunk] | None = None,
-        embedding_records: list[EmbeddingRecord] | None = None,
         diagnostics: ParseDiagnostics | None = None,
     ) -> OutputFiles:
-        document_id = parse_output.document.document_id
-        output_dir = output_root / document_id
+        output_dir = output_root / content.document_id
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        raw_docling_json = output_dir / "raw_docling.json"
-        normalized_json = output_dir / "normalized.json"
         markdown_path = output_dir / "document.md"
-        text_path = output_dir / "document.txt"
-        html_path = output_dir / "document.html" if parse_output.raw_html is not None else None
-        chunks_json = output_dir / "chunks.json" if chunks is not None else None
-        embedding_input_jsonl = (
-            output_dir / "embedding_input.jsonl" if embedding_records is not None else None
-        )
-        confidence_json = (
-            output_dir / "confidence.json" if parse_output.confidence is not None else None
-        )
-        manifest_json = output_dir / "manifest.json"
+        metadata_json = output_dir / "document_metadata.json"
+        rag_chunks_jsonl = output_dir / "rag_chunks.jsonl"
+        html_path = output_dir / "document.html" if content.html is not None else None
 
-        self._json_writer.write(raw_docling_json, parse_output.raw_docling)
-        normalized_json.write_text(
-            parse_output.document.model_dump_json(indent=2), encoding="utf-8"
+        markdown_path.write_text(content.markdown, encoding="utf-8")
+        rag_chunks_jsonl.write_text(
+            "\n".join(record.model_dump_json() for record in content.rag_records)
+            + ("\n" if content.rag_records else ""),
+            encoding="utf-8",
         )
-        markdown_path.write_text(parse_output.raw_markdown, encoding="utf-8")
-        text_path.write_text(parse_output.raw_text, encoding="utf-8")
         if html_path is not None:
-            html_path.write_text(parse_output.raw_html or "", encoding="utf-8")
-        if chunks_json is not None:
-            self._json_writer.write(
-                chunks_json,
-                {
-                    "document_id": document_id,
-                    "chunks": [chunk.model_dump(mode="json") for chunk in chunks or []],
-                },
-            )
-        if embedding_input_jsonl is not None:
-            embedding_input_jsonl.write_text(
-                "\n".join(record.model_dump_json() for record in embedding_records or [])
-                + ("\n" if embedding_records else ""),
-                encoding="utf-8",
-            )
-        if confidence_json is not None:
-            self._json_writer.write(
-                confidence_json,
-                {
-                    "document_id": document_id,
-                    "confidence": parse_output.confidence,
-                    "summary": parse_output.confidence_summary,
-                    "warnings": parse_output.warnings,
-                },
-            )
-
-        files = OutputFiles(
-            output_dir=output_dir,
-            raw_docling_json=raw_docling_json,
-            normalized_json=normalized_json,
-            markdown=markdown_path,
-            text=text_path,
-            html=html_path,
-            chunks_json=chunks_json,
-            embedding_input_jsonl=embedding_input_jsonl,
-            confidence_json=confidence_json,
-            manifest_json=manifest_json,
-        )
+            html_path.write_text(content.html or "", encoding="utf-8")
         self._json_writer.write(
-            manifest_json,
+            metadata_json,
             {
-                "document_id": document_id,
-                "source_file_name": parse_output.document.source_file_name,
-                "source_path": parse_output.document.source_path,
-                "outputs": files.model_dump(mode="json"),
+                **content.metadata,
+                "document_id": content.document_id,
+                "rag_record_count": len(content.rag_records),
                 "diagnostics": diagnostics.model_dump(mode="json") if diagnostics else None,
             },
         )
 
-        return files
+        return OutputFiles(
+            output_dir=output_dir,
+            markdown=markdown_path,
+            document_metadata_json=metadata_json,
+            rag_chunks_jsonl=rag_chunks_jsonl,
+            html=html_path,
+            manifest_json=metadata_json,
+        )

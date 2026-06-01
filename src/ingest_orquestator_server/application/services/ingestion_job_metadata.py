@@ -12,6 +12,9 @@ def build_request_metadata(
     pipeline: str | None,
     chunking_enabled: bool | None,
     chunking_strategy: str | None,
+    dispatch_sink_mode: str | None = None,
+    ocr_languages: list[str] | None = None,
+    include_html: bool = False,
 ) -> dict[str, object]:
     metadata: dict[str, object] = {}
     if pipeline is not None:
@@ -20,6 +23,11 @@ def build_request_metadata(
         metadata["requested_chunking_enabled"] = chunking_enabled
     if chunking_strategy is not None:
         metadata["requested_chunking_strategy"] = chunking_strategy
+    if dispatch_sink_mode is not None:
+        metadata["requested_dispatch_sink_mode"] = dispatch_sink_mode
+    if ocr_languages is not None:
+        metadata["requested_ocr_languages"] = ocr_languages
+    metadata["requested_include_html"] = include_html
     return metadata
 
 

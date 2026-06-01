@@ -14,7 +14,9 @@ from ingest_orquestator_server.models.output_files import OutputFiles
 
 
 class OutputType(StrEnum):
+    METADATA = "metadata"
     MANIFEST = "manifest"
+    RAG = "rag"
     NORMALIZED = "normalized"
     MARKDOWN = "markdown"
     TEXT = "text"
@@ -27,7 +29,9 @@ class OutputType(StrEnum):
 
 class OutputRetrievalService:
     _content_types = {
+        OutputType.METADATA: "application/json",
         OutputType.MANIFEST: "application/json",
+        OutputType.RAG: "application/x-ndjson",
         OutputType.NORMALIZED: "application/json",
         OutputType.MARKDOWN: "text/markdown; charset=utf-8",
         OutputType.TEXT: "text/plain; charset=utf-8",
@@ -61,8 +65,12 @@ class OutputRetrievalService:
 
     @staticmethod
     def _path_for_type(outputs: OutputFiles, output_type: OutputType) -> Path | None:
+        if output_type == OutputType.METADATA:
+            return outputs.document_metadata_json
         if output_type == OutputType.MANIFEST:
-            return outputs.manifest_json
+            return outputs.manifest_json or outputs.document_metadata_json
+        if output_type == OutputType.RAG:
+            return outputs.rag_chunks_jsonl
         if output_type == OutputType.NORMALIZED:
             return outputs.normalized_json
         if output_type == OutputType.MARKDOWN:

@@ -182,17 +182,19 @@ class DoclingEngineRegistry:
     def get_engine(
         self,
         *,
+        settings: Settings | None = None,
         input_format: str,
         pipeline: str,
     ) -> DoclingEngine:
-        validate_allowed_format(input_format, self._settings.docling_allowed_formats)
+        effective_settings = settings or self._settings
+        validate_allowed_format(input_format, effective_settings.docling_allowed_formats)
         key = build_docling_engine_key(
-            self._settings,
+            effective_settings,
             input_format=input_format,
             pipeline=pipeline,
         )
-        if not self._settings.docling_engine_cache_enabled:
-            return self._build_engine(key, cache_hit=False)
+        if not effective_settings.docling_engine_cache_enabled:
+            return self._build_engine(key, settings=effective_settings, cache_hit=False)
 
         with self._lock:
             engine = self._engines.get(key)
@@ -207,7 +209,11 @@ class DoclingEngineRegistry:
                 )
                 return engine
 
-            engine = self._build_engine(key, cache_hit=False)
+            engine = self._build_engine(
+                key,
+                settings=effective_settings,
+                cache_hit=False,
+            )
             self._engines[key] = engine
             return engine
 
@@ -266,7 +272,13 @@ class DoclingEngineRegistry:
             "engines": engines,
         }
 
-    def _build_engine(self, key: DoclingEngineKey, *, cache_hit: bool) -> DoclingEngine:
+    def _build_engine(
+        self,
+        key: DoclingEngineKey,
+        *,
+        settings: Settings,
+        cache_hit: bool,
+    ) -> DoclingEngine:
         started = time.perf_counter()
         log_stage(
             "docling.engine.cache.miss",
@@ -277,15 +289,15 @@ class DoclingEngineRegistry:
             cache_hit=cache_hit,
         )
         converter = self._converter_factory.create(
-            self._settings,
+            settings,
             pipeline=key.pipeline,
             input_format=key.input_format,
         )
         engine = DoclingEngine(
             key=key,
             converter=converter,
-            concurrency=self._settings.docling_gpu_engine_concurrency,
-            cache_enabled=self._settings.docling_engine_cache_enabled,
+            concurrency=settings.docling_gpu_engine_concurrency,
+            cache_enabled=settings.docling_engine_cache_enabled,
         )
         log_stage(
             "docling.engine.created",
@@ -293,7 +305,7 @@ class DoclingEngineRegistry:
             input_format=key.input_format,
             pipeline=key.pipeline,
             duration_ms=round((time.perf_counter() - started) * 1000),
-            concurrency=self._settings.docling_gpu_engine_concurrency,
+            concurrency=settings.docling_gpu_engine_concurrency,
         )
         return engine
 
@@ -308,11 +320,13 @@ class DoclingConversionScheduler:
         self,
         source_path: Path,
         *,
+        settings: Settings | None = None,
         input_format: str,
         pipeline: str,
     ) -> tuple[Any, dict[str, Any]]:
         self._engine_registry.evict_idle()
         engine = self._engine_registry.get_engine(
+            settings=settings,
             input_format=input_format,
             pipeline=pipeline,
         )
@@ -330,11 +344,13 @@ class DoclingConversionScheduler:
         self,
         source_paths: list[Path],
         *,
+        settings: Settings | None = None,
         input_format: str,
         pipeline: str,
     ) -> tuple[list[Any], dict[str, Any]]:
         self._engine_registry.evict_idle()
         engine = self._engine_registry.get_engine(
+            settings=settings,
             input_format=input_format,
             pipeline=pipeline,
         )

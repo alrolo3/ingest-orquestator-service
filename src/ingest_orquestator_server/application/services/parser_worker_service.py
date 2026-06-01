@@ -9,11 +9,11 @@ from ingest_orquestator_server.application.ports.ingestion_job_repository import
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
-from ingest_orquestator_server.application.services.embedding_dispatch_service import (
-    EmbeddingDispatchService,
-)
 from ingest_orquestator_server.application.services.job_parse_coordinator import (
     JobParseCoordinator,
+)
+from ingest_orquestator_server.application.services.parsed_document_dispatch_service import (
+    ParsedDocumentDispatchService,
 )
 from ingest_orquestator_server.application.services.stage_logger import log_stage
 from ingest_orquestator_server.config.settings import Settings
@@ -29,7 +29,7 @@ class ParserWorkerService:
         settings: Settings,
         document_parse_service: DocumentParseService,
         job_repository: IngestionJobRepository,
-        dispatch_service: EmbeddingDispatchService,
+        dispatch_service: ParsedDocumentDispatchService,
     ) -> None:
         self._settings = settings
         self._job_repository = job_repository

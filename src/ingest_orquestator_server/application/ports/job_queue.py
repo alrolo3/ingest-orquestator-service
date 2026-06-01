@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ingest_orquestator_server.models.embedding_queue import EmbeddingQueueItem
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    ParsedDocumentDispatchItem,
+)
 
 
 class ParserJobQueue(Protocol):
@@ -12,7 +14,7 @@ class ParserJobQueue(Protocol):
 
 
 class DispatchJobQueue(Protocol):
-    def enqueue_dispatch_job(self, item: EmbeddingQueueItem) -> None:
+    def enqueue_dispatch_job(self, item: ParsedDocumentDispatchItem) -> None:
         """Publish a dispatch job for asynchronous output handling."""
         ...
 

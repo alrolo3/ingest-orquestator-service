@@ -8,7 +8,9 @@ from ingest_orquestator_server.infrastructure.queue.dramatiq_runtime import (
     build_parser_worker_service,
     configure_dramatiq_broker,
 )
-from ingest_orquestator_server.models.embedding_queue import EmbeddingQueueItem
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    ParsedDocumentDispatchItem,
+)
 
 _settings = get_settings()
 configure_dramatiq_broker(_settings)
@@ -21,4 +23,6 @@ def process_parser_job(job_id: str) -> None:
 
 @dramatiq.actor(queue_name=_settings.dramatiq_dispatch_queue_name)
 def process_dispatch_job(item_payload: dict) -> None:
-    build_dispatch_service().dispatch_item(EmbeddingQueueItem.model_validate(item_payload))
+    build_dispatch_service().dispatch_item(
+        ParsedDocumentDispatchItem.model_validate(item_payload)
+    )

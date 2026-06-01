@@ -20,15 +20,16 @@ def test_parser_adds_docling_accelerator_metadata(tmp_path: Path) -> None:
         input_file
     )
 
-    options = output.document.metadata["docling_options"]
+    assert output.normalized_document is not None
+    options = output.normalized_document.metadata["docling_options"]
     assert options["common"]["accelerator_device"] == "cuda"
     assert options["common"]["num_threads"] == 8
     assert options["configured_options"]["pdf"]["ocr_batch_size"] == 16
     assert options["runtime"]["stages"]["picture_description"]["resolved_runtime"]
-    assert output.document.metadata["docling"]["input_format"] == "md"
-    assert output.document.metadata["docling"]["pipeline"] == "standard"
-    assert "runtime" in output.document.metadata["docling"]
-    assert output.document.metadata["docling_result"]["status"] is None
+    assert output.normalized_document.metadata["docling"]["input_format"] == "md"
+    assert output.normalized_document.metadata["docling"]["pipeline"] == "standard"
+    assert "runtime" in output.normalized_document.metadata["docling"]
+    assert output.normalized_document.metadata["docling_result"]["status"] is None
 
 
 def test_parser_emits_docling_progress_updates(tmp_path: Path) -> None:

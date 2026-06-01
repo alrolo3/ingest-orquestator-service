@@ -1,13 +1,6 @@
 from ingest_orquestator_server.models.document_chunk import DocumentChunk
 from ingest_orquestator_server.models.document_element import DocumentElement
 from ingest_orquestator_server.models.document_page import DocumentPage
-from ingest_orquestator_server.models.embedding_queue import (
-    EmbeddingDispatchResult,
-    EmbeddingDispatchRunResult,
-    EmbeddingQueueItem,
-    EmbeddingQueueItemStatus,
-    EmbeddingQueueSnapshot,
-)
 from ingest_orquestator_server.models.embedding_record import EmbeddingRecord
 from ingest_orquestator_server.models.ingest_batch_response import IngestBatchResponse
 from ingest_orquestator_server.models.ingest_response import IngestResponse
@@ -21,17 +14,29 @@ from ingest_orquestator_server.models.parse_progress import (
     ParseProgressUpdate,
 )
 from ingest_orquestator_server.models.parsed_document import ParsedDocument
+from ingest_orquestator_server.models.parsed_document_content import ParsedDocumentContent
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    DispatchSinkResult,
+    ParsedDocumentDispatchItem,
+    ParsedDocumentDispatchItemStatus,
+    ParsedDocumentDispatchQueueSnapshot,
+    ParsedDocumentDispatchRunResult,
+)
+from ingest_orquestator_server.models.queue_metrics import (
+    DispatchQueueCounts,
+    QueueJobSummary,
+    QueueMetrics,
+    QueueStageMetrics,
+)
+from ingest_orquestator_server.models.rag_ingestion import RagIngestionRecord, RagRecordType
 
 __all__ = [
+    "DispatchQueueCounts",
     "DocumentChunk",
     "DocumentElement",
     "DocumentPage",
-    "EmbeddingDispatchResult",
-    "EmbeddingDispatchRunResult",
-    "EmbeddingQueueItem",
-    "EmbeddingQueueItemStatus",
-    "EmbeddingQueueSnapshot",
     "EmbeddingRecord",
+    "DispatchSinkResult",
     "IngestionJob",
     "IngestResponse",
     "IngestBatchResponse",
@@ -39,7 +44,17 @@ __all__ = [
     "OutputFiles",
     "ParseDiagnostics",
     "ParsedDocument",
+    "ParsedDocumentContent",
+    "ParsedDocumentDispatchItem",
+    "ParsedDocumentDispatchItemStatus",
+    "ParsedDocumentDispatchQueueSnapshot",
+    "ParsedDocumentDispatchRunResult",
     "ParseOutput",
     "ParseProgressCallback",
     "ParseProgressUpdate",
+    "QueueJobSummary",
+    "QueueMetrics",
+    "QueueStageMetrics",
+    "RagIngestionRecord",
+    "RagRecordType",
 ]
