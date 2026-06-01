@@ -199,6 +199,20 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Ingestor settings" }));
 
+    expect(
+      await screen.findByRole("navigation", { name: "Ingestor settings sections" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Docling runtime settings" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Dispatch settings" }));
+    expect(screen.getByPlaceholderText("Configured")).toHaveAttribute(
+      "placeholder",
+      "Configured",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Docling runtime settings" }));
+
     const accelerator = await screen.findByRole("textbox", {
       name: /Docling Accelerator Device/,
     });
@@ -214,10 +228,8 @@ describe("App", () => {
         }),
       ),
     );
-    expect(screen.getByPlaceholderText("Configured")).toHaveAttribute(
-      "placeholder",
-      "Configured",
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Dispatch settings" }));
+    expect(screen.getByPlaceholderText("Configured")).toBeInTheDocument();
   });
 
   it("keeps invalid numeric setting drafts for backend validation", async () => {
@@ -226,6 +238,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Ingestor settings" }));
 
+    fireEvent.click(await screen.findByRole("button", { name: "Upload settings" }));
     const maxUploadSize = await screen.findByRole("textbox", {
       name: /Max Upload Size MB/,
     });

@@ -364,16 +364,88 @@ h1 {
   line-height: 1.2;
 }
 
-.settings-groups {
+.settings-shell {
+  align-items: start;
   display: grid;
   gap: 16px;
+  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
+}
+
+.settings-sidenav {
+  background: #f8fafc;
+  border: 1px solid #e1e7ef;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  position: sticky;
+  top: 16px;
+}
+
+.settings-sidenav button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #475467;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 36px;
+  min-width: 0;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.settings-sidenav button.active {
+  background: #ffffff;
+  color: #144f64;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+
+.settings-sidenav span {
+  font-size: 13px;
+  font-weight: 800;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sidenav small {
+  align-items: center;
+  background: #e8edf3;
+  border-radius: 999px;
+  color: #667888;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 7px;
 }
 
 .settings-group {
-  border-top: 1px solid #e1e7ef;
+  border: 1px solid #e1e7ef;
+  border-radius: 8px;
   display: grid;
   gap: 12px;
-  padding-top: 14px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.settings-group-head {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.settings-group-head span {
+  color: #667888;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .settings-group h3 {
@@ -901,6 +973,15 @@ h1 {
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .settings-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sidenav {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    position: static;
   }
 
   .toolbar-actions {

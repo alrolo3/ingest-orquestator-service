@@ -1040,6 +1040,7 @@ function IngestorSettingsView({
   settings: IngestorSettingsResponse | null;
 }) {
   const [draft, setDraft] = useState<Record<string, string | boolean>>({});
+  const [activeGroup, setActiveGroup] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settings) {
@@ -1049,8 +1050,22 @@ function IngestorSettingsView({
   }, [settings]);
 
   const groupedFields = useMemo(() => groupSettingFields(settings?.fields ?? []), [settings]);
+  const selectedGroup =
+    groupedFields.find(([group]) => group === activeGroup) ?? groupedFields[0] ?? null;
+  const selectedGroupName = selectedGroup?.[0] ?? null;
+  const selectedFields = selectedGroup?.[1] ?? [];
   const changedValues = settings ? buildChangedSettings(settings.fields, draft) : {};
   const hasChanges = Object.keys(changedValues).length > 0;
+
+  useEffect(() => {
+    if (groupedFields.length === 0) {
+      setActiveGroup(null);
+      return;
+    }
+    if (!selectedGroupName) {
+      setActiveGroup(groupedFields[0][0]);
+    }
+  }, [groupedFields, selectedGroupName]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -1087,12 +1102,31 @@ function IngestorSettingsView({
       ) : null}
 
       {settings ? (
-        <div className="settings-groups">
-          {groupedFields.map(([group, fields]) => (
-            <section className="settings-group" key={group}>
-              <h3>{group}</h3>
+        <div className="settings-shell">
+          <nav className="settings-sidenav" aria-label="Ingestor settings sections">
+            {groupedFields.map(([group, fields]) => (
+              <button
+                aria-label={`${group} settings`}
+                aria-current={group === selectedGroupName ? "page" : undefined}
+                className={group === selectedGroupName ? "active" : ""}
+                key={group}
+                type="button"
+                onClick={() => setActiveGroup(group)}
+              >
+                <span>{group}</span>
+                <small>{fields.length}</small>
+              </button>
+            ))}
+          </nav>
+
+          {selectedGroupName ? (
+            <section className="settings-group" key={selectedGroupName}>
+              <div className="settings-group-head">
+                <h3>{selectedGroupName}</h3>
+                <span>{selectedFields.length} settings</span>
+              </div>
               <div className="settings-field-grid">
-                {fields.map((field) => (
+                {selectedFields.map((field) => (
                   <SettingControl
                     field={field}
                     key={field.key}
@@ -1104,7 +1138,7 @@ function IngestorSettingsView({
                 ))}
               </div>
             </section>
-          ))}
+          ) : null}
         </div>
       ) : (
         <div className="empty-state">
