@@ -94,8 +94,6 @@ class DispatchConfig(BaseModel):
     parser_process_count: int
     parser_threads_per_process: int
     parser_worker_count: int
-    dispatch_process_count: int
-    dispatch_threads_per_process: int
     dispatch_worker_count: int
     queue_backend: str
     rabbitmq_configured: bool

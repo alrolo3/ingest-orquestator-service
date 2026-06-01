@@ -73,8 +73,6 @@ def test_env_example_loads() -> None:
     assert settings.dramatiq_dispatch_time_limit_ms == 600_000
     assert settings.parser_max_retry_attempts == 3
     assert settings.parser_worker_count == settings.parser_process_count
-    assert settings.dispatch_process_count == 1
-    assert settings.dispatch_threads_per_process == 2
     assert settings.dispatch_worker_count == 2
     assert settings.dispatch_queue_max_payload_bytes is None
     assert settings.dispatch_max_bulk_size == 5
@@ -161,8 +159,7 @@ def test_settings_parse_parser_process_and_thread_env_vars(tmp_path) -> None:
             [
                 "INGEST_PARSER_PROCESS_COUNT=6",
                 "INGEST_PARSER_THREADS_PER_PROCESS=2",
-                "INGEST_DISPATCH_PROCESS_COUNT=3",
-                "INGEST_DISPATCH_THREADS_PER_PROCESS=4",
+                "INGEST_DISPATCH_WORKER_COUNT=4",
             ]
         ),
         encoding="utf-8",
@@ -174,8 +171,7 @@ def test_settings_parse_parser_process_and_thread_env_vars(tmp_path) -> None:
     assert settings.parser_threads_per_process == 2
     assert settings.parser_worker_count == 6
     assert settings.effective_docling_parse_concurrency == 2
-    assert settings.dispatch_process_count == 3
-    assert settings.dispatch_threads_per_process == 4
+    assert settings.dispatch_worker_count == 4
 
 
 def test_settings_legacy_parser_worker_count_is_deprecated_process_alias() -> None:
@@ -199,8 +195,7 @@ def test_settings_new_parser_process_count_wins_over_legacy_alias() -> None:
         {"parser_process_count": -1},
         {"parser_threads_per_process": 0},
         {"parser_threads_per_process": -1},
-        {"dispatch_process_count": 0},
-        {"dispatch_threads_per_process": 0},
+        {"dispatch_worker_count": 0},
     ],
 )
 def test_settings_reject_non_positive_process_and_thread_counts(kwargs: dict) -> None:
@@ -305,8 +300,6 @@ def test_settings_grouped_config_views() -> None:
     assert settings.dispatch_config.max_bulk_size == 5
     assert settings.dispatch_config.parser_process_count == 3
     assert settings.dispatch_config.parser_threads_per_process == 2
-    assert settings.dispatch_config.dispatch_process_count == 1
-    assert settings.dispatch_config.dispatch_threads_per_process == 2
     assert settings.dispatch_config.parser_worker_count == 3
     assert settings.dispatch_config.dispatch_worker_count == 2
     assert settings.dispatch_config.queue_backend == "local"

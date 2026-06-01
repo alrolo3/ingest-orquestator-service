@@ -63,12 +63,12 @@ python -m dramatiq ingest_orquestator_server.infrastructure.queue.dramatiq_actor
   --queues ingest_parser_jobs
 ```
 
-- Keep dispatch workers independently configurable, for example:
+- Keep dispatch on the existing one-process worker model, for example:
 
 ```bash
 python -m dramatiq ingest_orquestator_server.infrastructure.queue.dramatiq_actors \
-  --processes "${INGEST_DISPATCH_PROCESS_COUNT:-1}" \
-  --threads "${INGEST_DISPATCH_THREADS_PER_PROCESS:-2}" \
+  --processes 1 \
+  --threads "${INGEST_DISPATCH_WORKER_COUNT:-2}" \
   --queues ingest_dispatch_jobs
 ```
 
@@ -199,4 +199,3 @@ Implementation notes:
 - Do not commit local-only `.env`, `.serena`, `.codex`, `.agents`, or accidental scratch files.
 - Prefer small characterization tests around current behavior before changing worker internals.
 - If changing public setting names, document migration from the old environment variables.
-

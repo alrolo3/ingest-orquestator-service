@@ -201,7 +201,7 @@ use Docling's own threaded PDF pipeline stages for that document:
 
 ```bash
 INGEST_PARSER_PROCESS_COUNT=2 INGEST_PARSER_THREADS_PER_PROCESS=1 \
-INGEST_DISPATCH_PROCESS_COUNT=1 INGEST_DISPATCH_THREADS_PER_PROCESS=2 \
+INGEST_DISPATCH_WORKER_COUNT=2 \
   docker compose -f docker-compose-queues.yml up -d --build
 ```
 
@@ -221,8 +221,8 @@ python -m dramatiq ingest_orquestator_server.infrastructure.queue.dramatiq_actor
   --queues ingest_parser_jobs
 
 python -m dramatiq ingest_orquestator_server.infrastructure.queue.dramatiq_actors \
-  --processes "${INGEST_DISPATCH_PROCESS_COUNT:-1}" \
-  --threads "${INGEST_DISPATCH_THREADS_PER_PROCESS:-2}" \
+  --processes 1 \
+  --threads "${INGEST_DISPATCH_WORKER_COUNT:-2}" \
   --queues ingest_dispatch_jobs
 ```
 

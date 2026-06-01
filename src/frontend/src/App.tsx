@@ -1001,14 +1001,7 @@ function QueueMetricsView({
               label="Stale parser jobs"
               value={String(metrics.stale_parser_job_count)}
             />
-            <RuntimeCell
-              label="Dispatch processes"
-              value={String(metrics.dispatch_process_count)}
-            />
-            <RuntimeCell
-              label="Dispatch threads/process"
-              value={String(metrics.dispatch_threads_per_process)}
-            />
+            <RuntimeCell label="Dispatch workers" value={String(metrics.dispatch_worker_count)} />
             {metrics.dispatch_queue ? (
               <RuntimeCell
                 label="In-memory dispatch"

@@ -838,8 +838,7 @@ def test_queue_metrics_endpoint_reports_persisted_job_stages(tmp_path: Path) -> 
         storage_dir=tmp_path,
         parser_process_count=4,
         parser_threads_per_process=1,
-        dispatch_process_count=2,
-        dispatch_threads_per_process=3,
+        dispatch_worker_count=3,
     )
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)
     repository.save(
@@ -901,8 +900,7 @@ def test_queue_metrics_endpoint_reports_persisted_job_stages(tmp_path: Path) -> 
         assert body["parser_process_count"] == 4
         assert body["parser_threads_per_process"] == 1
         assert body["parser_worker_count"] == 4
-        assert body["dispatch_process_count"] == 2
-        assert body["dispatch_threads_per_process"] == 3
+        assert body["dispatch_worker_count"] == 3
         assert body["active_parser_job_count"] == 2
         assert body["queued_parser_job_count"] == 1
         assert body["stale_parser_job_count"] == 1

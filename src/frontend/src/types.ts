@@ -230,8 +230,6 @@ export interface QueueMetrics {
   queued_parser_job_count: number;
   stale_parser_job_count: number;
   parser_worker_count: number;
-  dispatch_process_count: number;
-  dispatch_threads_per_process: number;
   dispatch_worker_count: number;
   status_counts: Record<string, number>;
   stages: QueueStageMetrics[];

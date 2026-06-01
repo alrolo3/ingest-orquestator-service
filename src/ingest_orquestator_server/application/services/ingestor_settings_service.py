@@ -25,8 +25,6 @@ BOOT_TIME_SETTING_KEYS = {
     "parser_process_count",
     "parser_threads_per_process",
     "parser_worker_count",
-    "dispatch_process_count",
-    "dispatch_threads_per_process",
 }
 
 SECRET_SETTING_KEYS = {

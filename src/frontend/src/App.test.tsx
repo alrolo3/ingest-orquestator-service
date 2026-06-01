@@ -21,8 +21,6 @@ describe("App", () => {
               queued_parser_job_count: 1,
               stale_parser_job_count: 0,
               parser_worker_count: 2,
-              dispatch_process_count: 1,
-              dispatch_threads_per_process: 3,
               dispatch_worker_count: 3,
               status_counts: { parser_queued: 1, completed: 4 },
               stages: [

@@ -57,7 +57,7 @@ Use existing dependency-injection and Pydantic validation patterns. Store struct
 
 Runtime-configurable by default: all `Settings.model_fields` except boot-time-only fields.
 
-Boot-time-only fields: `storage_dir`, `cors_allow_origins`, `queue_backend`, `rabbitmq_url`, `dramatiq_parser_queue_name`, `dramatiq_dispatch_queue_name`, `dramatiq_parser_time_limit_ms`, `dramatiq_dispatch_time_limit_ms`, `parser_process_count`, `parser_threads_per_process`, deprecated `parser_worker_count`, `dispatch_process_count`, and `dispatch_threads_per_process`.
+Boot-time-only fields: `storage_dir`, `cors_allow_origins`, `queue_backend`, `rabbitmq_url`, `dramatiq_parser_queue_name`, `dramatiq_dispatch_queue_name`, `dramatiq_parser_time_limit_ms`, `dramatiq_dispatch_time_limit_ms`, `parser_process_count`, `parser_threads_per_process`, and deprecated `parser_worker_count`.
 
 Secrets: `docling_remote_llm_api_key` and `embedding_elastic_password` are write-only in the frontend/API response.
 

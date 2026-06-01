@@ -97,9 +97,7 @@ does both according to `INGEST_DISPATCH_SINK_MODE`.
 | `INGEST_PARSER_PROCESS_COUNT` | `2` | `2` | Integer `>= 1`. | Number of independent parser processes. Each parser process handles one queued parse workflow at a time when Dramatiq is launched with matching `--processes`. |
 | `INGEST_PARSER_THREADS_PER_PROCESS` | `1` | `1` | Integer `>= 1`. | Dramatiq actor threads per parser process. Keep this at `1` for predictable one-document-per-process GPU deployments. |
 | `INGEST_PARSER_WORKER_COUNT` | `2` | `2` | Integer `>= 1`. | Deprecated compatibility alias for `INGEST_PARSER_PROCESS_COUNT`. If both are set, `INGEST_PARSER_PROCESS_COUNT` wins. |
-| `INGEST_DISPATCH_PROCESS_COUNT` | `1` | `1` | Integer `>= 1`. | Number of independent dispatch worker processes for the Dramatiq dispatch queue. |
-| `INGEST_DISPATCH_THREADS_PER_PROCESS` | `2` | `2` | Integer `>= 1`. | Dramatiq actor threads per dispatch process. |
-| `INGEST_DISPATCH_WORKER_COUNT` | `2` | `2` | Integer `>= 1`. | In-process dispatch service thread count for the local queue backend. |
+| `INGEST_DISPATCH_WORKER_COUNT` | `2` | `2` | Integer `>= 1`. | Dispatch worker thread count. Dispatch concurrency keeps the existing one-process worker model. |
 | `INGEST_DRAMATIQ_PARSER_TIME_LIMIT_MS` | `14400000` | `14400000` | Integer `>= 1`. | Dramatiq parser actor time limit in milliseconds. The default is 4 hours so long OCR/PDF jobs are not interrupted by Dramatiq's 10 minute middleware default. |
 | `INGEST_DRAMATIQ_DISPATCH_TIME_LIMIT_MS` | `600000` | `600000` | Integer `>= 1`. | Dramatiq dispatch actor time limit in milliseconds. |
 | `INGEST_PARSER_MAX_RETRY_ATTEMPTS` | `3` | `3` | Integer `>= 0`. | Retry budget for parser failures. Retried jobs are marked `retrying` and republished at the parser queue tail before final failure. |

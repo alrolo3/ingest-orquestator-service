@@ -146,8 +146,6 @@ class Settings(BaseSettings):
         ge=1,
         description="Deprecated alias for parser_process_count.",
     )
-    dispatch_process_count: int = Field(default=1, ge=1)
-    dispatch_threads_per_process: int = Field(default=2, ge=1)
     dispatch_worker_count: int = Field(default=2, ge=1)
     dispatch_queue_max_size: int = Field(default=100, ge=1)
     dispatch_queue_max_payload_bytes: int | None = Field(default=None, ge=1)
@@ -596,8 +594,6 @@ class Settings(BaseSettings):
             parser_process_count=self.parser_process_count,
             parser_threads_per_process=self.parser_threads_per_process,
             parser_worker_count=self.parser_worker_count,
-            dispatch_process_count=self.dispatch_process_count,
-            dispatch_threads_per_process=self.dispatch_threads_per_process,
             dispatch_worker_count=self.dispatch_worker_count,
             queue_backend=self.queue_backend,
             rabbitmq_configured=bool(self.rabbitmq_url),

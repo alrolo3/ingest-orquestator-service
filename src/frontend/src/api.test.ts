@@ -74,8 +74,6 @@ describe("getQueueMetrics", () => {
           queued_parser_job_count: 0,
           stale_parser_job_count: 0,
           parser_worker_count: 2,
-          dispatch_process_count: 1,
-          dispatch_threads_per_process: 2,
           dispatch_worker_count: 2,
           status_counts: {},
           stages: [],

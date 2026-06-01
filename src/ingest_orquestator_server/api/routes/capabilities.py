@@ -100,8 +100,6 @@ def ingestion_capabilities(
             "parser_threads_per_process": settings.parser_threads_per_process,
             "parser_worker_count": settings.parser_worker_count,
             "docling_parse_concurrency": settings.effective_docling_parse_concurrency,
-            "dispatch_process_count": settings.dispatch_process_count,
-            "dispatch_threads_per_process": settings.dispatch_threads_per_process,
             "dispatch_max_bulk_size": settings.dispatch_max_bulk_size,
             "embedding_output_enabled": settings.embedding_output_enabled,
             "elastic_index": settings.embedding_elastic_index,

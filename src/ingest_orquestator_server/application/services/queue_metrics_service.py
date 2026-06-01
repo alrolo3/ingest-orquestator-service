@@ -80,8 +80,6 @@ class QueueMetricsService:
             ),
             stale_parser_job_count=self._stale_parser_job_count(),
             parser_worker_count=self._settings.parser_worker_count,
-            dispatch_process_count=self._settings.dispatch_process_count,
-            dispatch_threads_per_process=self._settings.dispatch_threads_per_process,
             dispatch_worker_count=self._settings.dispatch_worker_count,
             status_counts=status_counts,
             stages=[

@@ -68,9 +68,9 @@ services:
       - dramatiq
       - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
       - --processes
-      - "${INGEST_DISPATCH_PROCESS_COUNT:-1}"
+      - "1"
       - --threads
-      - "${INGEST_DISPATCH_THREADS_PER_PROCESS:-2}"
+      - "${INGEST_DISPATCH_WORKER_COUNT:-2}"
       - --queues
       - ingest_dispatch_jobs
     env_file:
