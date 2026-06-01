@@ -106,17 +106,14 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
             }
         },
         {
-            "set": {
-                "field": "content_semantic",
-                "copy_from": "content",
-                "ignore_empty_value": True,
-            }
-        },
-        {
-            "set": {
-                "field": "title_semantic",
-                "copy_from": "title",
-                "ignore_empty_value": True,
+            "script": {
+                "lang": "painless",
+                "source": (
+                    "if (ctx.content != null) { ctx.content_semantic = "
+                    "ctx.content.replace('${', '$ {'); } "
+                    "if (ctx.title != null) { ctx.title_semantic = "
+                    "ctx.title.replace('${', '$ {'); }"
+                ),
             }
         },
     ]

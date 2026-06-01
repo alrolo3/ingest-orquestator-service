@@ -14,6 +14,7 @@ from ingest_orquestator_server.application.services.ingestion_job_metadata impor
     build_error_metadata,
 )
 from ingest_orquestator_server.application.services.ingestion_request_options import (
+    ocr_enabled_from_metadata,
     ocr_languages_from_metadata,
 )
 from ingest_orquestator_server.application.services.job_progress_reporter import (
@@ -35,6 +36,7 @@ class RequestedParseOptions:
     pipeline: object
     chunking_enabled: object
     chunking_strategy: object
+    ocr_enabled: bool | None
     ocr_languages: list[str] | None
     include_html: bool
 
@@ -127,6 +129,7 @@ class JobParseCoordinator:
                 pipeline=self._optional_string(requested.pipeline),
                 chunking_enabled=self._optional_bool(requested.chunking_enabled),
                 chunking_strategy=self._optional_string(requested.chunking_strategy),
+                ocr_enabled=requested.ocr_enabled,
                 ocr_languages=requested.ocr_languages,
                 include_html=requested.include_html,
                 progress_callback=self._progress_reporter.callback_for(job_id),
@@ -323,6 +326,7 @@ class JobParseCoordinator:
             pipeline=job.metadata.get("requested_pipeline"),
             chunking_enabled=job.metadata.get("requested_chunking_enabled"),
             chunking_strategy=job.metadata.get("requested_chunking_strategy"),
+            ocr_enabled=ocr_enabled_from_metadata(job.metadata),
             ocr_languages=ocr_languages_from_metadata(job.metadata),
             include_html=bool(job.metadata.get("requested_include_html")),
         )

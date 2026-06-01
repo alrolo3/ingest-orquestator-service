@@ -47,6 +47,7 @@ async def ingest_file(
     chunking_enabled: Annotated[bool | None, Query()] = None,
     chunking_strategy: Annotated[str | None, Query()] = None,
     dispatch_sink_mode: Annotated[str | None, Query()] = None,
+    do_ocr: Annotated[bool | None, Query()] = None,
     ocr_languages: Annotated[str | None, Query()] = None,
     include_html: Annotated[bool, Query()] = False,
     async_mode: Annotated[bool, Query()] = False,
@@ -60,6 +61,7 @@ async def ingest_file(
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
             dispatch_sink_mode=dispatch_sink_mode,
+            ocr_enabled=do_ocr,
             ocr_languages=ocr_languages,
             include_html=include_html,
             include_document=include_document,
@@ -86,6 +88,7 @@ async def ingest_files(
     chunking_enabled: Annotated[bool | None, Query()] = None,
     chunking_strategy: Annotated[str | None, Query()] = None,
     dispatch_sink_mode: Annotated[str | None, Query()] = None,
+    do_ocr: Annotated[bool | None, Query()] = None,
     ocr_languages: Annotated[str | None, Query()] = None,
     include_html: Annotated[bool, Query()] = False,
 ) -> IngestBatchResponse:
@@ -97,6 +100,7 @@ async def ingest_files(
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
             dispatch_sink_mode=dispatch_sink_mode,
+            ocr_enabled=do_ocr,
             ocr_languages=ocr_languages,
             include_html=include_html,
         )

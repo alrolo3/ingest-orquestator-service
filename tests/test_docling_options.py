@@ -33,6 +33,17 @@ def test_build_pdf_pipeline_options_selects_standard_pipeline_models() -> None:
     assert options.do_formula_enrichment is False
 
 
+def test_build_pdf_pipeline_options_can_disable_ocr_per_request() -> None:
+    options = build_pdf_pipeline_options(
+        Settings(docling_pdf_ocr_engine="auto").with_docling_ocr_options(
+            do_ocr=False,
+            languages=["es"],
+        )
+    )
+
+    assert options.do_ocr is False
+
+
 def test_build_pdf_pipeline_options_can_select_remote_picture_description() -> None:
     options = build_pdf_pipeline_options(
         Settings(

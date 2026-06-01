@@ -75,3 +75,10 @@ def ocr_languages_from_metadata(metadata: Mapping[str, object]) -> list[str] | N
     if isinstance(requested, list):
         return normalize_ocr_languages([str(item) for item in requested])
     return None
+
+
+def ocr_enabled_from_metadata(metadata: Mapping[str, object]) -> bool | None:
+    requested = metadata.get("requested_ocr_enabled")
+    if isinstance(requested, bool):
+        return requested
+    return None

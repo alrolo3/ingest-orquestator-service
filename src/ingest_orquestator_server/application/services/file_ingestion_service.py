@@ -89,6 +89,7 @@ class FileIngestionService:
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
         dispatch_sink_mode: str | None = None,
+        ocr_enabled: bool | None = None,
         ocr_languages: str | list[str] | None = None,
         include_html: bool = False,
     ) -> IngestResponse:
@@ -99,6 +100,7 @@ class FileIngestionService:
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
             dispatch_sink_mode=dispatch_sink_mode,
+            ocr_enabled=ocr_enabled,
             ocr_languages=ocr_languages,
             include_html=include_html,
         )
@@ -112,6 +114,7 @@ class FileIngestionService:
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
         dispatch_sink_mode: str | None = None,
+        ocr_enabled: bool | None = None,
         ocr_languages: str | list[str] | None = None,
         include_html: bool = False,
     ) -> IngestResponse:
@@ -131,6 +134,7 @@ class FileIngestionService:
             parser=parser_name,
             pipeline=pipeline,
             dispatch_sink_mode=requested_dispatch_sink_mode,
+            ocr_enabled=ocr_enabled,
             ocr_languages=requested_ocr_languages,
             filename=upload.filename,
         )
@@ -144,6 +148,7 @@ class FileIngestionService:
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
             dispatch_sink_mode=requested_dispatch_sink_mode,
+            ocr_enabled=ocr_enabled,
             ocr_languages=requested_ocr_languages,
             include_html=include_html,
         )
@@ -215,6 +220,7 @@ class FileIngestionService:
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
         dispatch_sink_mode: str | None = None,
+        ocr_enabled: bool | None = None,
         ocr_languages: str | list[str] | None = None,
         include_html: bool = False,
     ) -> IngestBatchResponse:
@@ -230,6 +236,7 @@ class FileIngestionService:
                         chunking_enabled=chunking_enabled,
                         chunking_strategy=chunking_strategy,
                         dispatch_sink_mode=dispatch_sink_mode,
+                        ocr_enabled=ocr_enabled,
                         ocr_languages=ocr_languages,
                         include_html=include_html,
                     )
@@ -242,6 +249,7 @@ class FileIngestionService:
                     chunking_enabled=chunking_enabled,
                     chunking_strategy=chunking_strategy,
                     dispatch_sink_mode=dispatch_sink_mode,
+                    ocr_enabled=ocr_enabled,
                     ocr_languages=ocr_languages,
                     include_html=include_html,
                     error=exc,
@@ -286,6 +294,7 @@ class FileIngestionService:
         chunking_enabled: bool | None,
         chunking_strategy: str | None,
         dispatch_sink_mode: str | None,
+        ocr_enabled: bool | None,
         ocr_languages: str | list[str] | None,
         include_html: bool,
         error: Exception,
@@ -305,6 +314,7 @@ class FileIngestionService:
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
             dispatch_sink_mode=requested_dispatch_sink_mode,
+            ocr_enabled=ocr_enabled,
             ocr_languages=requested_ocr_languages,
             include_html=include_html,
         ) | {

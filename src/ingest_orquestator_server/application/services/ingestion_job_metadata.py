@@ -13,6 +13,7 @@ def build_request_metadata(
     chunking_enabled: bool | None,
     chunking_strategy: str | None,
     dispatch_sink_mode: str | None = None,
+    ocr_enabled: bool | None = None,
     ocr_languages: list[str] | None = None,
     include_html: bool = False,
 ) -> dict[str, object]:
@@ -25,6 +26,8 @@ def build_request_metadata(
         metadata["requested_chunking_strategy"] = chunking_strategy
     if dispatch_sink_mode is not None:
         metadata["requested_dispatch_sink_mode"] = dispatch_sink_mode
+    if ocr_enabled is not None:
+        metadata["requested_ocr_enabled"] = ocr_enabled
     if ocr_languages is not None:
         metadata["requested_ocr_languages"] = ocr_languages
     metadata["requested_include_html"] = include_html

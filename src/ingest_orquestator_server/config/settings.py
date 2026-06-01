@@ -2,7 +2,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ingest_orquestator_server.config.config_groups import (
@@ -110,12 +110,11 @@ class Settings(BaseSettings):
         description="Allow Docling external plugins. Required for the SuryaOCR plugin.",
     )
     docling_pipeline: str = "standard"
-    docling_pdf_do_ocr: bool = True
     docling_pdf_ocr_engine: str = DOCLING_OCR_ENGINE
-    docling_pdf_ocr_languages: list[str] = Field(
-        default_factory=lambda: list(DOCLING_OCR_LANGUAGES)
-    )
     docling_pdf_ocr_use_gpu: bool | None = None
+    docling_pdf_layout_model: str = DOCLING_LAYOUT_MODEL
+    docling_pdf_table_structure_backend: str = DOCLING_TABLE_STRUCTURE_BACKEND
+    docling_pdf_picture_classifier_preset: str = DOCLING_PICTURE_CLASSIFIER_PRESET
     docling_vlm_model: str = DOCLING_PICTURE_DESCRIPTION_MODEL
     docling_vlm_prompt: str = "Convert this page to markdown."
     docling_vlm_response_format: str = "markdown"
@@ -159,6 +158,8 @@ class Settings(BaseSettings):
     embedding_elastic_verify_certs: bool = True
     embedding_elastic_request_timeout_seconds: float = Field(default=30.0, gt=0)
     embedding_elastic_max_retries: int = Field(default=3, ge=0)
+    _docling_pdf_do_ocr_override: bool | None = PrivateAttr(default=None)
+    _docling_pdf_ocr_languages_override: list[str] | None = PrivateAttr(default=None)
 
     model_config = SettingsConfigDict(
         env_prefix="INGEST_",
@@ -201,12 +202,21 @@ class Settings(BaseSettings):
             return normalized
         raise ValueError("must be one of hybrid, line_based, or legacy_char")
 
-    @field_validator("docling_pdf_ocr_languages", mode="before")
+    @field_validator("docling_pdf_layout_model", "docling_pdf_picture_classifier_preset")
     @classmethod
-    def parse_docling_pdf_ocr_languages(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+    def normalize_non_empty_docling_model_setting(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("must not be empty")
+        return cleaned
+
+    @field_validator("docling_pdf_table_structure_backend")
+    @classmethod
+    def validate_docling_pdf_table_structure_backend(cls, value: str) -> str:
+        normalized = value.strip().lower().replace("-", "_")
+        if normalized == DOCLING_TABLE_STRUCTURE_BACKEND:
+            return normalized
+        raise ValueError("must be tableformer")
 
     @field_validator("docling_vlm_response_format")
     @classmethod
@@ -349,6 +359,21 @@ class Settings(BaseSettings):
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
 
+    def with_docling_ocr_options(
+        self,
+        *,
+        do_ocr: bool | None = None,
+        languages: list[str] | None = None,
+    ) -> "Settings":
+        if do_ocr is None and languages is None:
+            return self
+        effective = self.model_copy()
+        effective._docling_pdf_do_ocr_override = do_ocr
+        effective._docling_pdf_ocr_languages_override = (
+            list(languages) if languages is not None else None
+        )
+        return effective
+
     @property
     def docling_allowed_formats(self) -> list[str]:
         from ingest_orquestator_server.infrastructure.docling.docling_formats import (
@@ -386,14 +411,6 @@ class Settings(BaseSettings):
         return True
 
     @property
-    def docling_pdf_layout_model(self) -> str:
-        return DOCLING_LAYOUT_MODEL
-
-    @property
-    def docling_pdf_table_structure_backend(self) -> str:
-        return DOCLING_TABLE_STRUCTURE_BACKEND
-
-    @property
     def docling_pdf_table_structure_mode(self) -> str:
         return DOCLING_TABLE_STRUCTURE_MODE
 
@@ -404,10 +421,6 @@ class Settings(BaseSettings):
     @property
     def docling_pdf_do_picture_classification(self) -> bool:
         return True
-
-    @property
-    def docling_pdf_picture_classifier_preset(self) -> str:
-        return DOCLING_PICTURE_CLASSIFIER_PRESET
 
     @property
     def docling_pdf_do_picture_description(self) -> bool:
@@ -440,6 +453,18 @@ class Settings(BaseSettings):
     @property
     def docling_pdf_queue_max_size(self) -> int:
         return DOCLING_PDF_QUEUE_MAX_SIZE
+
+    @property
+    def docling_pdf_do_ocr(self) -> bool:
+        return (
+            True
+            if self._docling_pdf_do_ocr_override is None
+            else self._docling_pdf_do_ocr_override
+        )
+
+    @property
+    def docling_pdf_ocr_languages(self) -> list[str]:
+        return list(self._docling_pdf_ocr_languages_override or DOCLING_OCR_LANGUAGES)
 
     @property
     def docling_remote_llm_concurrency(self) -> int:
