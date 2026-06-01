@@ -2,7 +2,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ingest_orquestator_server.config.config_groups import (
@@ -42,6 +42,10 @@ from ingest_orquestator_server.config.docling_defaults import (
 
 
 class Settings(BaseSettings):
+    _docling_pdf_ocr_languages: list[str] = PrivateAttr(
+        default_factory=lambda: list(DOCLING_OCR_LANGUAGES)
+    )
+
     service_name: str = "ingest-orquestator-server"
     storage_dir: Path = Path(".data")
     max_upload_size_mb: int = Field(default=100, ge=1)
@@ -110,11 +114,7 @@ class Settings(BaseSettings):
         description="Allow Docling external plugins. Required for the SuryaOCR plugin.",
     )
     docling_pipeline: str = "standard"
-    docling_pdf_do_ocr: bool = True
     docling_pdf_ocr_engine: str = DOCLING_OCR_ENGINE
-    docling_pdf_ocr_languages: list[str] = Field(
-        default_factory=lambda: list(DOCLING_OCR_LANGUAGES)
-    )
     docling_pdf_ocr_use_gpu: bool | None = None
     docling_vlm_model: str = DOCLING_PICTURE_DESCRIPTION_MODEL
     docling_vlm_prompt: str = "Convert this page to markdown."
@@ -167,6 +167,19 @@ class Settings(BaseSettings):
         enable_decoding=False,
     )
 
+    @property
+    def docling_pdf_do_ocr(self) -> bool:
+        return True
+
+    @property
+    def docling_pdf_ocr_languages(self) -> list[str]:
+        return list(self._docling_pdf_ocr_languages)
+
+    def with_docling_pdf_ocr_languages(self, languages: list[str]) -> "Settings":
+        settings = self.model_copy()
+        settings._docling_pdf_ocr_languages = list(languages)
+        return settings
+
     @field_validator("docling_accelerator_device")
     @classmethod
     def validate_docling_accelerator_device(cls, value: str) -> str:
@@ -200,13 +213,6 @@ class Settings(BaseSettings):
         if normalized in {"hybrid", "line_based", "legacy_char"}:
             return normalized
         raise ValueError("must be one of hybrid, line_based, or legacy_char")
-
-    @field_validator("docling_pdf_ocr_languages", mode="before")
-    @classmethod
-    def parse_docling_pdf_ocr_languages(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
 
     @field_validator("docling_vlm_response_format")
     @classmethod

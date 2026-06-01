@@ -49,11 +49,6 @@ def build_layout_options(settings: Settings) -> Any:
 
 
 def build_ocr_options(settings: Settings) -> Any:
-    if not settings.docling_pdf_do_ocr:
-        from docling.datamodel.pipeline_options import OcrAutoOptions
-
-        return OcrAutoOptions()
-
     registry = OcrEngineRegistry(allow_external_plugins=settings.docling_allow_external_plugins)
     try:
         ocr_options = registry.create_options(kind=settings.docling_pdf_ocr_engine)

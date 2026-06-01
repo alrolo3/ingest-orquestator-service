@@ -138,6 +138,27 @@ def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     assert settings.docling_remote_llm_page_batch_size == settings.parser_worker_count
 
 
+def test_settings_do_not_expose_docling_ocr_defaults_as_fields() -> None:
+    settings = Settings(
+        docling_pdf_do_ocr=False,
+        docling_pdf_ocr_languages="es",
+    )
+
+    assert "docling_pdf_do_ocr" not in Settings.model_fields
+    assert "docling_pdf_ocr_languages" not in Settings.model_fields
+    assert settings.docling_pdf_do_ocr is True
+    assert settings.docling_pdf_ocr_languages == ["en"]
+
+
+def test_settings_can_create_request_scoped_docling_ocr_languages() -> None:
+    settings = Settings()
+    requested_settings = settings.with_docling_pdf_ocr_languages(["es"])
+
+    assert settings.docling_pdf_ocr_languages == ["en"]
+    assert requested_settings.docling_pdf_ocr_languages == ["es"]
+    assert requested_settings.docling_pdf_do_ocr is True
+
+
 def test_docling_allowed_formats_are_derived_from_backend_upload_extensions() -> None:
     settings = Settings(allowed_upload_extensions=[".PDF", "md", ".png", ".jpg"])
 
@@ -173,15 +194,11 @@ def test_settings_do_not_expose_backend_vlm_loader_settings() -> None:
         "docling_pdf_picture_description_max_new_tokens",
         "docling_remote_llm_concurrency",
         "docling_remote_llm_page_batch_size",
+        "docling_pdf_do_ocr",
+        "docling_pdf_ocr_languages",
     }
 
     assert removed_fields.isdisjoint(Settings.model_fields)
-
-
-def test_settings_parse_docling_ocr_languages_from_string() -> None:
-    settings = Settings(docling_pdf_ocr_languages="en,es")
-
-    assert settings.docling_pdf_ocr_languages == ["en", "es"]
 
 
 def test_settings_grouped_config_views() -> None:

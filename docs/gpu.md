@@ -103,17 +103,16 @@ INGEST_DOCLING_VLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 INGEST_DOCLING_VLM_RESPONSE_FORMAT=markdown
 INGEST_DOCLING_REMOTE_LLM_URL=http://localhost:8000/v1/chat/completions
 INGEST_DOCLING_REMOTE_LLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
-INGEST_DOCLING_PDF_DO_OCR=true
 INGEST_DOCLING_PDF_OCR_ENGINE=suryaocr
-INGEST_DOCLING_PDF_OCR_LANGUAGES=en
 INGEST_DOCLING_PDF_OCR_USE_GPU=true
 ```
 
 Use `INGEST_DOCLING_ACCELERATOR_DEVICE=cuda` for NVIDIA GPUs. Use `auto` to let Docling choose.
-Docling engine caching, warmup behavior, table structure, picture
-classification, picture descriptions, and pipeline batch sizes are backend
-constants. Docling and RemoteLLM concurrency both follow
-`INGEST_PARSER_WORKER_COUNT`.
+OCR is always enabled and defaults to English. Request-specific OCR languages
+are selected through the ingest API. Docling engine caching, warmup behavior,
+table structure, picture classification, picture descriptions, and pipeline
+batch sizes are backend constants. Docling and RemoteLLM concurrency both
+follow `INGEST_PARSER_WORKER_COUNT`.
 
 Use `pipeline=vlm` only for PDF and image inputs.
 For details, see [`docs/docling-ingestion.md`](docling-ingestion.md).

@@ -447,9 +447,7 @@ class DoclingDocumentParser:
     def _effective_settings(self, ocr_languages: list[str] | None) -> Settings:
         if ocr_languages is None:
             return self._settings
-        return self._settings.model_copy(
-            update={"docling_pdf_ocr_languages": list(ocr_languages)}
-        )
+        return self._settings.with_docling_pdf_ocr_languages(ocr_languages)
 
     @staticmethod
     def _report_progress(

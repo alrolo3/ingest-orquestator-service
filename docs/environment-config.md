@@ -159,15 +159,14 @@ when the standard pipeline is selected.
 
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
-| `INGEST_DOCLING_PDF_DO_OCR` | `true` | `true` | `true` or `false`. | Enables OCR in the standard PDF/image pipeline. |
 | `INGEST_DOCLING_PDF_OCR_ENGINE` | `suryaocr` | `suryaocr` | Any non-empty Docling OCR engine id. Common values: `auto`, `suryaocr`, `easyocr`, `rapidocr`, `tesseract`, `tesserocr`, `ocrmac`, `kserve_v2_ocr`, or plugin-provided ids. | OCR engine name passed through Docling's OCR factory. |
-| `INGEST_DOCLING_PDF_OCR_LANGUAGES` | `en` | `en,es` | Comma-separated OCR language codes such as `en`, `es`, or `fr`. | OCR language codes assigned to the selected OCR options when supported by the engine. |
 | `INGEST_DOCLING_PDF_OCR_USE_GPU` | unset | `true` | Unset, `true`, or `false`. | Optional GPU hint for OCR engines with a `use_gpu` option. Leave unset to let Docling or the OCR engine decide. |
 
-Table structure extraction, TableFormer accurate mode with cell matching,
-picture classification, RemoteLLM picture descriptions, and PDF pipeline batch
-sizes are backend constants. Picture descriptions use
-`INGEST_DOCLING_VLM_MODEL` and a fixed token budget of `2048`.
+OCR is always enabled and defaults to English. Request-specific OCR languages
+are selected through the ingest API. Table structure extraction, TableFormer
+accurate mode with cell matching, picture classification, RemoteLLM picture
+descriptions, and PDF pipeline batch sizes are backend constants. Picture
+descriptions use `INGEST_DOCLING_VLM_MODEL` and a fixed token budget of `2048`.
 
 ## Full VLM Pipeline Options
 
