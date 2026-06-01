@@ -141,6 +141,7 @@ class Settings(BaseSettings):
     dramatiq_dispatch_queue_name: str = "ingest_dispatch_jobs"
     dramatiq_parser_time_limit_ms: int = Field(default=14_400_000, ge=1)
     dramatiq_dispatch_time_limit_ms: int = Field(default=600_000, ge=1)
+    parser_max_retry_attempts: int = Field(default=3, ge=0)
     parser_worker_count: int = Field(default=2, ge=1)
     dispatch_worker_count: int = Field(default=2, ge=1)
     dispatch_queue_max_size: int = Field(default=100, ge=1)
@@ -570,6 +571,7 @@ class Settings(BaseSettings):
             dramatiq_dispatch_queue_name=self.dramatiq_dispatch_queue_name,
             dramatiq_parser_time_limit_ms=self.dramatiq_parser_time_limit_ms,
             dramatiq_dispatch_time_limit_ms=self.dramatiq_dispatch_time_limit_ms,
+            parser_max_retries=self.parser_max_retry_attempts,
             queue_max_size=self.dispatch_queue_max_size,
             queue_max_payload_bytes=self.dispatch_queue_max_payload_bytes,
             max_bulk_size=self.dispatch_max_bulk_size,

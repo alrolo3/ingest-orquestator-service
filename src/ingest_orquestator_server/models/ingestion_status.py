@@ -6,6 +6,7 @@ class IngestionStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     PARSER_QUEUED = "parser_queued"
+    RETRYING = "retrying"
     PARSING = "parsing"
     PARSED = "parsed"
     COMPLETED = "completed"

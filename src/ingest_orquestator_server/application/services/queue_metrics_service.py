@@ -26,7 +26,10 @@ class QueueStageDefinition:
 
 
 QUEUE_STAGES = (
-    QueueStageDefinition("parser_queue", (IngestionStatus.PARSER_QUEUED,)),
+    QueueStageDefinition(
+        "parser_queue",
+        (IngestionStatus.PARSER_QUEUED, IngestionStatus.RETRYING),
+    ),
     QueueStageDefinition("parser_workers", (IngestionStatus.PARSING,)),
     QueueStageDefinition("dispatch_queue", (IngestionStatus.DISPATCH_QUEUED,)),
     QueueStageDefinition("dispatcher_workers", (IngestionStatus.DISPATCHING,)),

@@ -81,7 +81,7 @@ describe("App", () => {
             },
             runtime: {},
             output_types: ["metadata", "markdown", "rag", "html"],
-            job_statuses: ["parser_queued", "parsing", "completed", "failed"],
+            job_statuses: ["parser_queued", "retrying", "parsing", "completed", "failed"],
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );

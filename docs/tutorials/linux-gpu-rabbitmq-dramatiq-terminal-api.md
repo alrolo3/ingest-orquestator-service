@@ -213,6 +213,9 @@ worst-case OCR duration for your largest PDFs so Dramatiq does not interrupt
 Docling while its page-stage threads are active. Restart both the API process
 that enqueues parser messages and the Dramatiq worker after changing this value.
 Messages that were already queued keep their original Dramatiq options.
+Parser failures are republished at the parser queue tail while
+`INGEST_PARSER_MAX_RETRY_ATTEMPTS` has remaining budget; the job metadata records
+the retry state and last parser error.
 
 If GPU memory or the RemoteLLM endpoint is tight, reduce parser threads in
 `.env`:

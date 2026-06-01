@@ -39,6 +39,11 @@ class RequestedParseOptions:
     include_html: bool
 
 
+@dataclass(frozen=True)
+class ParseJobResult:
+    retry_requested: bool = False
+
+
 class JobParseCoordinator:
     """Coordinates the persisted job parse lifecycle shared by ingestion entrypoints."""
 
@@ -55,6 +60,7 @@ class JobParseCoordinator:
         self._job_repository = job_repository
         self._dispatch_service = dispatch_service
         self._include_validation_error_metadata = include_validation_error_metadata
+        self._parser_max_retry_attempts = settings.parser_max_retry_attempts
         self._progress_reporter = JobProgressReporter(
             job_repository=job_repository,
             history_limit=settings.progress_history_limit,
@@ -70,10 +76,10 @@ class JobParseCoordinator:
         log_started_input_path: bool = True,
         log_completed_context: bool = False,
         log_failed_parser: bool = False,
-    ) -> None:
+    ) -> ParseJobResult:
         job = self._job_repository.get(job_id)
         if job is None:
-            return
+            return ParseJobResult()
         if fail_missing_input_before_start and job.input_path is None:
             self._fail_job(
                 job,
@@ -81,7 +87,7 @@ class JobParseCoordinator:
                 error_type="RuntimeError",
                 log_parser=log_failed_parser,
             )
-            return
+            return ParseJobResult()
 
         requested = self._requested_parse_options(job)
         now = datetime.now(UTC)
@@ -127,7 +133,7 @@ class JobParseCoordinator:
             )
         except Exception as exc:
             latest_job = self._job_repository.get(job_id) or running_job
-            self._fail_job(
+            retry_requested = self._retry_or_fail_job(
                 latest_job,
                 error=str(exc),
                 error_type=type(exc).__name__,
@@ -137,11 +143,18 @@ class JobParseCoordinator:
             extra = {"job_id": job_id}
             if log_failed_parser:
                 extra["parser"] = running_job.parser
-            logger.exception(
-                "parser.worker.failed",
-                extra=extra,
-            )
-            return
+            if retry_requested:
+                logger.warning(
+                    "parser.worker.retrying",
+                    exc_info=True,
+                    extra=extra,
+                )
+            else:
+                logger.exception(
+                    "parser.worker.failed",
+                    extra=extra,
+                )
+            return ParseJobResult(retry_requested=retry_requested)
 
         latest_job = self._job_repository.get(job_id) or running_job
         parsed_job = latest_job.model_copy(
@@ -182,6 +195,60 @@ class JobParseCoordinator:
                 }
             )
         log_stage("parser.worker.completed", **completed_fields)
+        return ParseJobResult()
+
+    def _retry_or_fail_job(
+        self,
+        job: IngestionJob,
+        *,
+        error: str,
+        error_type: str,
+        exc: Exception | None = None,
+        log_parser: bool = False,
+    ) -> bool:
+        retry_metadata = self._parser_retry_metadata(
+            job,
+            error=error,
+            error_type=error_type,
+        )
+        if retry_metadata["failure_count"] > self._parser_max_retry_attempts:
+            self._fail_job(
+                job,
+                error=error,
+                error_type=error_type,
+                exc=exc,
+                log_parser=log_parser,
+                extra_metadata={"parser_retry": retry_metadata | {"state": "exhausted"}},
+            )
+            return False
+
+        retrying_job = job.model_copy(
+            update={
+                "status": IngestionStatus.RETRYING,
+                "error": error,
+                "metadata": job.metadata
+                | build_error_metadata(
+                    error_type=error_type,
+                    exc=exc,
+                    include_validation_error=self._include_validation_error_metadata,
+                )
+                | {"parser_retry": retry_metadata | {"state": "retrying"}},
+                "updated_at": datetime.now(UTC),
+                "completed_at": None,
+            }
+        )
+        self._job_repository.save(retrying_job)
+        retry_fields = {
+            "job_id": job.job_id,
+            "error_type": error_type,
+            "error": error,
+            "failure_count": retry_metadata["failure_count"],
+            "max_retries": self._parser_max_retry_attempts,
+        }
+        if log_parser:
+            retry_fields["parser"] = job.parser
+        log_stage("parser.worker.retrying", **retry_fields)
+        return True
 
     def _fail_job(
         self,
@@ -191,6 +258,7 @@ class JobParseCoordinator:
         error_type: str,
         exc: Exception | None = None,
         log_parser: bool = False,
+        extra_metadata: dict[str, object] | None = None,
     ) -> None:
         failed_job = job.model_copy(
             update={
@@ -201,7 +269,8 @@ class JobParseCoordinator:
                     error_type=error_type,
                     exc=exc,
                     include_validation_error=self._include_validation_error_metadata,
-                ),
+                )
+                | (extra_metadata or {}),
                 "updated_at": datetime.now(UTC),
                 "completed_at": datetime.now(UTC),
             }
@@ -215,6 +284,26 @@ class JobParseCoordinator:
         if log_parser:
             failed_fields["parser"] = job.parser
         log_stage("parser.worker.failed", **failed_fields)
+
+    def _parser_retry_metadata(
+        self,
+        job: IngestionJob,
+        *,
+        error: str,
+        error_type: str,
+    ) -> dict[str, object]:
+        retry = job.metadata.get("parser_retry")
+        previous_failure_count = 0
+        if isinstance(retry, dict):
+            value = retry.get("failure_count")
+            if isinstance(value, int):
+                previous_failure_count = value
+        return {
+            "failure_count": previous_failure_count + 1,
+            "max_retries": self._parser_max_retry_attempts,
+            "last_error": error,
+            "last_error_type": error_type,
+        }
 
     @staticmethod
     def _requested_parse_options(job: IngestionJob) -> RequestedParseOptions:

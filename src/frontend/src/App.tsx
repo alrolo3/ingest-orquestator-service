@@ -30,6 +30,7 @@ import {
   isTerminalStatus,
   lifecycle,
   metadataValue,
+  parserRetryMessage,
   phaseState,
   progressHistory,
   progressPercent,
@@ -645,6 +646,7 @@ function JobPanel({ apiBaseUrl, capabilities, tracked, onRetry }: JobPanelProps)
   const failed = Boolean(tracked.upload_error || status === "failed");
   const completed = status === "completed";
   const metadata = job?.metadata ?? tracked.response?.metadata ?? {};
+  const retryMessage = parserRetryMessage(job);
 
   return (
     <article className={`job-panel ${failed ? "failed" : ""}`}>
@@ -662,7 +664,11 @@ function JobPanel({ apiBaseUrl, capabilities, tracked, onRetry }: JobPanelProps)
             <span>{formatBytes(tracked.file_size)}</span>
           </div>
         </div>
-        <div className={`status-pill ${failed ? "danger" : completed ? "success" : ""}`}>
+        <div
+          className={`status-pill ${
+            failed ? "danger" : completed ? "success" : status === "retrying" ? "retry" : ""
+          }`}
+        >
           {statusLabel(status)}
         </div>
       </div>
@@ -700,6 +706,13 @@ function JobPanel({ apiBaseUrl, capabilities, tracked, onRetry }: JobPanelProps)
               <RotateCcw size={14} aria-hidden="true" />
             </button>
           ) : null}
+        </div>
+      ) : null}
+
+      {retryMessage ? (
+        <div className="notice retry">
+          <RotateCcw size={16} aria-hidden="true" />
+          <span>{retryMessage}</span>
         </div>
       ) : null}
 
