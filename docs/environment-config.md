@@ -70,7 +70,7 @@ extensions so upload validation and parser support stay aligned.
 | `INGEST_CHUNKING_ENABLED` | `false` | `false` | `true` or `false`. | Deprecated compatibility fallback only. Prefer request-level `chunking_enabled`; API values take precedence. |
 | `INGEST_CHUNKING_STRATEGY` | `page` | `page` | `token`, `page`, or `line`. | Deprecated compatibility fallback only. Prefer request-level `chunking_strategy`; parser capabilities decide which values are valid. Legacy `hybrid` is accepted as an alias for `token`; legacy `line_based` is accepted as an alias for `line`, which Docling rejects in this iteration. |
 | `INGEST_CHUNK_MAX_TOKENS` | `768` | `1024` | Integer `>= 32`. | Token budget used by token-based parser chunkers. |
-| `INGEST_CHUNK_TOKENIZER_PATH` | unset | `/datastore/tokenizers/qwen3-embedding-8b` | Local filesystem path. | Local Hugging Face tokenizer directory for token chunking. Runtime tokenizer downloads are not used by default. |
+| `INGEST_CHUNK_TOKENIZER_PATH` | unset | `/datastore/models/tokenizers/qwen3-embedding-8b` | Local filesystem path. | Local Hugging Face tokenizer directory for token chunking. Runtime tokenizer downloads are not used by default. |
 
 Removed chunking variables: `INGEST_CHUNK_TOKENIZER_MODEL`,
 `INGEST_CHUNK_MERGE_PEERS`, `INGEST_CHUNK_REPEAT_TABLE_HEADER`,

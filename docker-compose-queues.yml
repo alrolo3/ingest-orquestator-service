@@ -39,10 +39,14 @@ services:
       INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
       INGEST_STORAGE_DIR: .data
       INGEST_DOCLING_ACCELERATOR_DEVICE: cuda
+      DOCLING_CACHE_DIR: /datastore/models/docling
+      HF_HOME: /datastore/models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /datastore/models/sentence-transformers
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     volumes:
       - ./.data:/app/.data
+      - ${INGEST_HOST_MODELS_DIR:-/datastore/models}:/datastore/models
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -79,8 +83,12 @@ services:
       INGEST_QUEUE_BACKEND: dramatiq
       INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
       INGEST_STORAGE_DIR: .data
+      DOCLING_CACHE_DIR: /datastore/models/docling
+      HF_HOME: /datastore/models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /datastore/models/sentence-transformers
     volumes:
       - ./.data:/app/.data
+      - ${INGEST_HOST_MODELS_DIR:-/datastore/models}:/datastore/models
     depends_on:
       rabbitmq:
         condition: service_healthy

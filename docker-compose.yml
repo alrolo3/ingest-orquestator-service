@@ -12,7 +12,11 @@ services:
       INGEST_CHUNK_MAX_TOKENS: 768
       INGEST_CHUNK_TOKENIZER_PATH: ""
       INGEST_RETENTION_DAYS: 30
+      DOCLING_CACHE_DIR: /datastore/models/docling
+      HF_HOME: /datastore/models/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /datastore/models/sentence-transformers
     ports:
       - "8000:8000"
     volumes:
       - ./.data:/app/.data
+      - ${INGEST_HOST_MODELS_DIR:-/datastore/models}:/datastore/models
