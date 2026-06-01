@@ -103,6 +103,8 @@ class DispatchConfig(BaseModel):
     rabbitmq_configured: bool
     dramatiq_parser_queue_name: str
     dramatiq_dispatch_queue_name: str
+    dramatiq_parser_time_limit_ms: int
+    dramatiq_dispatch_time_limit_ms: int
     queue_max_size: int
     queue_max_payload_bytes: int | None
     max_bulk_size: int

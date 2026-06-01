@@ -208,6 +208,11 @@ The parser worker container runs Dramatiq with one process and
 unless you intend to duplicate Docling engine pools. Set
 `INGEST_PARSER_WORKER_COUNT` to the number of documents allowed to make Docling
 progress at once, and size the RemoteLLM endpoint for that concurrency.
+Parser jobs use `INGEST_DRAMATIQ_PARSER_TIME_LIMIT_MS`; keep it above the
+worst-case OCR duration for your largest PDFs so Dramatiq does not interrupt
+Docling while its page-stage threads are active. Restart both the API process
+that enqueues parser messages and the Dramatiq worker after changing this value.
+Messages that were already queued keep their original Dramatiq options.
 
 If GPU memory or the RemoteLLM endpoint is tight, reduce parser threads in
 `.env`:

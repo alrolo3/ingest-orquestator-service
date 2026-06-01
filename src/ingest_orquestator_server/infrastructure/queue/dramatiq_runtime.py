@@ -10,6 +10,20 @@ from ingest_orquestator_server.infrastructure.queue.dramatiq_job_queue import (
 _configured_broker_url: str | None = None
 
 
+def parser_actor_options(settings: Settings) -> dict[str, object]:
+    return {
+        "queue_name": settings.dramatiq_parser_queue_name,
+        "time_limit": settings.dramatiq_parser_time_limit_ms,
+    }
+
+
+def dispatch_actor_options(settings: Settings) -> dict[str, object]:
+    return {
+        "queue_name": settings.dramatiq_dispatch_queue_name,
+        "time_limit": settings.dramatiq_dispatch_time_limit_ms,
+    }
+
+
 def configure_dramatiq_broker(settings: Settings) -> None:
     global _configured_broker_url
     if _configured_broker_url == settings.rabbitmq_url:
@@ -34,6 +48,8 @@ def build_dramatiq_publisher(settings: Settings) -> DramatiqJobQueuePublisher:
     return DramatiqJobQueuePublisher(
         parser_actor=dramatiq_actors.process_parser_job,
         dispatch_actor=dramatiq_actors.process_dispatch_job,
+        parser_time_limit_ms=settings.dramatiq_parser_time_limit_ms,
+        dispatch_time_limit_ms=settings.dramatiq_dispatch_time_limit_ms,
     )
 
 

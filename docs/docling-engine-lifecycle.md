@@ -74,6 +74,11 @@ isolated converter state.
 - Dramatiq parser workers should use one process per GPU and
   `--threads ${INGEST_PARSER_WORKER_COUNT:-2}`. Multiple processes each create
   their own Docling engine pool and can multiply GPU memory use.
+- Parser actors use `INGEST_DRAMATIQ_PARSER_TIME_LIMIT_MS`; keep it above the
+  worst-case Docling OCR duration for large PDFs. The default is 4 hours to
+  avoid interrupting Docling's internal stage threads mid-conversion. Restart
+  both the API publisher process and the Dramatiq worker after changing this
+  value because queued messages carry their Dramatiq options.
 - Increase `INGEST_PARSER_WORKER_COUNT` to allow more queued documents to make
   Docling progress concurrently in one process.
 - Reduce `INGEST_PARSER_WORKER_COUNT` when GPU memory or the RemoteLLM endpoint
