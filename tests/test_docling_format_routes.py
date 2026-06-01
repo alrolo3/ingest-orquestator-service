@@ -16,7 +16,7 @@ EXPECTED_STANDARD_ROUTE_METADATA = {
         "selected_pipeline": "standard",
         "format_option": "PdfFormatOption",
         "pipeline_class": "IngestProgressStandardPdfPipeline",
-        "backend_class": "DoclingParseDocumentBackend",
+        "backend_class": "ThreadedDoclingParseDocumentBackend",
         "route_kind": "standard",
         "supports_vlm": True,
     },
@@ -172,7 +172,7 @@ EXPECTED_VLM_ROUTE_METADATA = {
         "selected_pipeline": "vlm",
         "format_option": "PdfFormatOption",
         "pipeline_class": "IngestProgressVlmPipeline",
-        "backend_class": "DoclingParseDocumentBackend",
+        "backend_class": "ThreadedDoclingParseDocumentBackend",
         "route_kind": "vlm",
         "supports_vlm": True,
     },
@@ -247,6 +247,9 @@ def test_build_format_options_routes_default_formats_without_model_loading() -> 
     )
     assert set(routes) == set(settings.docling_allowed_formats)
     assert issubclass(format_options[InputFormat.PDF].pipeline_cls, StandardPdfPipeline)
+    assert format_options[InputFormat.PDF].backend.__name__ == (
+        "ThreadedDoclingParseDocumentBackend"
+    )
     assert issubclass(format_options[InputFormat.IMAGE].pipeline_cls, StandardPdfPipeline)
     assert issubclass(format_options[InputFormat.MD].pipeline_cls, SimplePipeline)
     assert routes["pdf"].route_kind == "standard"
@@ -294,6 +297,9 @@ def test_build_format_options_routes_selected_vlm_format_only() -> None:
     )
 
     assert issubclass(format_options[InputFormat.PDF].pipeline_cls, VlmPipeline)
+    assert format_options[InputFormat.PDF].backend.__name__ == (
+        "ThreadedDoclingParseDocumentBackend"
+    )
     assert issubclass(format_options[InputFormat.IMAGE].pipeline_cls, StandardPdfPipeline)
     assert issubclass(format_options[InputFormat.DOCX].pipeline_cls, SimplePipeline)
     assert routes["pdf"].route_kind == "vlm"

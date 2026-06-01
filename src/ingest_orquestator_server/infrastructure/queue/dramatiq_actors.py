@@ -9,7 +9,7 @@ from ingest_orquestator_server.infrastructure.queue.dramatiq_runtime import (
     configure_dramatiq_broker,
     dispatch_actor_options,
     parser_actor_options,
-    run_parser_job,
+    run_parser_job_in_subprocess,
 )
 from ingest_orquestator_server.models.parsed_document_dispatch import (
     ParsedDocumentDispatchItem,
@@ -32,6 +32,9 @@ def process_dispatch_job(item_payload: dict) -> None:
 
 
 def _process_parser_job(job_id: str) -> None:
-    result = run_parser_job(job_id)
+    result = run_parser_job_in_subprocess(
+        job_id,
+        _settings.model_dump(mode="python"),
+    )
     if result.retry_requested:
         build_dramatiq_publisher(_settings).enqueue_parser_job(job_id)

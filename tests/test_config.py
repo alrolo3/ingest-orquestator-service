@@ -46,7 +46,10 @@ def test_env_example_loads() -> None:
     assert settings.docling_pdf_ocr_languages == ["en"]
     assert settings.chunking_enabled is False
     assert settings.chunking_strategy == "page"
-    assert str(settings.chunk_tokenizer_path) == "/datastore/tokenizers/qwen3-embedding-8b"
+    assert (
+        str(settings.chunk_tokenizer_path)
+        == "/datastore/models/tokenizers/qwen3-embedding-8b"
+    )
     assert settings.confidence_output_enabled is True
     assert settings.docling_accelerator_device == "cuda"
     assert settings.docling_xbrl_enable_local_fetch is True
@@ -125,7 +128,10 @@ def test_cpu_env_loads() -> None:
     assert settings.docling_pdf_ocr_batch_size == 32
     assert settings.docling_pdf_queue_max_size == 512
     assert settings.chunking_strategy == "page"
-    assert str(settings.chunk_tokenizer_path) == "/datastore/tokenizers/qwen3-embedding-8b"
+    assert (
+        str(settings.chunk_tokenizer_path)
+        == "/datastore/models/tokenizers/qwen3-embedding-8b"
+    )
 
 
 def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:

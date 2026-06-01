@@ -15,7 +15,7 @@ def test_parser_actor_requeues_retrying_job_at_queue_tail(monkeypatch) -> None:
 
     monkeypatch.setattr(
         dramatiq_actors,
-        "run_parser_job",
+        "run_parser_job_in_subprocess",
         RetryingParserJobRunner(),
     )
     monkeypatch.setattr(
@@ -35,7 +35,7 @@ def test_parser_actor_does_not_apply_in_process_slot_limit(monkeypatch) -> None:
 
     monkeypatch.setattr(
         dramatiq_actors,
-        "run_parser_job",
+        "run_parser_job_in_subprocess",
         runner,
     )
 
@@ -71,7 +71,7 @@ def _import_dramatiq_actors(monkeypatch):
 
 
 class RetryingParserJobRunner:
-    def __call__(self, job_id: str) -> ParseJobResult:
+    def __call__(self, job_id: str, _settings_data: dict) -> ParseJobResult:
         assert job_id == "job-1"
         return ParseJobResult(retry_requested=True)
 
@@ -94,7 +94,7 @@ class BlockingParserJobRunner:
         self.job_ids: list[str] = []
         self.lock = threading.Lock()
 
-    def __call__(self, job_id: str) -> ParseJobResult:
+    def __call__(self, job_id: str, _settings_data: dict) -> ParseJobResult:
         with self.lock:
             self.active += 1
             self.max_active = max(self.max_active, self.active)

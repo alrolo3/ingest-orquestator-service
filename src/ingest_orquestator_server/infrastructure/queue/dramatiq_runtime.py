@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import traceback
 from collections.abc import Mapping
 from functools import partial
+from multiprocessing import get_context
+from multiprocessing.connection import Connection
 from typing import Any
 
 from ingest_orquestator_server.application.services.job_parse_coordinator import (
@@ -142,6 +145,81 @@ def run_parser_job(
         preserve_existing_started_at=True,
         fail_missing_input_before_start=True,
     )
+
+
+def run_parser_job_in_subprocess(
+    job_id: str,
+    settings_data: Mapping[str, Any] | None = None,
+) -> ParseJobResult:
+    settings = (
+        Settings(**settings_data)
+        if settings_data is not None
+        else effective_runtime_settings()
+    )
+    settings_snapshot = settings.model_dump(mode="python")
+    context = get_context("spawn")
+    parent_connection, child_connection = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_run_parser_job_child,
+        args=(job_id, settings_snapshot, child_connection),
+        name=f"ingest-parser-job-{job_id[:8]}",
+    )
+    process.start()
+    child_connection.close()
+
+    try:
+        while process.is_alive():
+            process.join(timeout=0.5)
+    except BaseException:
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+            if process.is_alive():
+                process.kill()
+                process.join(timeout=5)
+        raise
+
+    try:
+        if parent_connection.poll():
+            message = parent_connection.recv()
+        else:
+            message = None
+    finally:
+        parent_connection.close()
+
+    if message is not None and message[0] == "result":
+        return message[1]
+    if message is not None and message[0] == "error":
+        _, error_type, error, child_traceback = message
+        raise RuntimeError(
+            f"Parser job subprocess failed for {job_id}: {error_type}: {error}\n"
+            f"{child_traceback}"
+        )
+    if process.exitcode:
+        raise RuntimeError(
+            f"Parser job subprocess exited with status {process.exitcode} for {job_id}"
+        )
+    raise RuntimeError(f"Parser job subprocess completed without a result for {job_id}")
+
+
+def _run_parser_job_child(
+    job_id: str,
+    settings_data: Mapping[str, Any],
+    result_connection: Connection,
+) -> None:
+    try:
+        result_connection.send(("result", run_parser_job(job_id, settings_data)))
+    except BaseException as exc:
+        result_connection.send(
+            (
+                "error",
+                exc.__class__.__name__,
+                str(exc),
+                traceback.format_exc(),
+            )
+        )
+    finally:
+        result_connection.close()
 
 
 def build_dispatch_service() -> Any:

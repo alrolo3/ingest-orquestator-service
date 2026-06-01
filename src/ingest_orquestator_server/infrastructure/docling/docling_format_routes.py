@@ -63,7 +63,7 @@ _STANDARD_ROUTE_SPECS = {
         input_format="pdf",
         format_option_class="PdfFormatOption",
         pipeline_class="IngestProgressStandardPdfPipeline",
-        backend_class="DoclingParseDocumentBackend",
+        backend_class="ThreadedDoclingParseDocumentBackend",
         route_kind="standard",
         option_builder="pdf_pipeline",
         supports_vlm=True,
@@ -206,7 +206,7 @@ _VLM_ROUTE_SPECS = {
         input_format="pdf",
         format_option_class="PdfFormatOption",
         pipeline_class="IngestProgressVlmPipeline",
-        backend_class="DoclingParseDocumentBackend",
+        backend_class="ThreadedDoclingParseDocumentBackend",
         route_kind="vlm",
         option_builder="vlm_pipeline",
         supports_vlm=True,
@@ -230,6 +230,7 @@ def build_format_options(
     input_format: str | None,
 ) -> tuple[list[Any], dict[Any, Any], dict[str, DoclingFormatRoute]]:
     try:
+        from docling.backend.docling_parse_backend import ThreadedDoclingParseDocumentBackend
         from docling.backend.json.docling_json_backend import DoclingJSONBackend
         from docling.backend.webvtt_backend import WebVTTDocumentBackend
         from docling.datamodel.backend_options import XBRLBackendOptions
@@ -293,6 +294,7 @@ def build_format_options(
         "PdfFormatOption": PdfFormatOption,
         "PowerpointFormatOption": PowerpointFormatOption,
         "SimplePipeline": SimplePipeline,
+        "ThreadedDoclingParseDocumentBackend": ThreadedDoclingParseDocumentBackend,
         "WebVTTDocumentBackend": WebVTTDocumentBackend,
         "WordFormatOption": WordFormatOption,
         "XBRLBackendOptions": XBRLBackendOptions,
@@ -396,15 +398,21 @@ def _build_format_option(
 ) -> Any:
     option_cls = classes[route_spec.format_option_class]
     if route_spec.option_builder == "pdf_pipeline":
-        return option_cls(
-            pipeline_cls=classes[route_spec.pipeline_class],
-            pipeline_options=get_standard_pdf_options(),
-        )
+        kwargs = {
+            "pipeline_cls": classes[route_spec.pipeline_class],
+            "pipeline_options": get_standard_pdf_options(),
+        }
+        if route_spec.format_option_class == "PdfFormatOption":
+            kwargs["backend"] = classes[route_spec.backend_class]
+        return option_cls(**kwargs)
     if route_spec.option_builder == "vlm_pipeline":
-        return option_cls(
-            pipeline_cls=classes[route_spec.pipeline_class],
-            pipeline_options=get_vlm_options(),
-        )
+        kwargs = {
+            "pipeline_cls": classes[route_spec.pipeline_class],
+            "pipeline_options": get_vlm_options(),
+        }
+        if route_spec.format_option_class == "PdfFormatOption":
+            kwargs["backend"] = classes[route_spec.backend_class]
+        return option_cls(**kwargs)
     if route_spec.option_builder == "convert_pipeline":
         return option_cls(pipeline_options=convert_options)
     if route_spec.option_builder == "backend_pipeline":
