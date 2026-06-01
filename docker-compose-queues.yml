@@ -36,7 +36,7 @@ services:
       - .env
     environment:
       INGEST_QUEUE_BACKEND: dramatiq
-      INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
       INGEST_STORAGE_DIR: .data
       INGEST_DOCLING_ACCELERATOR_DEVICE: cuda
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
@@ -77,7 +77,7 @@ services:
       - .env
     environment:
       INGEST_QUEUE_BACKEND: dramatiq
-      INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
       INGEST_STORAGE_DIR: .data
     volumes:
       - ./.data:/app/.data

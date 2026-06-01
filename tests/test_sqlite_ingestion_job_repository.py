@@ -20,12 +20,12 @@ def test_sqlite_repository_saves_and_loads_jobs(tmp_path: Path) -> None:
         metadata={"pipeline": "standard", "input_format": "pdf"},
         outputs=OutputFiles(
             output_dir=tmp_path / "outputs" / "job-1",
-            raw_docling_json=tmp_path / "outputs" / "job-1" / "raw_docling.json",
-            normalized_json=tmp_path / "outputs" / "job-1" / "normalized.json",
             markdown=tmp_path / "outputs" / "job-1" / "document.md",
-            text=tmp_path / "outputs" / "job-1" / "document.txt",
-            chunks_json=tmp_path / "outputs" / "job-1" / "chunks.json",
-            manifest_json=tmp_path / "outputs" / "job-1" / "manifest.json",
+            document_metadata_json=tmp_path
+            / "outputs"
+            / "job-1"
+            / "document_metadata.json",
+            rag_chunks_jsonl=tmp_path / "outputs" / "job-1" / "rag_chunks.jsonl",
         ),
     )
 
@@ -36,7 +36,7 @@ def test_sqlite_repository_saves_and_loads_jobs(tmp_path: Path) -> None:
     assert loaded.status == IngestionStatus.COMPLETED
     assert loaded.metadata["pipeline"] == "standard"
     assert loaded.outputs is not None
-    assert loaded.outputs.chunks_json is not None
+    assert loaded.outputs.rag_chunks_jsonl is not None
 
 
 def test_sqlite_repository_lists_active_jobs(tmp_path: Path) -> None:

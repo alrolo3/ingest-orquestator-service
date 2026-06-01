@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from ingest_orquestator_server.application.exceptions import UnsupportedIngestionOptionError
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
 )
@@ -16,6 +17,10 @@ from ingest_orquestator_server.application.services.document_parse_service impor
 from ingest_orquestator_server.application.services.ingestion_job_metadata import (
     build_error_metadata,
     build_request_metadata,
+)
+from ingest_orquestator_server.application.services.ingestion_request_options import (
+    normalize_dispatch_sink_mode,
+    normalize_ocr_languages,
 )
 from ingest_orquestator_server.application.services.job_parse_coordinator import (
     JobParseCoordinator,
@@ -34,8 +39,8 @@ from ingest_orquestator_server.models.ingestion_status import IngestionStatus
 
 if TYPE_CHECKING:
     from ingest_orquestator_server.application.ports.job_queue import ParserJobQueue
-    from ingest_orquestator_server.application.services.embedding_dispatch_service import (
-        EmbeddingDispatchService,
+    from ingest_orquestator_server.application.services.parsed_document_dispatch_service import (
+        ParsedDocumentDispatchService,
     )
     from ingest_orquestator_server.application.services.parser_worker_service import (
         ParserWorkerService,
@@ -51,7 +56,7 @@ class FileIngestionService:
         document_parse_service: DocumentParseService,
         job_repository: IngestionJobRepository,
         upload_validator: UploadValidator,
-        embedding_dispatch_service: EmbeddingDispatchService | None = None,
+        parsed_document_dispatch_service: ParsedDocumentDispatchService | None = None,
         parser_worker_service: ParserWorkerService | None = None,
         parser_job_queue: ParserJobQueue | None = None,
         parser_request_validator: ParserRequestValidator | None = None,
@@ -63,14 +68,14 @@ class FileIngestionService:
         self._parser_request_validator = (
             parser_request_validator or build_default_parser_request_validator(settings)
         )
-        self._embedding_dispatch_service = embedding_dispatch_service
+        self._parsed_document_dispatch_service = parsed_document_dispatch_service
         self._parser_worker_service = parser_worker_service
         self._parser_job_queue = parser_job_queue
         self._parse_coordinator = JobParseCoordinator(
             settings=settings,
             document_parse_service=document_parse_service,
             job_repository=job_repository,
-            dispatch_service=embedding_dispatch_service,
+            dispatch_service=parsed_document_dispatch_service,
             include_validation_error_metadata=True,
         )
 
@@ -83,6 +88,9 @@ class FileIngestionService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        dispatch_sink_mode: str | None = None,
+        ocr_languages: str | list[str] | None = None,
+        include_html: bool = False,
     ) -> IngestResponse:
         return await self.enqueue_upload(
             upload=upload,
@@ -90,6 +98,9 @@ class FileIngestionService:
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=dispatch_sink_mode,
+            ocr_languages=ocr_languages,
+            include_html=include_html,
         )
 
     async def enqueue_upload(
@@ -100,8 +111,13 @@ class FileIngestionService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        dispatch_sink_mode: str | None = None,
+        ocr_languages: str | list[str] | None = None,
+        include_html: bool = False,
     ) -> IngestResponse:
         self._upload_validator.validate_metadata(upload)
+        requested_dispatch_sink_mode = normalize_dispatch_sink_mode(dispatch_sink_mode)
+        requested_ocr_languages = normalize_ocr_languages(ocr_languages)
         self._parser_request_validator.validate(
             filename=upload.filename or "",
             parser_name=parser_name,
@@ -114,6 +130,8 @@ class FileIngestionService:
             job_id=job_id,
             parser=parser_name,
             pipeline=pipeline,
+            dispatch_sink_mode=requested_dispatch_sink_mode,
+            ocr_languages=requested_ocr_languages,
             filename=upload.filename,
         )
         upload_path = await self._upload_storage.save(
@@ -125,6 +143,9 @@ class FileIngestionService:
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=requested_dispatch_sink_mode,
+            ocr_languages=requested_ocr_languages,
+            include_html=include_html,
         )
         job = IngestionJob(
             job_id=job_id,
@@ -193,6 +214,9 @@ class FileIngestionService:
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
+        dispatch_sink_mode: str | None = None,
+        ocr_languages: str | list[str] | None = None,
+        include_html: bool = False,
     ) -> IngestBatchResponse:
         jobs: list[IngestResponse] = []
         failed: list[IngestResponse] = []
@@ -205,6 +229,9 @@ class FileIngestionService:
                         pipeline=pipeline,
                         chunking_enabled=chunking_enabled,
                         chunking_strategy=chunking_strategy,
+                        dispatch_sink_mode=dispatch_sink_mode,
+                        ocr_languages=ocr_languages,
+                        include_html=include_html,
                     )
                 )
             except Exception as exc:
@@ -214,6 +241,9 @@ class FileIngestionService:
                     pipeline=pipeline,
                     chunking_enabled=chunking_enabled,
                     chunking_strategy=chunking_strategy,
+                    dispatch_sink_mode=dispatch_sink_mode,
+                    ocr_languages=ocr_languages,
+                    include_html=include_html,
                     error=exc,
                 )
                 failed.append(
@@ -241,10 +271,10 @@ class FileIngestionService:
             log_failed_parser=True,
         )
 
-    def process_embedding_queue(self) -> None:
-        if self._embedding_dispatch_service is not None:
+    def process_dispatch_queue(self) -> None:
+        if self._parsed_document_dispatch_service is not None:
             log_stage("dispatch.queue.drain.started")
-            self._embedding_dispatch_service.drain()
+            self._parsed_document_dispatch_service.drain()
             log_stage("dispatch.queue.drain.completed")
 
     def _save_rejected_batch_job(
@@ -255,14 +285,28 @@ class FileIngestionService:
         pipeline: str | None,
         chunking_enabled: bool | None,
         chunking_strategy: str | None,
+        dispatch_sink_mode: str | None,
+        ocr_languages: str | list[str] | None,
+        include_html: bool,
         error: Exception,
     ) -> IngestionJob:
         job_id = str(uuid4())
         now = datetime.now(UTC)
+        try:
+            requested_dispatch_sink_mode = normalize_dispatch_sink_mode(dispatch_sink_mode)
+        except UnsupportedIngestionOptionError:
+            requested_dispatch_sink_mode = None
+        try:
+            requested_ocr_languages = normalize_ocr_languages(ocr_languages)
+        except UnsupportedIngestionOptionError:
+            requested_ocr_languages = None
         metadata = build_request_metadata(
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=requested_dispatch_sink_mode,
+            ocr_languages=requested_ocr_languages,
+            include_html=include_html,
         ) | {
             "source_file_name": upload.filename,
             **build_error_metadata(

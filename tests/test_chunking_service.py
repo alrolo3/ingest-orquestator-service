@@ -84,7 +84,7 @@ def test_line_based_chunking_uses_docling_chunker() -> None:
 
     chunks = DocumentChunkingService(Settings(chunk_max_tokens=32)).chunk(
         document,
-        docling_document=docling_document,
+        chunking_document=docling_document,
         chunking_strategy="line_based",
     )
 

@@ -11,12 +11,12 @@ dispatch orchestration.
 - `FileIngestionService` creates persisted `IngestionJob` records.
 - `ParserWorkerService` executes parser jobs through `JobParseCoordinator`.
 - `DocumentParseService` selects a `DocumentParser` and normalizes parser output.
-- `EmbeddingDispatchService` owns output handoff to local storage and Elasticsearch.
+- `ParsedDocumentDispatchService` owns output handoff to local storage and Elasticsearch.
 
 ## Queue Contract
 - Parser queue messages contain the persisted `job_id`.
-- Dispatch queue messages contain a serialized output queue item with the normalized
-  document payload needed by an independent dispatcher worker.
+- Dispatch queue messages contain a serialized parsed-document dispatch item with
+  Markdown, metadata, diagnostics, and unified RAG ingestion records.
 - Queue publishers are application ports; RabbitMQ/dramatiq is an infrastructure adapter.
 - Dramatiq actors stay thin and call existing application services.
 

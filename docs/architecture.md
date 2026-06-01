@@ -55,13 +55,14 @@ return immediately with `parser_queued` status. A configurable parser worker
 pool runs Docling or another parser off the request thread, then enqueues the
 full parsed document result in the mandatory process-local dispatch queue.
 
-`EmbeddingDispatchService` is the dispatcher coordinator. It drains up to the
-configured number of full documents per batch, stores local artifacts when the
-local sink is enabled, and sends Elastic bulk requests when the Elastic sink is
-enabled. Elastic payload generation happens in the dispatcher: each parsed
-document is chunked into one indexed Elasticsearch document per RAG chunk with
-deterministic `_id = record_id`. Bulk failures are retried and then persisted as
-`failed` when retry budget is exhausted.
+`ParsedDocumentDispatchService` is the dispatcher coordinator. It drains up to the
+configured number of parsed-document dispatch items per batch, stores local
+artifacts when the local sink is enabled, and sends Elastic bulk requests when
+the Elastic sink is enabled. Elastic payload generation consumes the unified RAG
+ingestion records carried by the dispatch item: each chunk record is indexed as
+one Elasticsearch document with deterministic `_id = record_id`. If chunking is
+disabled, one document-level RAG record is indexed instead. Bulk failures are
+retried and then persisted as `failed` when retry budget is exhausted.
 
 ## Adding A Parser
 
@@ -81,5 +82,8 @@ chooses allowed formats and per-format options. `standard` mode is supported for
 all configured formats; direct `vlm` mode is supported for PDF and image inputs.
 
 The parser keeps Docling `ConversionResult` metadata, including status, errors,
-timings, and confidence reports, then the application service builds chunks and
-embedding records. The public runtime interface is the FastAPI server.
+timings, and confidence reports, only long enough to build the minimal parsed
+content. The default local artifacts are `document.md`,
+`document_metadata.json`, and `rag_chunks.jsonl`; `document.html` is written only
+when requested through the API. The public runtime interface is the FastAPI
+server.

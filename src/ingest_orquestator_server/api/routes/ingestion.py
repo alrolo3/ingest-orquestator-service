@@ -7,6 +7,7 @@ from ingest_orquestator_server.api.dependencies import (
     get_file_ingestion_service,
     get_job_query_service,
     get_output_retrieval_service,
+    get_queue_metrics_service,
 )
 from ingest_orquestator_server.application.exceptions import (
     JobNotFoundError,
@@ -25,10 +26,14 @@ from ingest_orquestator_server.application.services.output_retrieval_service imp
     OutputRetrievalService,
     OutputType,
 )
+from ingest_orquestator_server.application.services.queue_metrics_service import (
+    QueueMetricsService,
+)
 from ingest_orquestator_server.models.ingest_batch_response import IngestBatchResponse
 from ingest_orquestator_server.models.ingest_response import IngestResponse
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.output_files import OutputFiles
+from ingest_orquestator_server.models.queue_metrics import QueueMetrics
 
 router = APIRouter(prefix="/v1/ingest")
 
@@ -41,6 +46,9 @@ async def ingest_file(
     pipeline: Annotated[str | None, Query()] = None,
     chunking_enabled: Annotated[bool | None, Query()] = None,
     chunking_strategy: Annotated[str | None, Query()] = None,
+    dispatch_sink_mode: Annotated[str | None, Query()] = None,
+    ocr_languages: Annotated[str | None, Query()] = None,
+    include_html: Annotated[bool, Query()] = False,
     async_mode: Annotated[bool, Query()] = False,
     include_document: Annotated[bool, Query()] = True,
 ) -> IngestResponse:
@@ -51,6 +59,9 @@ async def ingest_file(
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=dispatch_sink_mode,
+            ocr_languages=ocr_languages,
+            include_html=include_html,
             include_document=include_document,
         )
     except UploadValidationError as exc:
@@ -74,6 +85,9 @@ async def ingest_files(
     pipeline: Annotated[str | None, Query()] = None,
     chunking_enabled: Annotated[bool | None, Query()] = None,
     chunking_strategy: Annotated[str | None, Query()] = None,
+    dispatch_sink_mode: Annotated[str | None, Query()] = None,
+    ocr_languages: Annotated[str | None, Query()] = None,
+    include_html: Annotated[bool, Query()] = False,
 ) -> IngestBatchResponse:
     try:
         return await service.enqueue_uploads(
@@ -82,6 +96,9 @@ async def ingest_files(
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=dispatch_sink_mode,
+            ocr_languages=ocr_languages,
+            include_html=include_html,
         )
     except UploadValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
@@ -105,6 +122,14 @@ def list_jobs(
     if len(job_ids) > 100:
         raise HTTPException(status_code=400, detail="At most 100 job ids can be requested.")
     return service.list_jobs(job_ids)
+
+
+@router.get("/queue/metrics", response_model=QueueMetrics)
+def queue_metrics(
+    service: Annotated[QueueMetricsService, Depends(get_queue_metrics_service)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> QueueMetrics:
+    return service.metrics(recent_limit=limit)
 
 
 @router.get("/jobs/{job_id}", response_model=IngestionJob)

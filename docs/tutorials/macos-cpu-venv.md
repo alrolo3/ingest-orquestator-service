@@ -81,8 +81,9 @@ curl "http://127.0.0.1:8000/v1/ingest/jobs/${job_id}"
 
 Expected result: the initial response is `parser_queued`; after parser and
 dispatcher completion the job reaches `completed` and a new output directory
-contains `document.md`, `document.txt`, `normalized.json`, `chunks.json`, and
-`manifest.json`.
+contains `document.md`, `document_metadata.json`, and `rag_chunks.jsonl`.
+`document.html` is created only when `include_html=true` is sent with the
+ingest request.
 
 ## Troubleshooting
 

@@ -19,7 +19,7 @@ flowchart LR
     Dispatcher --> Elastic["Official Elasticsearch Python client<br/>helpers.bulk"]
 
     Docling --> Models["Docling models<br/>Layout, OCR, tables, pictures, VLM"]
-    Storage --> Outputs["Parse artifacts<br/>normalized, markdown, text, chunks, embedding JSONL, confidence"]
+    Storage --> Outputs["Parse artifacts<br/>document.md, document_metadata.json,<br/>rag_chunks.jsonl, optional document.html"]
 ```
 
 ## Component View
@@ -34,12 +34,11 @@ flowchart TB
         FileIngestion["FileIngestionService"]
         ParseService["DocumentParseService"]
         Chunking["DocumentChunkingService"]
-        Embedding["EmbeddingRecordService"]
         OutputRetrieval["OutputRetrievalService"]
         JobQuery["JobQueryService"]
         ParserWorkers["ParserWorkerService"]
-        DispatchQueue["EmbeddingQueueService<br/>(full-document dispatch queue)"]
-        DispatchService["EmbeddingDispatchService<br/>(dispatcher coordinator)"]
+        DispatchQueue["ParsedDocumentDispatchQueueService<br/>(full-document dispatch queue)"]
+        DispatchService["ParsedDocumentDispatchService<br/>(dispatcher coordinator)"]
         Registry["ParserRegistry"]
     end
 
@@ -48,7 +47,7 @@ flowchart TB
         WriterPort["ParseOutputWriter"]
         UploadPort["UploadStorage"]
         JobRepoPort["IngestionJobRepository"]
-        DispatchPort["EmbeddingDispatcher<br/>(Elastic sink port)"]
+        DispatchPort["ParsedDocumentDispatchSink<br/>(Elastic sink port)"]
     end
 
     subgraph Infrastructure["Infrastructure Adapters"]
@@ -59,7 +58,7 @@ flowchart TB
         Writer["LocalParseOutputWriter"]
         Uploads["LocalUploadStorage"]
         SQLite["SqliteIngestionJobRepository"]
-        ElasticDispatch["ElasticEmbeddingDispatcher"]
+        ElasticDispatch["ElasticParsedDocumentDispatchSink"]
     end
 
     subgraph Config["Configuration"]
@@ -78,7 +77,6 @@ flowchart TB
     ParserWorkers --> DispatchService
     ParseService --> Registry
     ParseService --> Chunking
-    ParseService --> Embedding
     ParseService --> WriterPort
 
     Registry --> ParserPort
@@ -136,17 +134,17 @@ sequenceDiagram
     Parser-->>Worker: "ParseOutput"
     Worker->>Chunker: "Build configured RAG chunks"
     Chunker-->>Worker: "DocumentChunk list"
-    Worker->>Queue: "Enqueue full parsed document"
+    Worker->>Queue: "Enqueue parsed-document dispatch item"
     Queue->>Jobs: "status = dispatch_queued"
     Dispatch->>Queue: "Drain up to INGEST_DISPATCH_MAX_BULK_SIZE documents"
     Dispatch->>Jobs: "status = dispatching"
     opt "INGEST_DISPATCH_SINK_MODE includes local"
-        Dispatch->>Writer: "Write local artifacts"
+        Dispatch->>Writer: "Write minimal local artifacts"
         Writer-->>Dispatch: "OutputFiles"
         Dispatch->>Jobs: "status = stored_local"
     end
     opt "INGEST_DISPATCH_SINK_MODE includes elastic"
-        Dispatch->>Elastic: "Bulk one item per chunk"
+        Dispatch->>Elastic: "Bulk one item per RAG record"
         Elastic-->>Dispatch: "bulk success or item errors"
     end
     Dispatch->>Jobs: "status = completed or failed"
@@ -156,11 +154,11 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    Parsed["Parsed full document<br/>ParseOutput + chunks + embedding records"] --> Queue["Process-local dispatch queue<br/>bounded depth and payload size"]
+    Parsed["Parsed document content<br/>markdown + metadata + RAG records"] --> Queue["Process-local dispatch queue<br/>bounded depth and payload size"]
     Queue --> Bulk{"Up to<br/>INGEST_DISPATCH_MAX_BULK_SIZE docs"}
-    Bulk --> Store["Optional local sink<br/>normalized, markdown, chunks, confidence"]
-    Bulk --> ChunkDocs["Dispatcher creates<br/>1 chunk = 1 ES document"]
-    ChunkDocs --> Submit["ElasticEmbeddingDispatcher<br/>official Python client"]
+    Bulk --> Store["Optional local sink<br/>markdown, metadata, RAG JSONL, optional HTML"]
+    Bulk --> ChunkDocs["Dispatcher sends<br/>1 RAG record = 1 ES document"]
+    ChunkDocs --> Submit["ElasticParsedDocumentDispatchSink<br/>official Python client"]
     Submit --> BulkCall["helpers.bulk"]
     BulkCall --> Done{"Bulk succeeded?"}
     Done -->|Yes| CompletedState["completed"]
@@ -194,21 +192,12 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    ParseOutput["ParseOutput"] --> Normalized["ParsedDocument<br/>normalized.json"]
-    ParseOutput --> Raw["raw_docling.json"]
-    ParseOutput --> Markdown["document.md"]
-    ParseOutput --> Text["document.txt"]
-    ParseOutput --> Html["document.html"]
-    ParseOutput --> Confidence["confidence.json"]
-
-    Normalized --> Chunks["chunks.json"]
-    Chunks --> Embedding["embedding_input.jsonl"]
-    Confidence --> Manifest["manifest.json"]
-    Embedding --> Manifest
-    Raw --> Manifest
-    Markdown --> Manifest
-    Text --> Manifest
-    Html --> Manifest
+    ParseOutput["ParseOutput<br/>transient parser adapter result"] --> Content["ParsedDocumentContent"]
+    Content --> Markdown["document.md"]
+    Content --> Metadata["document_metadata.json"]
+    Content --> Rag["rag_chunks.jsonl"]
+    Content --> Html["document.html<br/>only when requested"]
+    Rag --> Elastic["Elastic chunk/document indexing"]
 ```
 
 ## Deployment View

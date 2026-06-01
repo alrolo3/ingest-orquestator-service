@@ -67,7 +67,7 @@ def test_env_example_loads() -> None:
     assert settings.docling_vlm_trust_remote_code is False
     assert settings.docling_remote_llm_page_batch_size == 8
     assert settings.queue_backend == "local"
-    assert settings.rabbitmq_url == "amqp://guest:guest@localhost:5672//"
+    assert settings.rabbitmq_url == "amqp://guest:guest@localhost:5672/%2F"
     assert settings.dramatiq_parser_queue_name == "ingest_parser_jobs"
     assert settings.dramatiq_dispatch_queue_name == "ingest_dispatch_jobs"
     assert settings.parser_worker_count == 2
@@ -217,7 +217,7 @@ def test_settings_reject_dispatch_bulk_size_over_five() -> None:
         Settings(dispatch_max_bulk_size=6)
 
 
-def test_settings_embedding_queue_config_redacts_password() -> None:
+def test_settings_dispatch_config_redacts_password() -> None:
     settings = Settings(
         embedding_elastic_url="https://elastic.example:9200",
         embedding_elastic_username="user",

@@ -96,6 +96,29 @@ class SqliteIngestionJobRepository:
             ).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def count_by_status(self) -> dict[str, int]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT status, COUNT(*) AS count FROM ingestion_jobs GROUP BY status"
+            ).fetchall()
+        return {str(row["status"]): int(row["count"]) for row in rows}
+
+    def list_recent_by_status(self, statuses: set[str], *, limit: int) -> list[IngestionJob]:
+        if not statuses or limit <= 0:
+            return []
+        placeholders = ",".join("?" for _ in statuses)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM ingestion_jobs
+                WHERE status IN ({placeholders})
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (*tuple(statuses), limit),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute(

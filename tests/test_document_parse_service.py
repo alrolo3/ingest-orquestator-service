@@ -30,10 +30,11 @@ def test_parse_file_can_disable_chunking(tmp_path: Path) -> None:
         chunking_enabled=False,
     )
 
-    assert result.chunks == []
-    assert result.embedding_records == []
+    assert len(result.content.rag_records) == 1
+    assert result.content.rag_records[0].record_type == "document"
     assert result.outputs.chunks_json is None
     assert result.outputs.embedding_input_jsonl is None
+    assert result.outputs.rag_chunks_jsonl is not None
     assert result.diagnostics.metadata["chunking_enabled"] is False
 
 
@@ -52,12 +53,37 @@ def test_parse_files_uses_docling_batch_path(tmp_path: Path) -> None:
         pipeline="auto",
     )
 
-    assert [result.parse_output.document.source_file_name for result in results] == [
+    assert [result.content.metadata["source_file_name"] for result in results] == [
         "first.md",
         "second.md",
     ]
-    assert all(result.outputs.manifest_json.exists() for result in results)
+    assert all(result.outputs.document_metadata_json.exists() for result in results)
+    assert all(result.outputs.rag_chunks_jsonl.exists() for result in results)
     assert all(result.diagnostics.metadata["pipeline"] == "standard" for result in results)
+
+
+def test_parse_file_only_writes_html_when_requested(tmp_path: Path) -> None:
+    input_path = tmp_path / "example.md"
+    input_path.write_text("# Example\n", encoding="utf-8")
+    settings = Settings(storage_dir=tmp_path, docling_allowed_formats=["md"])
+    service = _build_service(settings)
+
+    without_html = service.parse_file(
+        file_path=input_path,
+        parser_name="docling",
+        output_root=tmp_path / "outputs-no-html",
+    )
+    with_html = service.parse_file(
+        file_path=input_path,
+        parser_name="docling",
+        output_root=tmp_path / "outputs-html",
+        include_html=True,
+    )
+
+    assert without_html.content.html is None
+    assert without_html.outputs.html is None
+    assert with_html.content.html == "<h1>Example</h1>"
+    assert with_html.outputs.html is not None
 
 
 def _build_service(settings: Settings) -> DocumentParseService:

@@ -12,12 +12,6 @@ from ingest_orquestator_server.application.services.document_chunking_service im
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
-from ingest_orquestator_server.application.services.embedding_dispatch_service import (
-    EmbeddingDispatchService,
-)
-from ingest_orquestator_server.application.services.embedding_queue_service import (
-    EmbeddingQueueService,
-)
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
 )
@@ -25,8 +19,17 @@ from ingest_orquestator_server.application.services.job_query_service import Job
 from ingest_orquestator_server.application.services.output_retrieval_service import (
     OutputRetrievalService,
 )
+from ingest_orquestator_server.application.services.parsed_document_dispatch_queue_service import (
+    ParsedDocumentDispatchQueueService,
+)
+from ingest_orquestator_server.application.services.parsed_document_dispatch_service import (
+    ParsedDocumentDispatchService,
+)
 from ingest_orquestator_server.application.services.parser_worker_service import (
     ParserWorkerService,
+)
+from ingest_orquestator_server.application.services.queue_metrics_service import (
+    QueueMetricsService,
 )
 from ingest_orquestator_server.application.services.storage_cleanup_service import (
     StorageCleanupService,
@@ -40,8 +43,8 @@ from ingest_orquestator_server.infrastructure.docling.docling_engine import (
     DoclingConversionScheduler,
     DoclingEngineRegistry,
 )
-from ingest_orquestator_server.infrastructure.elastic.elastic_embedding_dispatcher import (
-    ElasticEmbeddingDispatcher,
+from ingest_orquestator_server.infrastructure.elastic.elastic_chunk_index_dispatch_sink import (
+    ElasticChunkIndexDispatchSink,
 )
 from ingest_orquestator_server.infrastructure.filesystem.local_parse_output_writer import (
     LocalParseOutputWriter,
@@ -62,10 +65,12 @@ from ingest_orquestator_server.infrastructure.sqlite.sqlite_ingestion_job_reposi
 
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 
-_embedding_queue_service: EmbeddingQueueService | None = None
-_embedding_queue_key: tuple[int, int, int | None] | None = None
-_embedding_dispatch_service: EmbeddingDispatchService | None = None
-_embedding_dispatch_key: tuple[str, int, int, int | None, int, str, str, str, str] | None = None
+_parsed_document_dispatch_queue_service: ParsedDocumentDispatchQueueService | None = None
+_parsed_document_dispatch_queue_key: tuple[int, int, int | None] | None = None
+_parsed_document_dispatch_service: ParsedDocumentDispatchService | None = None
+_parsed_document_dispatch_key: (
+    tuple[str, int, int, int | None, int, str, str, str, str] | None
+) = None
 _parser_worker_service: ParserWorkerService | None = None
 _parser_worker_key: tuple[int, str] | None = None
 _job_queue_publisher: JobQueuePublisher | None = None
@@ -142,21 +147,26 @@ def get_document_parse_service(
     )
 
 
-def get_embedding_queue_service(settings: SettingsDependency) -> EmbeddingQueueService:
-    global _embedding_queue_key, _embedding_queue_service
+def get_parsed_document_dispatch_queue_service(
+    settings: SettingsDependency,
+) -> ParsedDocumentDispatchQueueService:
+    global _parsed_document_dispatch_queue_key, _parsed_document_dispatch_queue_service
     key = (
         settings.dispatch_max_bulk_size,
         settings.dispatch_queue_max_size,
         settings.dispatch_queue_max_payload_bytes,
     )
-    if _embedding_queue_service is None or _embedding_queue_key != key:
-        _embedding_queue_service = EmbeddingQueueService(
+    if (
+        _parsed_document_dispatch_queue_service is None
+        or _parsed_document_dispatch_queue_key != key
+    ):
+        _parsed_document_dispatch_queue_service = ParsedDocumentDispatchQueueService(
             max_bulk_size=settings.dispatch_max_bulk_size,
             max_size=settings.dispatch_queue_max_size,
             max_payload_bytes=settings.dispatch_queue_max_payload_bytes,
         )
-        _embedding_queue_key = key
-    return _embedding_queue_service
+        _parsed_document_dispatch_queue_key = key
+    return _parsed_document_dispatch_queue_service
 
 
 def get_job_queue_publisher(settings: SettingsDependency) -> JobQueuePublisher | None:
@@ -175,11 +185,11 @@ def get_job_queue_publisher(settings: SettingsDependency) -> JobQueuePublisher |
     return _job_queue_publisher
 
 
-def get_embedding_dispatch_service(
+def get_parsed_document_dispatch_service(
     settings: SettingsDependency,
     queue_service: Annotated[
-        EmbeddingQueueService,
-        Depends(get_embedding_queue_service),
+        ParsedDocumentDispatchQueueService,
+        Depends(get_parsed_document_dispatch_queue_service),
     ],
     job_repository: Annotated[
         SqliteIngestionJobRepository,
@@ -189,8 +199,8 @@ def get_embedding_dispatch_service(
         JobQueuePublisher | None,
         Depends(get_job_queue_publisher),
     ],
-) -> EmbeddingDispatchService:
-    global _embedding_dispatch_key, _embedding_dispatch_service
+) -> ParsedDocumentDispatchService:
+    global _parsed_document_dispatch_key, _parsed_document_dispatch_service
     key = (
         settings.dispatch_sink_mode,
         settings.dispatch_max_bulk_size,
@@ -202,19 +212,22 @@ def get_embedding_dispatch_service(
         settings.dramatiq_parser_queue_name,
         settings.dramatiq_dispatch_queue_name,
     )
-    if _embedding_dispatch_service is None or _embedding_dispatch_key != key:
-        _embedding_dispatch_service = EmbeddingDispatchService(
+    if (
+        _parsed_document_dispatch_service is None
+        or _parsed_document_dispatch_key != key
+    ):
+        _parsed_document_dispatch_service = ParsedDocumentDispatchService(
             settings=settings,
             queue_service=queue_service,
-            dispatcher=ElasticEmbeddingDispatcher(settings),
+            dispatcher=ElasticChunkIndexDispatchSink(settings),
             job_repository=job_repository,
             output_writer=LocalParseOutputWriter(),
             dispatch_job_queue=job_queue_publisher,
         )
-        _embedding_dispatch_key = key
+        _parsed_document_dispatch_key = key
     if settings.queue_backend == "local":
-        _embedding_dispatch_service.start()
-    return _embedding_dispatch_service
+        _parsed_document_dispatch_service.start()
+    return _parsed_document_dispatch_service
 
 
 def get_parser_worker_service(
@@ -228,8 +241,8 @@ def get_parser_worker_service(
         Depends(get_job_repository),
     ],
     dispatch_service: Annotated[
-        EmbeddingDispatchService,
-        Depends(get_embedding_dispatch_service),
+        ParsedDocumentDispatchService,
+        Depends(get_parsed_document_dispatch_service),
     ],
 ) -> ParserWorkerService:
     global _parser_worker_key, _parser_worker_service
@@ -262,9 +275,9 @@ def get_file_ingestion_service(
         ParserRequestValidator,
         Depends(get_parser_request_validator),
     ],
-    embedding_dispatch_service: Annotated[
-        EmbeddingDispatchService,
-        Depends(get_embedding_dispatch_service),
+    parsed_document_dispatch_service: Annotated[
+        ParsedDocumentDispatchService,
+        Depends(get_parsed_document_dispatch_service),
     ],
     parser_worker_service: Annotated[
         ParserWorkerService,
@@ -282,7 +295,7 @@ def get_file_ingestion_service(
         job_repository=job_repository,
         upload_validator=upload_validator,
         parser_request_validator=parser_request_validator,
-        embedding_dispatch_service=embedding_dispatch_service,
+        parsed_document_dispatch_service=parsed_document_dispatch_service,
         parser_worker_service=parser_worker_service,
         parser_job_queue=job_queue_publisher,
     )
@@ -292,6 +305,24 @@ def get_job_query_service(
     job_repository: Annotated[SqliteIngestionJobRepository, Depends(get_job_repository)],
 ) -> JobQueryService:
     return JobQueryService(job_repository)
+
+
+def get_queue_metrics_service(
+    settings: SettingsDependency,
+    job_repository: Annotated[
+        SqliteIngestionJobRepository,
+        Depends(get_job_repository),
+    ],
+    parsed_document_dispatch_service: Annotated[
+        ParsedDocumentDispatchService,
+        Depends(get_parsed_document_dispatch_service),
+    ],
+) -> QueueMetricsService:
+    return QueueMetricsService(
+        settings=settings,
+        job_repository=job_repository,
+        dispatch_service=parsed_document_dispatch_service,
+    )
 
 
 def get_output_retrieval_service(
@@ -310,8 +341,8 @@ def get_storage_cleanup_service(
 def shutdown_background_services() -> None:
     if _parser_worker_service is not None:
         _parser_worker_service.shutdown()
-    if _embedding_dispatch_service is not None:
-        _embedding_dispatch_service.stop()
+    if _parsed_document_dispatch_service is not None:
+        _parsed_document_dispatch_service.stop()
 
 
 def warmup_docling_engines(settings: Settings | None = None) -> None:

@@ -3,6 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from ingest_orquestator_server.api.dependencies import get_docling_conversion_scheduler
+from ingest_orquestator_server.application.services.ingestion_request_options import (
+    DEFAULT_OCR_LANGUAGE_OPTIONS,
+    DISPATCH_SINK_MODES,
+)
 from ingest_orquestator_server.config.settings import Settings, get_settings
 from ingest_orquestator_server.infrastructure.docling.docling_engine import (
     DoclingConversionScheduler,
@@ -50,6 +54,28 @@ def ingestion_capabilities(
         ],
         "default_parser": "docling",
         "default_pipeline": settings.docling_pipeline,
+        "default_dispatch_sink_mode": settings.dispatch_sink_mode,
+        "dispatchers": [
+            {
+                "value": value,
+                "label": value.replace("_", " ").title(),
+                "default": value == settings.dispatch_sink_mode,
+            }
+            for value in DISPATCH_SINK_MODES
+        ],
+        "ocr": {
+            "enabled": settings.docling_pdf_do_ocr,
+            "engine": settings.docling_pdf_ocr_engine,
+            "default_languages": settings.docling_pdf_ocr_languages,
+            "languages": [
+                {
+                    "value": value,
+                    "label": label,
+                    "default": value in settings.docling_pdf_ocr_languages,
+                }
+                for value, label in DEFAULT_OCR_LANGUAGE_OPTIONS
+            ],
+        },
         "chunking": {
             "enabled": settings.chunking_enabled,
             "default_strategy": settings.chunking_strategy,
@@ -83,15 +109,10 @@ def ingestion_capabilities(
             "ocr_engine": settings.docling_pdf_ocr_engine,
         },
         "output_types": [
-            "manifest",
-            "normalized",
+            "metadata",
             "markdown",
-            "text",
-            "raw",
+            "rag",
             "html",
-            "chunks",
-            "embedding",
-            "confidence",
         ],
         "job_statuses": [
             "parser_queued",

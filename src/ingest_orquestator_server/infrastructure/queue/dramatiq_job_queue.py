@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from ingest_orquestator_server.config.settings import Settings
-from ingest_orquestator_server.models.embedding_queue import EmbeddingQueueItem
+from ingest_orquestator_server.models.parsed_document_dispatch import (
+    ParsedDocumentDispatchItem,
+)
 
 
 class ActorSender(Protocol):
@@ -32,5 +34,5 @@ class DramatiqJobQueuePublisher:
     def enqueue_parser_job(self, job_id: str) -> None:
         self._parser_actor.send(job_id)
 
-    def enqueue_dispatch_job(self, item: EmbeddingQueueItem) -> None:
+    def enqueue_dispatch_job(self, item: ParsedDocumentDispatchItem) -> None:
         self._dispatch_actor.send(item.model_dump(mode="json"))

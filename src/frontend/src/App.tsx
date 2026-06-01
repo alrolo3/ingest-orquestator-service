@@ -1,5 +1,7 @@
 import {
+  Activity,
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   Copy,
   Download,
@@ -18,6 +20,7 @@ import {
   defaultApiBaseUrl,
   getCapabilities,
   getJobs,
+  getQueueMetrics,
   outputUrl,
   uploadFiles,
 } from "./api";
@@ -39,6 +42,8 @@ import type {
   IngestionJob,
   IngestionOptions,
   JobStatus,
+  QueueMetrics,
+  QueueStageMetrics,
   TrackedJob,
 } from "./types";
 
@@ -50,8 +55,11 @@ const defaultOptions: IngestionOptions = {
   pipeline: "standard",
   chunkingEnabled: true,
   chunkingStrategy: "hybrid",
+  dispatchSinkMode: "local",
+  ocrLanguages: ["en"],
   asyncMode: false,
   includeDocument: true,
+  includeHtml: false,
 };
 
 function App() {
@@ -62,6 +70,9 @@ function App() {
   const [jobs, setJobs] = useState<TrackedJob[]>(() => restoreJobs());
   const [options, setOptions] = useState<IngestionOptions>(() => restoreOptions());
   const [submitting, setSubmitting] = useState(false);
+  const [activeView, setActiveView] = useState<"documents" | "metrics">("documents");
+  const [queueMetrics, setQueueMetrics] = useState<QueueMetrics | null>(null);
+  const [queueMetricsError, setQueueMetricsError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "completed" | "failed">(
     "all",
   );
@@ -82,6 +93,9 @@ function App() {
           pipeline: current.pipeline || data.default_pipeline,
           chunkingEnabled: current.chunkingEnabled ?? data.chunking.enabled,
           chunkingStrategy: current.chunkingStrategy || data.chunking.default_strategy,
+          dispatchSinkMode: current.dispatchSinkMode || data.default_dispatch_sink_mode,
+          ocrLanguages:
+            current.ocrLanguages?.length > 0 ? current.ocrLanguages : data.ocr.default_languages,
         }));
       })
       .catch((error: Error) => {
@@ -142,6 +156,40 @@ function App() {
       window.clearInterval(interval);
     };
   }, [apiBaseUrl]);
+
+  useEffect(() => {
+    if (activeView !== "metrics") {
+      return;
+    }
+    let cancelled = false;
+    let inFlight = false;
+    const poll = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
+      try {
+        const metrics = await getQueueMetrics(apiBaseUrl, 20);
+        if (!cancelled) {
+          setQueueMetrics(metrics);
+          setQueueMetricsError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setQueueMetricsError((error as Error).message);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void poll();
+    const interval = window.setInterval(poll, jobPollingIntervalMs);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeView, apiBaseUrl]);
 
   const filteredJobs = useMemo(
     () =>
@@ -260,6 +308,16 @@ function App() {
     );
   }
 
+  async function refreshQueueMetrics() {
+    try {
+      const metrics = await getQueueMetrics(apiBaseUrl, 20);
+      setQueueMetrics(metrics);
+      setQueueMetricsError(null);
+    } catch (error) {
+      setQueueMetricsError((error as Error).message);
+    }
+  }
+
   return (
     <main>
       <header className="app-header">
@@ -267,83 +325,111 @@ function App() {
           <p className="eyebrow">Open-RAG ingestion</p>
           <h1>Ingest Orquestator</h1>
         </div>
-        <div className="server-strip">
-          <Server size={18} aria-hidden="true" />
-          <span>{apiBaseUrl}</span>
-          <StatusDot ok={!capabilityError} />
+        <div className="header-actions">
+          <nav className="app-nav" aria-label="Workspace views">
+            <button
+              className={activeView === "documents" ? "active" : ""}
+              type="button"
+              onClick={() => setActiveView("documents")}
+            >
+              <FileText size={16} aria-hidden="true" />
+              Documents
+            </button>
+            <button
+              className={activeView === "metrics" ? "active" : ""}
+              type="button"
+              onClick={() => setActiveView("metrics")}
+            >
+              <BarChart3 size={16} aria-hidden="true" />
+              Queue metrics
+            </button>
+          </nav>
+          <div className="server-strip">
+            <Server size={18} aria-hidden="true" />
+            <span>{apiBaseUrl}</span>
+            <StatusDot ok={!capabilityError && !queueMetricsError} />
+          </div>
         </div>
       </header>
 
-      <section className="workspace">
-        <UploadPanel
-          capabilities={capabilities}
-          capabilityError={capabilityError}
-          files={files}
-          options={options}
-          submitting={submitting}
-          onAddFiles={addFiles}
-          onRemoveFile={removeFile}
-          onOptionsChange={setOptions}
-          onSubmit={submit}
-        />
+      {activeView === "documents" ? (
+        <section className="workspace">
+          <UploadPanel
+            capabilities={capabilities}
+            capabilityError={capabilityError}
+            files={files}
+            options={options}
+            submitting={submitting}
+            onAddFiles={addFiles}
+            onRemoveFile={removeFile}
+            onOptionsChange={setOptions}
+            onSubmit={submit}
+          />
 
-        <section className="dashboard" aria-label="Ingestion jobs">
-          <div className="dashboard-toolbar">
-            <div className="summary-grid">
-              <SummaryCell label="Total" value={summary.total} />
-              <SummaryCell label="Active" value={summary.active} />
-              <SummaryCell label="Done" value={summary.completed} />
-              <SummaryCell label="Failed" value={summary.failed} tone="danger" />
+          <section className="dashboard" aria-label="Ingestion jobs">
+            <div className="dashboard-toolbar">
+              <div className="summary-grid">
+                <SummaryCell label="Total" value={summary.total} />
+                <SummaryCell label="Active" value={summary.active} />
+                <SummaryCell label="Done" value={summary.completed} />
+                <SummaryCell label="Failed" value={summary.failed} tone="danger" />
+              </div>
+              <div className="toolbar-actions">
+                <FilterButton active={activeFilter === "all"} onClick={() => setActiveFilter("all")}>
+                  All
+                </FilterButton>
+                <FilterButton
+                  active={activeFilter === "active"}
+                  onClick={() => setActiveFilter("active")}
+                >
+                  Active
+                </FilterButton>
+                <FilterButton
+                  active={activeFilter === "completed"}
+                  onClick={() => setActiveFilter("completed")}
+                >
+                  Done
+                </FilterButton>
+                <FilterButton
+                  active={activeFilter === "failed"}
+                  onClick={() => setActiveFilter("failed")}
+                >
+                  Failed
+                </FilterButton>
+                <button className="icon-button" type="button" onClick={clearFinished}>
+                  <X size={16} aria-hidden="true" />
+                  Clear done
+                </button>
+              </div>
             </div>
-            <div className="toolbar-actions">
-              <FilterButton active={activeFilter === "all"} onClick={() => setActiveFilter("all")}>
-                All
-              </FilterButton>
-              <FilterButton
-                active={activeFilter === "active"}
-                onClick={() => setActiveFilter("active")}
-              >
-                Active
-              </FilterButton>
-              <FilterButton
-                active={activeFilter === "completed"}
-                onClick={() => setActiveFilter("completed")}
-              >
-                Done
-              </FilterButton>
-              <FilterButton
-                active={activeFilter === "failed"}
-                onClick={() => setActiveFilter("failed")}
-              >
-                Failed
-              </FilterButton>
-              <button className="icon-button" type="button" onClick={clearFinished}>
-                <X size={16} aria-hidden="true" />
-                Clear done
-              </button>
-            </div>
-          </div>
 
-          {filteredJobs.length === 0 ? (
-            <div className="empty-state">
-              <FileText size={22} aria-hidden="true" />
-              <span>No jobs in this view.</span>
-            </div>
-          ) : (
-            <div className="job-list">
-              {filteredJobs.map((tracked) => (
-                <JobPanel
-                  key={tracked.local_id}
-                  apiBaseUrl={apiBaseUrl}
-                  capabilities={capabilities}
-                  tracked={tracked}
-                  onRetry={retry}
-                />
-              ))}
-            </div>
-          )}
+            {filteredJobs.length === 0 ? (
+              <div className="empty-state">
+                <FileText size={22} aria-hidden="true" />
+                <span>No jobs in this view.</span>
+              </div>
+            ) : (
+              <div className="job-list">
+                {filteredJobs.map((tracked) => (
+                  <JobPanel
+                    key={tracked.local_id}
+                    apiBaseUrl={apiBaseUrl}
+                    capabilities={capabilities}
+                    tracked={tracked}
+                    onRetry={retry}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         </section>
-      </section>
+      ) : (
+        <QueueMetricsView
+          error={queueMetricsError}
+          metrics={queueMetrics}
+          onRefresh={refreshQueueMetrics}
+        />
+      )}
     </main>
   );
 }
@@ -481,6 +567,35 @@ function UploadPanel(props: UploadPanelProps) {
             }
             disabled={!options.chunkingEnabled}
           />
+          <SelectField
+            label="Dispatcher"
+            value={options.dispatchSinkMode}
+            options={
+              capabilities?.dispatchers ?? [
+                { value: "local", label: "Local" },
+                { value: "elastic", label: "Elastic" },
+                { value: "local_and_elastic", label: "Local And Elastic" },
+              ]
+            }
+            onChange={(value) =>
+              onOptionsChange({
+                ...options,
+                dispatchSinkMode: value as IngestionOptions["dispatchSinkMode"],
+              })
+            }
+          />
+          <SelectField
+            label="OCR language"
+            value={options.ocrLanguages[0] ?? "en"}
+            options={
+              capabilities?.ocr.languages ?? [
+                { value: "en", label: "English" },
+                { value: "es", label: "Spanish" },
+              ]
+            }
+            onChange={(value) => onOptionsChange({ ...options, ocrLanguages: [value] })}
+            disabled={capabilities?.ocr.enabled === false}
+          />
         </div>
         <div className="toggle-row">
           <Toggle
@@ -492,6 +607,11 @@ function UploadPanel(props: UploadPanelProps) {
             checked={options.includeDocument}
             label="Include document"
             onChange={(checked) => onOptionsChange({ ...options, includeDocument: checked })}
+          />
+          <Toggle
+            checked={options.includeHtml}
+            label="HTML output"
+            onChange={(checked) => onOptionsChange({ ...options, includeHtml: checked })}
           />
           <Toggle
             checked={options.asyncMode}
@@ -644,10 +764,15 @@ function MetadataPanel({ apiBaseUrl, capabilities, job, metadata }: MetadataPane
     "pipeline",
     "profile",
     "ocr_engine",
+    "ocr_languages",
+    "requested_ocr_languages",
+    "requested_dispatch_sink_mode",
     "vlm_model",
     "vlm_runtime",
     "chunking_enabled",
     "chunking_strategy",
+    "include_html",
+    "rag_record_count",
     "embedding_record_count",
     "page_count",
     "element_count",
@@ -656,15 +781,8 @@ function MetadataPanel({ apiBaseUrl, capabilities, job, metadata }: MetadataPane
     "warning_count",
   ];
   const confidence = metadata.confidence_summary;
-  const outputTypes = capabilities?.output_types ?? [
-    "manifest",
-    "normalized",
-    "markdown",
-    "text",
-    "chunks",
-    "embedding",
-    "confidence",
-  ];
+  const supportedOutputTypes = capabilities?.output_types ?? ["metadata", "markdown", "rag", "html"];
+  const outputTypes = supportedOutputTypes.filter((type) => hasOutput(job, type));
 
   return (
     <div className="metadata-grid">
@@ -704,6 +822,115 @@ function MetadataPanel({ apiBaseUrl, capabilities, job, metadata }: MetadataPane
   );
 }
 
+function QueueMetricsView({
+  error,
+  metrics,
+  onRefresh,
+}: {
+  error: string | null;
+  metrics: QueueMetrics | null;
+  onRefresh: () => void;
+}) {
+  const stages = metrics?.stages ?? [];
+  const stageCount = (name: string) => stages.find((stage) => stage.name === name)?.count ?? 0;
+  const active =
+    stageCount("parser_queue") +
+    stageCount("parser_workers") +
+    stageCount("dispatch_queue") +
+    stageCount("dispatcher_workers");
+
+  return (
+    <section className="metrics-page" aria-label="Queue metrics">
+      <div className="dashboard-toolbar">
+        <div className="summary-grid">
+          <SummaryCell label="Active" value={active} />
+          <SummaryCell label="Parser queue" value={stageCount("parser_queue")} />
+          <SummaryCell label="Dispatch queue" value={stageCount("dispatch_queue")} />
+          <SummaryCell label="Failed" value={stageCount("failed")} tone="danger" />
+        </div>
+        <button className="icon-button" type="button" onClick={onRefresh}>
+          <RefreshCw size={16} aria-hidden="true" />
+          Refresh
+        </button>
+      </div>
+
+      {error ? (
+        <div className="notice danger">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      {metrics ? (
+        <>
+          <div className="runtime-grid">
+            <RuntimeCell label="Backend" value={metrics.queue_backend} />
+            <RuntimeCell label="Parser queue" value={metrics.parser_queue_name} />
+            <RuntimeCell label="Dispatch queue" value={metrics.dispatch_queue_name} />
+            <RuntimeCell label="Parser workers" value={String(metrics.parser_worker_count)} />
+            <RuntimeCell label="Dispatch workers" value={String(metrics.dispatch_worker_count)} />
+            {metrics.dispatch_queue ? (
+              <RuntimeCell
+                label="In-memory dispatch"
+                value={`${metrics.dispatch_queue.queued_count} queued / ${metrics.dispatch_queue.in_flight_count} active`}
+              />
+            ) : null}
+          </div>
+
+          <div className="queue-stage-grid">
+            {stages.map((stage) => (
+              <QueueStageCard key={stage.name} stage={stage} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="empty-state">
+          <Activity size={22} aria-hidden="true" />
+          <span>Loading queue metrics.</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function QueueStageCard({ stage }: { stage: QueueStageMetrics }) {
+  return (
+    <article className="queue-stage-card">
+      <div className="queue-stage-head">
+        <div>
+          <h2>{stageLabel(stage.name)}</h2>
+          <span>{stage.statuses.map(statusLabel).join(", ")}</span>
+        </div>
+        <strong>{stage.count}</strong>
+      </div>
+      {stage.jobs.length === 0 ? (
+        <p className="muted">No recent jobs.</p>
+      ) : (
+        <ul className="queue-job-list">
+          {stage.jobs.map((job) => (
+            <li key={job.job_id}>
+              <div>
+                <strong>{job.source_file_name ?? job.document_id ?? job.job_id}</strong>
+                <code>{job.job_id}</code>
+              </div>
+              <span className="status-pill">{statusLabel(job.status)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
+
+function RuntimeCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="runtime-cell">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function FragmentEntry({ keyName, value }: { keyName: string; value: unknown }) {
   return (
     <>
@@ -711,6 +938,10 @@ function FragmentEntry({ keyName, value }: { keyName: string; value: unknown }) 
       <dd>{metadataValue(value)}</dd>
     </>
   );
+}
+
+function stageLabel(name: string): string {
+  return name.replaceAll("_", " ");
 }
 
 function SelectField({
@@ -844,6 +1075,47 @@ function validateFile(file: File, capabilities: IngestionCapabilities | null): s
     return `Over ${capabilities.max_upload_size_mb} MB`;
   }
   return null;
+}
+
+function hasOutput(job: IngestionJob, outputType: string): boolean {
+  const outputs = job.outputs;
+  if (!outputs) {
+    return false;
+  }
+  if (outputType === "metadata") {
+    return Boolean(outputs.document_metadata_json ?? outputs.manifest_json);
+  }
+  if (outputType === "rag") {
+    return Boolean(outputs.rag_chunks_jsonl);
+  }
+  if (outputType === "markdown") {
+    return Boolean(outputs.markdown);
+  }
+  if (outputType === "html") {
+    return Boolean(outputs.html);
+  }
+  if (outputType === "manifest") {
+    return Boolean(outputs.manifest_json);
+  }
+  if (outputType === "chunks") {
+    return Boolean(outputs.chunks_json);
+  }
+  if (outputType === "embedding") {
+    return Boolean(outputs.embedding_input_jsonl);
+  }
+  if (outputType === "normalized") {
+    return Boolean(outputs.normalized_json);
+  }
+  if (outputType === "text") {
+    return Boolean(outputs.text);
+  }
+  if (outputType === "raw") {
+    return Boolean(outputs.raw_docling_json);
+  }
+  if (outputType === "confidence") {
+    return Boolean(outputs.confidence_json);
+  }
+  return false;
 }
 
 export default App;
