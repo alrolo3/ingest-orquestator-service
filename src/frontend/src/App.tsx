@@ -12,6 +12,7 @@ import {
   Save,
   Server,
   Settings2,
+  Trash2,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState
 
 import {
   defaultApiBaseUrl,
+  deleteJob,
   getCapabilities,
   getIngestorSettings,
   getJobs,
@@ -86,6 +88,7 @@ function App() {
   const [ingestorSettings, setIngestorSettings] = useState<IngestorSettingsResponse | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [removingJobIds, setRemovingJobIds] = useState<Set<string>>(() => new Set());
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "completed" | "failed">(
     "all",
   );
@@ -342,6 +345,35 @@ function App() {
     setFiles([tracked.retained_file]);
   }
 
+  async function removeJob(tracked: TrackedJob) {
+    if (!tracked.job_id) {
+      setJobs((current) => current.filter((job) => job.local_id !== tracked.local_id));
+      return;
+    }
+    setRemovingJobIds((current) => new Set(current).add(tracked.job_id!));
+    try {
+      await deleteJob(tracked.job_id, apiBaseUrl);
+      setJobs((current) => current.filter((job) => job.local_id !== tracked.local_id));
+      if (activeView === "metrics") {
+        void refreshQueueMetrics();
+      }
+    } catch (error) {
+      setJobs((current) =>
+        current.map((job) =>
+          job.local_id === tracked.local_id
+            ? { ...job, upload_error: (error as Error).message }
+            : job,
+        ),
+      );
+    } finally {
+      setRemovingJobIds((current) => {
+        const next = new Set(current);
+        next.delete(tracked.job_id!);
+        return next;
+      });
+    }
+  }
+
   function clearFinished() {
     setJobs((current) =>
       current.filter((job) => {
@@ -490,7 +522,11 @@ function App() {
                     key={tracked.local_id}
                     apiBaseUrl={apiBaseUrl}
                     capabilities={capabilities}
+                    deleting={
+                      tracked.job_id !== undefined && removingJobIds.has(tracked.job_id)
+                    }
                     tracked={tracked}
+                    onRemove={removeJob}
                     onRetry={retry}
                   />
                 ))}
@@ -738,11 +774,20 @@ function UploadPanel(props: UploadPanelProps) {
 interface JobPanelProps {
   apiBaseUrl: string;
   capabilities: IngestionCapabilities | null;
+  deleting: boolean;
   tracked: TrackedJob;
+  onRemove: (tracked: TrackedJob) => void;
   onRetry: (tracked: TrackedJob) => void;
 }
 
-function JobPanel({ apiBaseUrl, capabilities, tracked, onRetry }: JobPanelProps) {
+function JobPanel({
+  apiBaseUrl,
+  capabilities,
+  deleting,
+  tracked,
+  onRemove,
+  onRetry,
+}: JobPanelProps) {
   const job = tracked.job;
   const status = job?.status ?? tracked.response?.status;
   const percent = progressPercent(job, status);
@@ -768,12 +813,27 @@ function JobPanel({ apiBaseUrl, capabilities, tracked, onRetry }: JobPanelProps)
             <span>{formatBytes(tracked.file_size)}</span>
           </div>
         </div>
-        <div
-          className={`status-pill ${
-            failed ? "danger" : completed ? "success" : status === "retrying" ? "retry" : ""
-          }`}
-        >
-          {statusLabel(status)}
+        <div className="job-head-actions">
+          <div
+            className={`status-pill ${
+              failed ? "danger" : completed ? "success" : status === "retrying" ? "retry" : ""
+            }`}
+          >
+            {statusLabel(status)}
+          </div>
+          <button
+            aria-label={`Remove job ${tracked.file_name}`}
+            className="icon-button danger"
+            disabled={deleting}
+            type="button"
+            onClick={() => onRemove(tracked)}
+          >
+            {deleting ? (
+              <Loader2 className="spin" size={16} aria-hidden="true" />
+            ) : (
+              <Trash2 size={16} aria-hidden="true" />
+            )}
+          </button>
         </div>
       </div>
 

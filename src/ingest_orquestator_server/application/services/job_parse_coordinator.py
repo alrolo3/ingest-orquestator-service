@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -96,6 +97,13 @@ class JobParseCoordinator:
                 "status": IngestionStatus.PARSING,
                 "started_at": (job.started_at or now) if preserve_existing_started_at else now,
                 "updated_at": now,
+                "metadata": job.metadata
+                | {
+                    "parser_runtime": {
+                        "pid": os.getpid(),
+                        "started_at": now.isoformat(),
+                    }
+                },
             }
         )
         self._job_repository.save(running_job)

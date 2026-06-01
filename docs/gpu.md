@@ -33,6 +33,17 @@ it. RemoteLLM uses a separate OpenAI-compatible inference endpoint for VLM
 calls; do not install vLLM in the API service venv unless this host also runs
 the external inference server.
 
+SuryaOCR imports OpenCV at runtime. On Ubuntu/Debian hosts, install the OpenCV
+runtime libraries before starting the API or workers:
+
+```bash
+sudo apt-get install -y \
+  libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libxcb1
+```
+
+The Docker images install these packages and run `import cv2` during build so
+missing native libraries such as `libxcb.so.1` fail fast.
+
 SuryaOCR currently requires `transformers>=4.57,<5`. If an existing venv has
 Transformers 5.x, reinstall the pinned dependency set:
 

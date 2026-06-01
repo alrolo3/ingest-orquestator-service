@@ -260,6 +260,73 @@ describe("App", () => {
     });
   });
 
+  it("removes a tracked job from the ingestor service", async () => {
+    const job = {
+      job_id: "job-1",
+      status: "parser_queued",
+      parser: "docling",
+      source_file_name: "example.pdf",
+      metadata: {},
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    localStorage.setItem(
+      "ingest-orquestator.frontend.jobs",
+      JSON.stringify([
+        {
+          local_id: "local-1",
+          file_name: "example.pdf",
+          file_size: 10,
+          submitted_at: "2026-01-01T00:00:00Z",
+          job_id: "job-1",
+          response: job,
+          job,
+        },
+      ]),
+    );
+    const fallbackFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/jobs?ids=")) {
+        return Promise.resolve(
+          new Response(JSON.stringify([job]), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      if (url.endsWith("/v1/ingest/jobs/job-1") && init?.method === "DELETE") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              job_id: "job-1",
+              previous_status: "parser_queued",
+              removed: true,
+              parser_process_terminated: false,
+              removed_dispatch_queue_item: false,
+              removed_artifact_count: 0,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
+      return fallbackFetch(input, init);
+    }));
+
+    render(<App />);
+
+    expect(await screen.findByText("example.pdf")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove job example.pdf" }));
+
+    await waitFor(() =>
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/v1/ingest/jobs/job-1",
+        { method: "DELETE" },
+      ),
+    );
+    expect(screen.queryByText("example.pdf")).not.toBeInTheDocument();
+  });
+
   it("renders chunking toggle before parser-dependent strategy options", async () => {
     render(<App />);
 

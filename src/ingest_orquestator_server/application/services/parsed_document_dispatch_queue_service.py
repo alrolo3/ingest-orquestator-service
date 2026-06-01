@@ -115,6 +115,14 @@ class ParsedDocumentDispatchQueueService:
             "Queue items must contain the full parsed document. Use enqueue_parse_result()."
         )
 
+    def remove_by_job_id(self, job_id: str) -> bool:
+        with self._lock:
+            queue_id = self._job_index.pop(job_id, None)
+            if queue_id is None:
+                return False
+            self._items.pop(queue_id, None)
+            return True
+
     def dequeue_batch(
         self, max_items: int | None = None
     ) -> list[ParsedDocumentDispatchItem]:

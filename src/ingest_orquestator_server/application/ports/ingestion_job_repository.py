@@ -12,6 +12,9 @@ class IngestionJobRepository(Protocol):
     def get(self, job_id: str) -> IngestionJob | None:
         """Return a job by id, or None when it does not exist."""
 
+    def delete(self, job_id: str) -> IngestionJob | None:
+        """Delete and return a job by id, or None when it does not exist."""
+
     def list_active_job_ids(self) -> set[str]:
         """Return jobs that should be protected from cleanup."""
 

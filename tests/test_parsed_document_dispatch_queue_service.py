@@ -73,6 +73,20 @@ def test_parsed_document_dispatch_payload_excludes_raw_parser_objects(
     assert "chunking_document" not in str(payload)
 
 
+def test_parsed_document_dispatch_queue_removes_item_by_job_id(
+    tmp_path: Path,
+) -> None:
+    service = ParsedDocumentDispatchQueueService(max_bulk_size=2)
+    service.enqueue_parse_result(_job(tmp_path, "job-1"), _parse_result("job-1"))
+
+    removed = service.remove_by_job_id("job-1")
+
+    assert removed is True
+    assert service.snapshot().queued_count == 0
+    assert service.dequeue_batch() == []
+    assert service.remove_by_job_id("missing") is False
+
+
 def _job(tmp_path: Path, job_id: str) -> IngestionJob:
     return IngestionJob(
         job_id=job_id,

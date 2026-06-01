@@ -214,6 +214,24 @@ class ParsedDocumentDispatchService:
         self, batch: list[ParsedDocumentDispatchItem], *, update_queue: bool
     ) -> int:
         started = perf_counter()
+        skipped_queue_ids = {
+            item.queue_id
+            for item in batch
+            if self._job_repository.get(item.job_id) is None
+        }
+        if skipped_queue_ids:
+            skipped = [item for item in batch if item.queue_id in skipped_queue_ids]
+            if update_queue:
+                self._queue_service.mark_completed(skipped)
+            log_stage(
+                "dispatch.skipped.deleted_job",
+                queue_ids=[item.queue_id for item in skipped],
+                job_ids=[item.job_id for item in skipped],
+            )
+            batch = [item for item in batch if item.queue_id not in skipped_queue_ids]
+            if not batch:
+                return 0
+
         for item in batch:
             self._save_item_state(item, IngestionStatus.DISPATCHING)
         sink_modes = self._sink_modes(batch)

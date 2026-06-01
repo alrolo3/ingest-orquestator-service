@@ -198,7 +198,17 @@ from this service's configuration.
 ## Docker Notes
 
 The GPU Dockerfile already uses the CUDA 13.2 PyTorch image and installs the
-default GPU requirements from `requirements.txt`.
+default GPU requirements from `requirements.txt`. It also installs the native
+OpenCV runtime libraries required by SuryaOCR, including `libxcb1`, and checks
+`import cv2` during the build. Python packages are installed into `/opt/venv`
+inside the image to avoid distro Python's PEP 668 externally managed
+environment guard. If a non-Docker host fails with
+`ImportError: libxcb.so.1`, install:
+
+```bash
+sudo apt-get install -y \
+  libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libxcb1
+```
 
 Then run the GPU compose overlay:
 

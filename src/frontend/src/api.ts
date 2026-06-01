@@ -6,6 +6,7 @@ import type {
   IngestionOptions,
   IngestorSettingsResponse,
   IngestorSettingsUpdate,
+  JobRemovalResult,
   OutputFiles,
   QueueMetrics,
 } from "./types";
@@ -92,6 +93,15 @@ export async function getJob(
   apiBaseUrl = defaultApiBaseUrl,
 ): Promise<IngestionJob> {
   return requestJson<IngestionJob>(`${apiBaseUrl}/v1/ingest/jobs/${jobId}`);
+}
+
+export async function deleteJob(
+  jobId: string,
+  apiBaseUrl = defaultApiBaseUrl,
+): Promise<JobRemovalResult> {
+  return requestJson<JobRemovalResult>(`${apiBaseUrl}/v1/ingest/jobs/${jobId}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getJobs(

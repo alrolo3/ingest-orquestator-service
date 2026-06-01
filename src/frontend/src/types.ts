@@ -162,6 +162,17 @@ export interface IngestionJob {
   completed_at?: string | null;
 }
 
+export interface JobRemovalResult {
+  job_id: string;
+  previous_status: JobStatus;
+  removed: boolean;
+  parser_process_terminated: boolean;
+  parser_process_signal?: number | null;
+  parser_process_error?: string | null;
+  removed_dispatch_queue_item: boolean;
+  removed_artifact_count: number;
+}
+
 export interface ProgressUpdate {
   component?: string;
   stage?: string;

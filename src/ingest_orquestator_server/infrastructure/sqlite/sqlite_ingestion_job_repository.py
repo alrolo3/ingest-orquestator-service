@@ -63,6 +63,20 @@ class SqliteIngestionJobRepository:
             return None
         return self._from_row(row)
 
+    def delete(self, job_id: str) -> IngestionJob | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM ingestion_jobs WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            connection.execute(
+                "DELETE FROM ingestion_jobs WHERE job_id = ?",
+                (job_id,),
+            )
+        return self._from_row(row)
+
     def list_active_job_ids(self) -> set[str]:
         active_statuses = (
             IngestionStatus.PENDING.value,

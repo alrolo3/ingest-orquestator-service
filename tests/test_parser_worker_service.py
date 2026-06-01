@@ -75,6 +75,7 @@ def test_parser_worker_processes_queued_job_into_dispatch_queue(tmp_path: Path) 
     assert job.status == IngestionStatus.DISPATCH_QUEUED
     assert job.document_id == "job-1"
     assert job.metadata["pipeline"] == "standard"
+    assert isinstance(job.metadata["parser_runtime"]["pid"], int)
     assert job.metadata["dispatch_handoff"]["state"] == "dispatch_queued"
 
 

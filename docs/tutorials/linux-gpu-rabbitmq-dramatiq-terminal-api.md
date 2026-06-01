@@ -28,7 +28,9 @@ docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 cd /path/to/ingest-orquestator-service
 
 sudo apt-get update
-sudo apt-get install -y python3.12 python3.12-venv python3.12-dev build-essential
+sudo apt-get install -y \
+  python3.12 python3.12-venv python3.12-dev build-essential \
+  libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libxcb1
 
 python3.12 -m venv .venv
 source .venv/bin/activate

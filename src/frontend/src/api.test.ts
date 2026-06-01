@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildIngestQuery,
+  deleteJob,
   getIngestorSettings,
   getJobs,
   getQueueMetrics,
@@ -155,5 +156,33 @@ describe("getJobs", () => {
       "http://api.test/v1/ingest/jobs?ids=job-1%2Cjob-2",
       undefined,
     );
+  });
+});
+
+describe("deleteJob", () => {
+  it("requests job removal", async () => {
+    const fetch = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          job_id: "job-1",
+          previous_status: "parser_queued",
+          removed: true,
+          parser_process_terminated: false,
+          removed_dispatch_queue_item: false,
+          removed_artifact_count: 0,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await deleteJob("job-1", "http://api.test");
+
+    expect(fetch).toHaveBeenCalledWith("http://api.test/v1/ingest/jobs/job-1", {
+      method: "DELETE",
+    });
   });
 });

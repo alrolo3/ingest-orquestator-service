@@ -12,6 +12,14 @@ from ingest_orquestator_server.infrastructure.docling.docling_model_options impo
 )
 
 TRANSFORMERS_PIN = "transformers>=4.57,<5"
+OPENCV_RUNTIME_APT_PACKAGES = {
+    "libgl1",
+    "libglib2.0-0",
+    "libsm6",
+    "libxext6",
+    "libxrender1",
+    "libxcb1",
+}
 
 
 def test_transformers_pin_keeps_surya_and_qwen3_compatible() -> None:
@@ -20,6 +28,17 @@ def test_transformers_pin_keeps_surya_and_qwen3_compatible() -> None:
 
     assert TRANSFORMERS_PIN in project["project"]["dependencies"]
     assert TRANSFORMERS_PIN in requirements
+
+
+@pytest.mark.parametrize("dockerfile", ["Dockerfile", "Dockerfile.gpu"])
+def test_dockerfiles_install_opencv_runtime_libraries(dockerfile: str) -> None:
+    contents = Path(dockerfile).read_text()
+
+    for package in OPENCV_RUNTIME_APT_PACKAGES:
+        assert package in contents
+    assert "import cv2" in contents
+    assert "VIRTUAL_ENV=/opt/venv" in contents
+    assert 'python -m venv "${VIRTUAL_ENV}"' in contents
 
 
 def test_surya_ocr_rejects_transformers_5(monkeypatch: pytest.MonkeyPatch) -> None:

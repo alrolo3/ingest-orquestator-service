@@ -268,6 +268,16 @@ h1 {
   padding: 7px 10px;
 }
 
+.icon-button.danger {
+  border-color: #f0b8b8;
+  color: #b42318;
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .filter-button.active {
   background: #144f64;
   border-color: #144f64;
@@ -710,6 +720,19 @@ h1 {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+}
+
+.job-head-actions {
+  align-items: flex-start;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.job-head-actions .icon-button {
+  min-height: 30px;
+  padding: 6px;
+  width: 32px;
 }
 
 .job-title {

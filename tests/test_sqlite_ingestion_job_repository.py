@@ -48,3 +48,21 @@ def test_sqlite_repository_lists_active_jobs(tmp_path: Path) -> None:
     repository.save(IngestionJob(job_id="done", status=IngestionStatus.COMPLETED, parser="docling"))
 
     assert repository.list_active_job_ids() == {"queued", "running"}
+
+
+def test_sqlite_repository_deletes_job(tmp_path: Path) -> None:
+    repository = SqliteIngestionJobRepository(tmp_path / "jobs.sqlite3")
+    repository.save(
+        IngestionJob(
+            job_id="job-1",
+            status=IngestionStatus.PARSER_QUEUED,
+            parser="docling",
+        )
+    )
+
+    deleted = repository.delete("job-1")
+
+    assert deleted is not None
+    assert deleted.job_id == "job-1"
+    assert repository.get("job-1") is None
+    assert repository.delete("missing") is None

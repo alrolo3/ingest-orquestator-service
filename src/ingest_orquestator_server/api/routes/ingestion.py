@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from ingest_orquestator_server.api.dependencies import (
     get_file_ingestion_service,
     get_job_query_service,
+    get_job_removal_service,
     get_output_retrieval_service,
     get_queue_metrics_service,
 )
@@ -22,6 +23,9 @@ from ingest_orquestator_server.application.services.file_ingestion_service impor
     FileIngestionService,
 )
 from ingest_orquestator_server.application.services.job_query_service import JobQueryService
+from ingest_orquestator_server.application.services.job_removal_service import (
+    JobRemovalService,
+)
 from ingest_orquestator_server.application.services.output_retrieval_service import (
     OutputRetrievalService,
     OutputType,
@@ -32,6 +36,7 @@ from ingest_orquestator_server.application.services.queue_metrics_service import
 from ingest_orquestator_server.models.ingest_batch_response import IngestBatchResponse
 from ingest_orquestator_server.models.ingest_response import IngestResponse
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
+from ingest_orquestator_server.models.job_removal import JobRemovalResult
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.queue_metrics import QueueMetrics
 
@@ -141,6 +146,17 @@ def get_job(
         return service.get_job(job_id)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/jobs/{job_id}", response_model=JobRemovalResult)
+def delete_job(
+    job_id: str,
+    service: Annotated[JobRemovalService, Depends(get_job_removal_service)],
+) -> JobRemovalResult:
+    result = service.remove_job(job_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return result
 
 
 @router.get("/jobs/{job_id}/outputs", response_model=OutputFiles)

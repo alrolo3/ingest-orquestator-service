@@ -10,7 +10,9 @@ Ubuntu/Debian example:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3.12 python3.12-venv python3.12-dev build-essential
+sudo apt-get install -y \
+  python3.12 python3.12-venv python3.12-dev build-essential \
+  libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libxcb1
 ```
 
 If your distribution provides Python 3.11 or 3.13 instead, that is also within

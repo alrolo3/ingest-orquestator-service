@@ -180,6 +180,32 @@ def test_parsed_document_dispatch_service_uses_job_dispatch_sink_mode(
     assert completed.metadata["dispatch_handoff"]["sink_mode"] == "elastic"
 
 
+def test_parsed_document_dispatch_service_skips_deleted_jobs(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    job = _job("job-1")
+    repository.save(job)
+    queue_service = ParsedDocumentDispatchQueueService(max_bulk_size=5)
+    dispatcher = FakeParsedDocumentDispatchSink()
+    service = ParsedDocumentDispatchService(
+        settings=settings,
+        queue_service=queue_service,
+        dispatcher=dispatcher,
+        job_repository=repository,
+        output_writer=LocalParseOutputWriter(),
+    )
+    service.enqueue_parse_result(job, _parse_result("job-1"))
+    repository.delete("job-1")
+
+    accepted_document_count = service.dispatch_next_batch()
+
+    assert accepted_document_count == 0
+    assert dispatcher.submitted_batches == []
+    assert queue_service.snapshot().completed_count == 1
+
+
 def test_parsed_document_dispatch_service_starts_configured_worker_pool(
     tmp_path: Path,
 ) -> None:

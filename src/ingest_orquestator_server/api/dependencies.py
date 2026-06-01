@@ -17,6 +17,9 @@ from ingest_orquestator_server.application.services.ingestor_settings_service im
     IngestorSettingsService,
 )
 from ingest_orquestator_server.application.services.job_query_service import JobQueryService
+from ingest_orquestator_server.application.services.job_removal_service import (
+    JobRemovalService,
+)
 from ingest_orquestator_server.application.services.output_retrieval_service import (
     OutputRetrievalService,
 )
@@ -339,6 +342,21 @@ def get_job_query_service(
     job_repository: Annotated[SqliteIngestionJobRepository, Depends(get_job_repository)],
 ) -> JobQueryService:
     return JobQueryService(job_repository)
+
+
+def get_job_removal_service(
+    settings: SettingsDependency,
+    job_repository: Annotated[SqliteIngestionJobRepository, Depends(get_job_repository)],
+    queue_service: Annotated[
+        ParsedDocumentDispatchQueueService,
+        Depends(get_parsed_document_dispatch_queue_service),
+    ],
+) -> JobRemovalService:
+    return JobRemovalService(
+        settings=settings,
+        job_repository=job_repository,
+        dispatch_queue_service=queue_service,
+    )
 
 
 def get_queue_metrics_service(

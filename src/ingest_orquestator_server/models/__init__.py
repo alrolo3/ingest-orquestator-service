@@ -18,6 +18,7 @@ from ingest_orquestator_server.models.ingestor_settings import (
     IngestorSettingsResponse,
     IngestorSettingsUpdate,
 )
+from ingest_orquestator_server.models.job_removal import JobRemovalResult
 from ingest_orquestator_server.models.output_files import OutputFiles
 from ingest_orquestator_server.models.parse_diagnostics import ParseDiagnostics
 from ingest_orquestator_server.models.parse_output import ParseOutput
@@ -60,6 +61,7 @@ __all__ = [
     "IngestorSettingOption",
     "IngestorSettingsResponse",
     "IngestorSettingsUpdate",
+    "JobRemovalResult",
     "OutputFiles",
     "ParseDiagnostics",
     "ParsedDocument",

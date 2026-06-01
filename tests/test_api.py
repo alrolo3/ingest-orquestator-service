@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from ingest_orquestator_server.api.dependencies import (
     get_file_ingestion_service,
     get_job_query_service,
+    get_job_removal_service,
     get_output_retrieval_service,
     get_queue_metrics_service,
 )
@@ -19,6 +20,9 @@ from ingest_orquestator_server.application.services.file_ingestion_service impor
     FileIngestionService,
 )
 from ingest_orquestator_server.application.services.job_query_service import JobQueryService
+from ingest_orquestator_server.application.services.job_removal_service import (
+    JobRemovalService,
+)
 from ingest_orquestator_server.application.services.output_retrieval_service import (
     OutputRetrievalService,
 )
@@ -910,6 +914,39 @@ def test_queue_metrics_endpoint_reports_persisted_job_stages(tmp_path: Path) -> 
         assert stages["dispatch_queue"]["count"] == 1
         assert stages["dispatch_queue"]["jobs"][0]["job_id"] == "dispatch-1"
         assert stages["processed"]["count"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_delete_job_endpoint_removes_job(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    repository.save(
+        IngestionJob(
+            job_id="job-1",
+            status=IngestionStatus.PARSER_QUEUED,
+            parser="docling",
+            source_file_name="example.pdf",
+        )
+    )
+    app.dependency_overrides[get_job_removal_service] = lambda: JobRemovalService(
+        settings=settings,
+        job_repository=repository,
+    )
+    app.dependency_overrides[get_job_query_service] = lambda: JobQueryService(repository)
+
+    try:
+        client = TestClient(app)
+        response = client.delete("/v1/ingest/jobs/job-1")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["job_id"] == "job-1"
+        assert body["previous_status"] == "parser_queued"
+        assert body["removed"] is True
+        assert repository.get("job-1") is None
+        assert client.get("/v1/ingest/jobs/job-1").status_code == 404
+        assert client.delete("/v1/ingest/jobs/missing").status_code == 404
     finally:
         app.dependency_overrides.clear()
 
