@@ -59,9 +59,25 @@ class RecordingJobQueue:
 class RecordingActor:
     def __init__(self) -> None:
         self.messages: list[tuple[Any, ...]] = []
+        self.messages_with_options: list[dict[str, Any]] = []
 
     def send(self, *args: Any, **_kwargs: Any) -> None:
         self.messages.append(args)
+
+    def send_with_options(
+        self,
+        *,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any] | None = None,
+        **options: Any,
+    ) -> None:
+        self.messages_with_options.append(
+            {
+                "args": args,
+                "kwargs": kwargs or {},
+                "options": options,
+            }
+        )
 
 
 def test_file_ingestion_service_publishes_parser_job(tmp_path: Path) -> None:
@@ -99,14 +115,24 @@ def test_dramatiq_job_queue_publisher_sends_actor_messages() -> None:
     publisher = DramatiqJobQueuePublisher(
         parser_actor=parser_actor,
         dispatch_actor=dispatch_actor,
+        parser_time_limit_ms=1234,
+        dispatch_time_limit_ms=5678,
     )
 
     publisher.enqueue_parser_job("job-1")
     publisher.enqueue_dispatch_job(_dispatch_item())
 
-    assert parser_actor.messages == [("job-1",)]
-    assert dispatch_actor.messages[0][0]["queue_id"] == "queue-1"
-    assert dispatch_actor.messages[0][0]["job_id"] == "job-1"
+    assert parser_actor.messages_with_options == [
+        {
+            "args": ("job-1",),
+            "kwargs": {},
+            "options": {"time_limit": 1234},
+        }
+    ]
+    dispatch_message = dispatch_actor.messages_with_options[0]
+    assert dispatch_message["args"][0]["queue_id"] == "queue-1"
+    assert dispatch_message["args"][0]["job_id"] == "job-1"
+    assert dispatch_message["options"] == {"time_limit": 5678}
 
 
 def _dispatch_item() -> ParsedDocumentDispatchItem:

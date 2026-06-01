@@ -94,6 +94,8 @@ does both according to `INGEST_DISPATCH_SINK_MODE`.
 | Variable | Code Default | Example | Allowed Values | Explanation |
 | --- | --- | --- | --- | --- |
 | `INGEST_PARSER_WORKER_COUNT` | `2` | `4` | Integer `>= 1`. | Number of parser worker threads that process queued uploaded files. |
+| `INGEST_DRAMATIQ_PARSER_TIME_LIMIT_MS` | `14400000` | `14400000` | Integer `>= 1`. | Dramatiq parser actor time limit in milliseconds. The default is 4 hours so long OCR/PDF jobs are not interrupted by Dramatiq's 10 minute middleware default. |
+| `INGEST_DRAMATIQ_DISPATCH_TIME_LIMIT_MS` | `600000` | `600000` | Integer `>= 1`. | Dramatiq dispatch actor time limit in milliseconds. |
 | `INGEST_DISPATCH_QUEUE_MAX_SIZE` | `100` | `100` | Integer `>= 1`. | Maximum number of parsed document dispatch items waiting in the process-local dispatch queue. |
 | `INGEST_DISPATCH_QUEUE_MAX_PAYLOAD_BYTES` | unset | `104857600` | Unset or integer `>= 1`. | Optional maximum serialized size for one parsed document dispatch payload. Leave unset for no per-item limit; set it to fail oversized documents explicitly instead of allowing unbounded memory growth. |
 | `INGEST_DISPATCH_MAX_BULK_SIZE` | `5` | `5` | Integer from `1` to `5`. | Maximum number of parsed documents drained by the dispatcher in one batch. Elastic receives one bulk item per RAG record. |
