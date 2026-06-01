@@ -72,7 +72,7 @@ _parsed_document_dispatch_key: (
     tuple[str, int, int, int | None, int, str, str, str, str] | None
 ) = None
 _parser_worker_service: ParserWorkerService | None = None
-_parser_worker_key: tuple[int, str] | None = None
+_parser_worker_key: tuple[int, int, str] | None = None
 _job_queue_publisher: JobQueuePublisher | None = None
 _job_queue_key: tuple[str, str, str, str] | None = None
 _docling_engine_registry: DoclingEngineRegistry | None = None
@@ -246,7 +246,11 @@ def get_parser_worker_service(
     ],
 ) -> ParserWorkerService:
     global _parser_worker_key, _parser_worker_service
-    key = (settings.parser_worker_count, settings.queue_backend)
+    key = (
+        settings.parser_worker_count,
+        settings.effective_docling_parse_concurrency,
+        settings.queue_backend,
+    )
     if _parser_worker_service is None or _parser_worker_key != key:
         _parser_worker_service = ParserWorkerService(
             settings=settings,

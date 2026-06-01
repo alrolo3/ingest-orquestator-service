@@ -223,6 +223,7 @@ def docling_runtime_metadata(
                 "temperature": settings.docling_remote_llm_temperature,
                 "health_check_enabled": settings.docling_remote_llm_health_check_enabled,
             },
+            "docling_parse_concurrency": settings.effective_docling_parse_concurrency,
         },
         "active_pipeline_stage": (vlm_resolution.to_metadata() if pipeline == "vlm" else None),
         "stages": {

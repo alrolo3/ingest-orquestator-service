@@ -106,6 +106,7 @@ class Settings(BaseSettings):
     docling_engine_cache_enabled: bool = True
     docling_engine_warmup_enabled: bool = False
     docling_engine_warmup_formats: list[str] = Field(default_factory=lambda: ["pdf"])
+    docling_parse_concurrency: int | None = Field(default=None, ge=1)
     docling_gpu_engine_concurrency: int = Field(default=1, ge=1)
     docling_gpu_batch_max_documents: int = Field(default=5, ge=1, le=32)
     docling_gpu_batch_wait_ms: int = Field(default=250, ge=0)
@@ -486,6 +487,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "dispatch_queue_max_payload_bytes",
+        "docling_parse_concurrency",
         "docling_perf_page_batch_size",
         mode="before",
     )
@@ -511,6 +513,10 @@ class Settings(BaseSettings):
     @property
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
+
+    @property
+    def effective_docling_parse_concurrency(self) -> int:
+        return self.docling_parse_concurrency or self.parser_worker_count
 
     @property
     def service_config(self) -> ServiceConfig:
@@ -545,6 +551,7 @@ class Settings(BaseSettings):
             engine_cache_enabled=self.docling_engine_cache_enabled,
             engine_warmup_enabled=self.docling_engine_warmup_enabled,
             engine_warmup_formats=self.docling_engine_warmup_formats,
+            parse_concurrency=self.effective_docling_parse_concurrency,
             gpu_engine_concurrency=self.docling_gpu_engine_concurrency,
             gpu_batch_max_documents=self.docling_gpu_batch_max_documents,
             gpu_batch_wait_ms=self.docling_gpu_batch_wait_ms,

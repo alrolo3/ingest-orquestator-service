@@ -54,6 +54,8 @@ def test_env_example_loads() -> None:
     assert settings.docling_engine_cache_enabled is True
     assert settings.docling_engine_warmup_enabled is False
     assert settings.docling_engine_warmup_formats == ["pdf"]
+    assert settings.docling_parse_concurrency == 2
+    assert settings.effective_docling_parse_concurrency == 2
     assert settings.docling_gpu_engine_concurrency == 1
     assert settings.docling_gpu_batch_max_documents == 5
     assert settings.docling_gpu_batch_wait_ms == 250
@@ -100,6 +102,8 @@ def test_cuda_gpu_env_loads() -> None:
     assert settings.docling_pdf_picture_description_runtime == "remote_llm"
     assert settings.docling_engine_cache_enabled is True
     assert settings.docling_engine_warmup_enabled is False
+    assert settings.docling_parse_concurrency == 2
+    assert settings.effective_docling_parse_concurrency == 2
     assert settings.docling_gpu_engine_concurrency == 1
     assert settings.docling_gpu_batch_max_documents == 5
     assert settings.docling_gpu_batch_wait_ms == 250
@@ -134,6 +138,8 @@ def test_cpu_env_loads() -> None:
 def test_settings_use_requested_docling_standard_pipeline_defaults() -> None:
     settings = Settings()
 
+    assert settings.docling_parse_concurrency is None
+    assert settings.effective_docling_parse_concurrency == settings.parser_worker_count
     assert settings.docling_allow_external_plugins is True
     assert settings.docling_pdf_layout_model == "docling-layout-heron-101"
     assert settings.docling_pdf_ocr_engine == "suryaocr"
@@ -171,9 +177,14 @@ def test_settings_reject_unknown_docling_format() -> None:
 
 
 def test_settings_grouped_config_views() -> None:
-    settings = Settings(docling_pipeline="vlm", docling_vlm_runtime="transformers")
+    settings = Settings(
+        docling_pipeline="vlm",
+        docling_vlm_runtime="transformers",
+        docling_parse_concurrency=3,
+    )
 
     assert settings.docling_common_config.pipeline == "vlm"
+    assert settings.docling_common_config.parse_concurrency == 3
     assert settings.docling_vlm_config.runtime == "transformers"
     assert settings.docling_common_config.engine_cache_enabled is True
     assert settings.docling_common_config.gpu_engine_concurrency == 1

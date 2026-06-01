@@ -88,6 +88,7 @@ def ingestion_capabilities(
         "runtime": {
             "dispatch_sink_mode": settings.dispatch_sink_mode,
             "parser_worker_count": settings.parser_worker_count,
+            "docling_parse_concurrency": settings.effective_docling_parse_concurrency,
             "dispatch_max_bulk_size": settings.dispatch_max_bulk_size,
             "embedding_output_enabled": settings.embedding_output_enabled,
             "elastic_index": settings.embedding_elastic_index,

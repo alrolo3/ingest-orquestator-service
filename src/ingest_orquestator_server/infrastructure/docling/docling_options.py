@@ -204,6 +204,7 @@ def _common_options(
         "engine_cache_enabled": settings.docling_engine_cache_enabled,
         "engine_warmup_enabled": settings.docling_engine_warmup_enabled,
         "engine_warmup_formats": settings.docling_engine_warmup_formats,
+        "parse_concurrency": settings.effective_docling_parse_concurrency,
         "gpu_engine_concurrency": settings.docling_gpu_engine_concurrency,
         "gpu_batch_max_documents": settings.docling_gpu_batch_max_documents,
         "gpu_batch_wait_ms": settings.docling_gpu_batch_wait_ms,

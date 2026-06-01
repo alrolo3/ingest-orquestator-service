@@ -32,6 +32,7 @@ class DoclingCommonConfig(BaseModel):
     engine_cache_enabled: bool
     engine_warmup_enabled: bool
     engine_warmup_formats: list[str]
+    parse_concurrency: int
     gpu_engine_concurrency: int
     gpu_batch_max_documents: int
     gpu_batch_wait_ms: int
