@@ -72,6 +72,25 @@ def test_ingestor_settings_service_resets_to_env_baseline(tmp_path) -> None:
     assert service.effective_settings().docling_accelerator_device == "cpu"
 
 
+def test_ingestor_settings_service_loads_env_then_sqlite_overrides(tmp_path) -> None:
+    repository = SqliteIngestorSettingsRepository(tmp_path / "jobs.sqlite3")
+    base_settings = Settings(
+        storage_dir=tmp_path,
+        chunk_tokenizer_path="/datastore/tokenizers/qwen3-embedding-8b",
+    )
+    repository.set(
+        "chunk_tokenizer_path",
+        "/datastore/models/tokenizers/qwen3-embedding-8b",
+    )
+
+    service = IngestorSettingsService(base_settings=base_settings, repository=repository)
+
+    assert (
+        str(service.effective_settings().chunk_tokenizer_path)
+        == "/datastore/models/tokenizers/qwen3-embedding-8b"
+    )
+
+
 def test_ingestor_settings_service_rejects_boot_time_and_unknown_keys(tmp_path) -> None:
     service = IngestorSettingsService(
         base_settings=Settings(storage_dir=tmp_path),

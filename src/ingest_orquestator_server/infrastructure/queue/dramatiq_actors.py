@@ -32,9 +32,6 @@ def process_dispatch_job(item_payload: dict) -> None:
 
 
 def _process_parser_job(job_id: str) -> None:
-    result = run_parser_job_in_subprocess(
-        job_id,
-        _settings.model_dump(mode="python"),
-    )
+    result = run_parser_job_in_subprocess(job_id)
     if result.retry_requested:
         build_dramatiq_publisher(_settings).enqueue_parser_job(job_id)

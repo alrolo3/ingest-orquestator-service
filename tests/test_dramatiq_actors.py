@@ -29,6 +29,23 @@ def test_parser_actor_requeues_retrying_job_at_queue_tail(monkeypatch) -> None:
     assert publisher.parser_job_ids == ["job-1"]
 
 
+def test_parser_actor_lets_subprocess_runner_resolve_runtime_settings(
+    monkeypatch,
+) -> None:
+    dramatiq_actors = _import_dramatiq_actors(monkeypatch)
+    runner = RecordingParserJobRunner()
+
+    monkeypatch.setattr(
+        dramatiq_actors,
+        "run_parser_job_in_subprocess",
+        runner,
+    )
+
+    dramatiq_actors._process_parser_job("job-1")
+
+    assert runner.job_ids == ["job-1"]
+
+
 def test_parser_actor_does_not_apply_in_process_slot_limit(monkeypatch) -> None:
     dramatiq_actors = _import_dramatiq_actors(monkeypatch)
     runner = BlockingParserJobRunner()
@@ -71,7 +88,7 @@ def _import_dramatiq_actors(monkeypatch):
 
 
 class RetryingParserJobRunner:
-    def __call__(self, job_id: str, _settings_data: dict) -> ParseJobResult:
+    def __call__(self, job_id: str) -> ParseJobResult:
         assert job_id == "job-1"
         return ParseJobResult(retry_requested=True)
 
@@ -84,6 +101,15 @@ class RecordingPublisher:
         self.parser_job_ids.append(job_id)
 
 
+class RecordingParserJobRunner:
+    def __init__(self) -> None:
+        self.job_ids: list[str] = []
+
+    def __call__(self, job_id: str) -> ParseJobResult:
+        self.job_ids.append(job_id)
+        return ParseJobResult()
+
+
 class BlockingParserJobRunner:
     def __init__(self) -> None:
         self.first_started = threading.Event()
@@ -94,7 +120,7 @@ class BlockingParserJobRunner:
         self.job_ids: list[str] = []
         self.lock = threading.Lock()
 
-    def __call__(self, job_id: str, _settings_data: dict) -> ParseJobResult:
+    def __call__(self, job_id: str) -> ParseJobResult:
         with self.lock:
             self.active += 1
             self.max_active = max(self.max_active, self.active)
