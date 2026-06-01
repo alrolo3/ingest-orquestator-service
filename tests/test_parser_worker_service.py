@@ -256,6 +256,47 @@ def test_parser_worker_marks_retrying_job_before_retry_limit(
     }
 
 
+def test_parser_worker_retries_dramatiq_time_limit_exceptions(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path, parser_max_retry_attempts=1)
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    input_path = _write_input(tmp_path)
+    repository.save(
+        IngestionJob(
+            job_id="job-1",
+            status=IngestionStatus.PARSER_QUEUED,
+            parser="docling",
+            source_file_name=input_path.name,
+            input_path=input_path,
+        )
+    )
+    worker = ParserWorkerService(
+        settings=settings,
+        document_parse_service=TimeLimitDocumentParseService(),
+        job_repository=repository,
+        dispatch_service=_build_dispatch_service(settings, repository),
+    )
+
+    try:
+        result = worker.process_job("job-1")
+    finally:
+        worker.shutdown()
+
+    job = repository.get("job-1")
+    assert job is not None
+    assert result.retry_requested is True
+    assert job.status == IngestionStatus.RETRYING
+    assert job.error == "Time limit exceeded"
+    assert job.metadata["parser_retry"] == {
+        "state": "retrying",
+        "failure_count": 1,
+        "max_retries": 1,
+        "last_error": "Time limit exceeded",
+        "last_error_type": "TimeLimitExceeded",
+    }
+
+
 def test_parser_worker_resubmits_retrying_submitted_job_after_release(
     tmp_path: Path,
 ) -> None:
@@ -337,6 +378,15 @@ def test_file_ingestion_manual_job_processor_preserves_legacy_dispatch_flow(
 class FailingDocumentParseService:
     def parse_file(self, **_kwargs):
         raise ValueError("parse failed")
+
+
+class TimeLimitExceeded(BaseException):
+    __module__ = "dramatiq.middleware.time_limit"
+
+
+class TimeLimitDocumentParseService:
+    def parse_file(self, **_kwargs):
+        raise TimeLimitExceeded("Time limit exceeded")
 
 
 class RecordingDocumentParseService:

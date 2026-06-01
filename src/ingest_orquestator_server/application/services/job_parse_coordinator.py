@@ -131,7 +131,9 @@ class JobParseCoordinator:
                 include_html=requested.include_html,
                 progress_callback=self._progress_reporter.callback_for(job_id),
             )
-        except Exception as exc:
+        except BaseException as exc:
+            if not self._is_recoverable_parser_failure(exc):
+                raise
             latest_job = self._job_repository.get(job_id) or running_job
             retry_requested = self._retry_or_fail_job(
                 latest_job,
@@ -197,13 +199,23 @@ class JobParseCoordinator:
         log_stage("parser.worker.completed", **completed_fields)
         return ParseJobResult()
 
+    @staticmethod
+    def _is_recoverable_parser_failure(exc: BaseException) -> bool:
+        if isinstance(exc, Exception):
+            return True
+        exc_type = type(exc)
+        return (
+            exc_type.__module__ == "dramatiq.middleware.time_limit"
+            and exc_type.__name__ == "TimeLimitExceeded"
+        )
+
     def _retry_or_fail_job(
         self,
         job: IngestionJob,
         *,
         error: str,
         error_type: str,
-        exc: Exception | None = None,
+        exc: BaseException | None = None,
         log_parser: bool = False,
     ) -> bool:
         retry_metadata = self._parser_retry_metadata(
@@ -256,7 +268,7 @@ class JobParseCoordinator:
         *,
         error: str,
         error_type: str,
-        exc: Exception | None = None,
+        exc: BaseException | None = None,
         log_parser: bool = False,
         extra_metadata: dict[str, object] | None = None,
     ) -> None:

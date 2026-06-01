@@ -34,7 +34,7 @@ def build_request_metadata(
 def build_error_metadata(
     *,
     error_type: str,
-    exc: Exception | None = None,
+    exc: BaseException | None = None,
     include_validation_error: bool = False,
 ) -> dict[str, str]:
     metadata = {"error_type": error_type}
