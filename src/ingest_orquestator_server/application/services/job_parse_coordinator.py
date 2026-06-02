@@ -131,7 +131,7 @@ class JobParseCoordinator:
                 file_path=running_job.input_path,
                 parser_name=running_job.parser,
                 output_root=None,
-                document_id=job_id,
+                document_id=running_job.document_id or job_id,
                 pipeline=self._optional_string(requested.pipeline),
                 chunking_enabled=self._optional_bool(requested.chunking_enabled),
                 chunking_strategy=self._optional_string(requested.chunking_strategy),

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from ingest_orquestator_server.application.exceptions import UnsupportedIngestionOptionError
+from ingest_orquestator_server.application.exceptions import (
+    JobNotFoundError,
+    UnsupportedIngestionOptionError,
+)
 from ingest_orquestator_server.application.ports.ingestion_job_repository import (
     IngestionJobRepository,
 )
@@ -140,6 +144,14 @@ class FileIngestionService:
             self._settings.uploads_dir,
             job_id=job_id,
         )
+        content_hash = self._file_sha256(upload_path)
+        document = self._job_repository.upsert_document(
+            content_hash=content_hash,
+            source_file_name=upload.filename,
+            size_bytes=upload_path.stat().st_size,
+            mime_type=upload.content_type,
+            storage_path=upload_path,
+        )
         metadata = build_request_metadata(
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
@@ -147,19 +159,22 @@ class FileIngestionService:
             dispatch_sink_mode=requested_dispatch_sink_mode,
             ocr_languages=requested_ocr_languages,
             include_html=include_html,
-        )
+        ) | {"content_hash": content_hash, "document_record_id": document.document_id}
         job = IngestionJob(
             job_id=job_id,
             status=IngestionStatus.PARSER_QUEUED,
             parser=parser_name,
             source_file_name=upload.filename,
             input_path=upload_path,
+            document_id=document.document_id,
             metadata=metadata,
         )
         self._job_repository.save(job)
+        self._job_repository.create_run_for_job(job, document_id=document.document_id)
         log_stage(
             "ingestion.upload.stored",
             job_id=job_id,
+            document_id=document.document_id,
             parser=parser_name,
             pipeline=pipeline,
             source_file_name=upload.filename,
@@ -195,6 +210,7 @@ class FileIngestionService:
                 parser=parser_name,
                 source_file_name=upload.filename,
                 input_path=upload_path,
+                document_id=document.document_id,
                 metadata=failed_job.metadata,
                 error=str(exc),
             )
@@ -204,6 +220,7 @@ class FileIngestionService:
             parser=parser_name,
             source_file_name=upload.filename,
             input_path=upload_path,
+            document_id=document.document_id,
             metadata=metadata,
         )
 
@@ -258,6 +275,92 @@ class FileIngestionService:
                     )
                 )
         return IngestBatchResponse(jobs=jobs, failed=failed)
+
+    def enqueue_document_run(
+        self,
+        *,
+        document_id: str,
+        parser_name: str,
+        pipeline: str | None = None,
+        chunking_enabled: bool | None = None,
+        chunking_strategy: str | None = None,
+        dispatch_sink_mode: str | None = None,
+        ocr_languages: str | list[str] | None = None,
+        include_html: bool = False,
+    ) -> IngestResponse:
+        document = self._job_repository.get_document(document_id)
+        input_path = self._job_repository.get_document_storage_path(document_id)
+        if document is None or input_path is None:
+            raise JobNotFoundError(document_id)
+
+        self._parser_request_validator.validate(
+            filename=document.document.source_file_name or "",
+            parser_name=parser_name,
+            pipeline=pipeline,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+        )
+        requested_dispatch_sink_mode = normalize_dispatch_sink_mode(dispatch_sink_mode)
+        requested_ocr_languages = normalize_ocr_languages(ocr_languages)
+        job_id = str(uuid4())
+        metadata = build_request_metadata(
+            pipeline=pipeline,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=requested_dispatch_sink_mode,
+            ocr_languages=requested_ocr_languages,
+            include_html=include_html,
+        ) | {
+            "content_hash": document.document.content_hash,
+            "document_record_id": document_id,
+            "rerun_of_document_id": document_id,
+        }
+        job = IngestionJob(
+            job_id=job_id,
+            status=IngestionStatus.PARSER_QUEUED,
+            parser=parser_name,
+            source_file_name=document.document.source_file_name,
+            input_path=input_path,
+            document_id=document_id,
+            metadata=metadata,
+        )
+        self._job_repository.save(job)
+        self._job_repository.create_run_for_job(job, document_id=document_id)
+        try:
+            if self._parser_job_queue is not None:
+                self._parser_job_queue.enqueue_parser_job(job_id)
+            elif self._parser_worker_service is not None:
+                self._parser_worker_service.submit_job(job_id)
+        except Exception as exc:
+            failed_job = job.model_copy(
+                update={
+                    "status": IngestionStatus.RETRYABLE_FAILURE,
+                    "metadata": job.metadata
+                    | build_error_metadata(error_type=type(exc).__name__, exc=exc),
+                    "error": str(exc),
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            self._job_repository.save(failed_job)
+            return self._ingest_response(
+                job_id=job_id,
+                status=IngestionStatus.RETRYABLE_FAILURE,
+                parser=parser_name,
+                source_file_name=document.document.source_file_name,
+                input_path=input_path,
+                document_id=document_id,
+                metadata=failed_job.metadata,
+                error=str(exc),
+            )
+        return self._ingest_response(
+            job_id=job_id,
+            status=IngestionStatus.PARSER_QUEUED,
+            parser=parser_name,
+            source_file_name=document.document.source_file_name,
+            input_path=input_path,
+            document_id=document_id,
+            metadata=metadata,
+        )
 
     def process_queued_job(self, job_id: str) -> None:
         if self._parser_worker_service is not None:
@@ -348,12 +451,14 @@ class FileIngestionService:
         metadata: dict[str, object],
         source_file_name: str | None = None,
         input_path: Path | None = None,
+        document_id: str | None = None,
         error: str | None = None,
     ) -> IngestResponse:
         return IngestResponse(
             job_id=job_id,
             status=status,
             parser=parser,
+            document_id=document_id,
             source_file_name=source_file_name,
             input_path=input_path,
             metadata=metadata,
@@ -361,3 +466,11 @@ class FileIngestionService:
             status_url=f"/v1/ingest/jobs/{job_id}",
             outputs_url=f"/v1/ingest/jobs/{job_id}/outputs",
         )
+
+    @staticmethod
+    def _file_sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as input_file:
+            while chunk := input_file.read(1024 * 1024):
+                digest.update(chunk)
+        return digest.hexdigest()

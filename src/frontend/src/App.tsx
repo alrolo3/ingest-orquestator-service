@@ -25,9 +25,10 @@ import {
   getIngestorSettings,
   getJobs,
   getQueueMetrics,
+  getRuns,
   outputUrl,
   updateIngestorSettings,
-  uploadFiles,
+  uploadDocuments,
 } from "./api";
 import { createLocalId } from "./id";
 import {
@@ -156,7 +157,7 @@ function App() {
       }
       inFlight = true;
       const jobIds = active.map((tracked) => tracked.job_id!);
-      const updates = await getJobs(jobIds, apiBaseUrl).catch(() => []);
+      const updates = await getRuns(jobIds, apiBaseUrl).catch(() => getJobs(jobIds, apiBaseUrl));
       inFlight = false;
       if (cancelled) {
         return;
@@ -168,7 +169,10 @@ function App() {
           if (!update) {
             return tracked;
           }
-          return { ...tracked, job: update };
+          const runs = tracked.runs?.map((run) =>
+            run.run_id === update.job_id ? { ...run, ...update, run_id: update.job_id } : run,
+          );
+          return { ...tracked, job: update, runs };
         }),
       );
     };
@@ -307,23 +311,34 @@ function App() {
     setSubmitting(true);
 
     try {
-      const responses = await uploadFiles(submittedFiles, options, apiBaseUrl);
-      setJobs((current) =>
-        current.map((tracked) => {
-          const response = responses.find(
-            (candidate) => candidate.source_file_name === tracked.file_name,
-          );
-          if (!response) {
-            return tracked;
-          }
-          return {
-            ...tracked,
-            job_id: response.job_id,
-            response,
-            upload_error: response.error ?? undefined,
-          };
-        }),
-      );
+      const documents = await uploadDocuments(submittedFiles, options, apiBaseUrl);
+      const documentIds = new Set(documents.map((item) => item.document.document_id));
+      const nextTracked = documents.map((item) => {
+        const latestRun = item.latest_run ?? item.runs[0];
+        const pending = pendingJobs.find(
+          (candidate) => candidate.file_name === item.document.source_file_name,
+        );
+        return {
+          local_id: pending?.local_id ?? createLocalId(),
+          document_id: item.document.document_id,
+          file_name: item.document.source_file_name ?? pending?.file_name ?? "document",
+          file_size: item.document.size_bytes ?? pending?.file_size ?? 0,
+          retained_file: pending?.retained_file,
+          submitted_at: latestRun?.created_at ?? new Date().toISOString(),
+          job_id: latestRun?.run_id,
+          job: latestRun,
+          runs: item.runs,
+          upload_error: latestRun?.error ?? undefined,
+        };
+      });
+      setJobs((current) => [
+        ...nextTracked,
+        ...current.filter(
+          (tracked) =>
+            !pendingJobs.some((pending) => pending.local_id === tracked.local_id) &&
+            (!tracked.document_id || !documentIds.has(tracked.document_id)),
+        ),
+      ]);
       setFiles([]);
     } catch (error) {
       setJobs((current) =>
@@ -861,6 +876,12 @@ function JobPanel({
         </div>
       ) : null}
 
+      {tracked.document_id ? (
+        <div className="job-id-row">
+          <code>{tracked.document_id}</code>
+        </div>
+      ) : null}
+
       {tracked.upload_error || job?.error ? (
         <div className="notice danger">
           <AlertTriangle size={16} aria-hidden="true" />
@@ -881,6 +902,7 @@ function JobPanel({
       ) : null}
 
       <ProgressHistory job={job} />
+      <RunHistory runs={tracked.runs ?? []} />
 
       {completed && job ? (
         <MetadataPanel
@@ -891,6 +913,27 @@ function JobPanel({
         />
       ) : null}
     </article>
+  );
+}
+
+function RunHistory({ runs }: { runs: TrackedJob["runs"] }) {
+  if (!runs || runs.length <= 1) {
+    return null;
+  }
+  return (
+    <details className="history">
+      <summary>Run history</summary>
+      <ul>
+        {runs.map((run) => (
+          <li key={run.run_id}>
+            <span>
+              #{run.attempt_number} {run.pipeline ?? "default"}
+            </span>
+            <small>{statusLabel(run.status)}</small>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

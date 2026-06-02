@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from ingest_orquestator_server.api.dependencies import (
+    get_document_run_query_service,
     get_file_ingestion_service,
     get_job_query_service,
     get_job_removal_service,
@@ -15,6 +16,9 @@ from ingest_orquestator_server.api.dependencies import (
 from ingest_orquestator_server.application.parser_registry import ParserRegistry
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
+)
+from ingest_orquestator_server.application.services.document_run_query_service import (
+    DocumentRunQueryService,
 )
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
@@ -320,6 +324,79 @@ def test_batch_ingest_persists_valid_jobs_and_rejections(tmp_path: Path) -> None
         assert failed_job is not None
         assert failed_job.status == "failed"
         assert failed_job.error is not None
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_document_endpoints_group_same_file_runs(tmp_path: Path) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".md"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    validator = UploadValidator(settings)
+    parse_service = DocumentParseService(
+        parser_registry=ParserRegistry(
+            {
+                "docling": lambda: DoclingDocumentParser(
+                    converter=FakeDoclingConverter(),
+                    settings=settings,
+                )
+            }
+        ),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=build_parser_chunking_service(settings),
+    )
+    ingestion_service = FileIngestionService(
+        settings=settings,
+        upload_storage=LocalUploadStorage(upload_validator=validator),
+        document_parse_service=parse_service,
+        job_repository=repository,
+        upload_validator=validator,
+    )
+    document_service = DocumentRunQueryService(repository)
+
+    app.dependency_overrides[get_file_ingestion_service] = lambda: ingestion_service
+    app.dependency_overrides[get_document_run_query_service] = lambda: document_service
+
+    try:
+        client = TestClient(app)
+        upload_response = client.post(
+            "/v1/ingest/documents?pipeline=standard",
+            files=[("files", ("example.md", b"# Example", "text/markdown"))],
+        )
+
+        assert upload_response.status_code == 200
+        upload_body = upload_response.json()
+        assert len(upload_body["documents"]) == 1
+        document_id = upload_body["documents"][0]["document"]["document_id"]
+        first_run_id = upload_body["documents"][0]["latest_run"]["run_id"]
+        assert upload_body["documents"][0]["latest_run"]["attempt_number"] == 1
+
+        rerun_response = client.post(
+            f"/v1/ingest/documents/{document_id}/runs?pipeline=standard",
+        )
+        assert rerun_response.status_code == 200
+        assert rerun_response.json()["attempt_number"] == 2
+        second_run_id = rerun_response.json()["run_id"]
+
+        document_response = client.get(f"/v1/ingest/documents/{document_id}")
+        assert document_response.status_code == 200
+        document_body = document_response.json()
+        assert document_body["latest_run"]["run_id"] == second_run_id
+        assert [run["run_id"] for run in document_body["runs"]] == [
+            second_run_id,
+            first_run_id,
+        ]
+
+        runs_response = client.get(f"/v1/ingest/runs?ids={first_run_id},{second_run_id}")
+        assert runs_response.status_code == 200
+        assert [run["run_id"] for run in runs_response.json()["runs"]] == [
+            first_run_id,
+            second_run_id,
+        ]
+
+        documents_response = client.get("/v1/ingest/documents?limit=1")
+        assert documents_response.status_code == 200
+        assert documents_response.json()["total"] == 1
+        assert documents_response.json()["next_cursor"] is None
     finally:
         app.dependency_overrides.clear()
 

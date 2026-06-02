@@ -162,6 +162,39 @@ export interface IngestionJob {
   completed_at?: string | null;
 }
 
+export type IngestionRunSummary = IngestionJob & {
+  run_id: string;
+  attempt_number: number;
+  pipeline?: string | null;
+  status_url: string;
+  outputs_url: string;
+};
+
+export interface IngestionDocumentSummary {
+  document_id: string;
+  content_hash: string;
+  source_file_name?: string | null;
+  size_bytes?: number | null;
+  mime_type?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngestionDocumentEnvelope {
+  document: IngestionDocumentSummary;
+  latest_run?: IngestionRunSummary | null;
+  runs: IngestionRunSummary[];
+}
+
+export interface IngestDocumentsResponse {
+  documents: IngestionDocumentEnvelope[];
+  failed: IngestionRunSummary[];
+}
+
+export interface IngestionRunListResponse {
+  runs: IngestionRunSummary[];
+}
+
 export interface JobRemovalResult {
   job_id: string;
   previous_status: JobStatus;
@@ -190,12 +223,14 @@ export interface ProgressUpdate {
 
 export interface TrackedJob {
   local_id: string;
+  document_id?: string;
   file_name: string;
   file_size: number;
   submitted_at: string;
   job_id?: string;
   response?: IngestResponse;
   job?: IngestionJob;
+  runs?: IngestionRunSummary[];
   upload_error?: string;
   retained_file?: File;
 }

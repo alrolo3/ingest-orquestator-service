@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from ingest_orquestator_server.api.dependencies import (
+    get_document_run_query_service,
     get_file_ingestion_service,
     get_job_query_service,
     get_job_removal_service,
@@ -18,6 +19,9 @@ from ingest_orquestator_server.application.exceptions import (
     UnsupportedParserError,
     UnsupportedPipelineError,
     UploadValidationError,
+)
+from ingest_orquestator_server.application.services.document_run_query_service import (
+    DocumentRunQueryService,
 )
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
@@ -35,6 +39,13 @@ from ingest_orquestator_server.application.services.queue_metrics_service import
 )
 from ingest_orquestator_server.models.ingest_batch_response import IngestBatchResponse
 from ingest_orquestator_server.models.ingest_response import IngestResponse
+from ingest_orquestator_server.models.ingestion_document import (
+    IngestDocumentsResponse,
+    IngestionDocumentEnvelope,
+    IngestionDocumentListResponse,
+    IngestionRunListResponse,
+    IngestionRunSummary,
+)
 from ingest_orquestator_server.models.ingestion_job import IngestionJob
 from ingest_orquestator_server.models.job_removal import JobRemovalResult
 from ingest_orquestator_server.models.output_files import OutputFiles
@@ -116,6 +127,145 @@ async def ingest_files(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to enqueue files: {exc}") from exc
+
+
+@router.post("/documents", response_model=IngestDocumentsResponse)
+async def ingest_documents(
+    files: Annotated[list[UploadFile], File()],
+    ingestion_service: Annotated[FileIngestionService, Depends(get_file_ingestion_service)],
+    document_service: Annotated[
+        DocumentRunQueryService,
+        Depends(get_document_run_query_service),
+    ],
+    parser: Annotated[str, Query()] = "docling",
+    pipeline: Annotated[str | None, Query()] = None,
+    chunking_enabled: Annotated[bool | None, Query()] = None,
+    chunking_strategy: Annotated[str | None, Query()] = None,
+    dispatch_sink_mode: Annotated[str | None, Query()] = None,
+    ocr_languages: Annotated[str | None, Query()] = None,
+    include_html: Annotated[bool, Query()] = False,
+) -> IngestDocumentsResponse:
+    try:
+        response = await ingestion_service.enqueue_uploads(
+            uploads=list(files),
+            parser_name=parser,
+            pipeline=pipeline,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=dispatch_sink_mode,
+            ocr_languages=ocr_languages,
+            include_html=include_html,
+        )
+        document_ids = [
+            job.document_id for job in response.jobs if job.document_id is not None
+        ]
+        return IngestDocumentsResponse(
+            documents=[
+                document_service.get_document(document_id)
+                for document_id in dict.fromkeys(document_ids)
+            ],
+            failed=response.failed,
+        )
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except (
+        UnsupportedParserError,
+        UnsupportedDocumentFormatError,
+        UnsupportedIngestionOptionError,
+        UnsupportedPipelineError,
+    ) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/documents", response_model=IngestionDocumentListResponse)
+def list_documents(
+    service: Annotated[DocumentRunQueryService, Depends(get_document_run_query_service)],
+    status: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: Annotated[str | None, Query()] = None,
+) -> IngestionDocumentListResponse:
+    return service.list_documents(status=status, q=q, limit=limit, cursor=cursor)
+
+
+@router.get("/documents/{document_id}", response_model=IngestionDocumentEnvelope)
+def get_document(
+    document_id: str,
+    service: Annotated[DocumentRunQueryService, Depends(get_document_run_query_service)],
+) -> IngestionDocumentEnvelope:
+    try:
+        return service.get_document(document_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/documents/{document_id}/runs", response_model=IngestionRunSummary)
+def create_document_run(
+    document_id: str,
+    ingestion_service: Annotated[FileIngestionService, Depends(get_file_ingestion_service)],
+    document_service: Annotated[
+        DocumentRunQueryService,
+        Depends(get_document_run_query_service),
+    ],
+    parser: Annotated[str, Query()] = "docling",
+    pipeline: Annotated[str | None, Query()] = None,
+    chunking_enabled: Annotated[bool | None, Query()] = None,
+    chunking_strategy: Annotated[str | None, Query()] = None,
+    dispatch_sink_mode: Annotated[str | None, Query()] = None,
+    ocr_languages: Annotated[str | None, Query()] = None,
+    include_html: Annotated[bool, Query()] = False,
+) -> IngestionRunSummary:
+    try:
+        response = ingestion_service.enqueue_document_run(
+            document_id=document_id,
+            parser_name=parser,
+            pipeline=pipeline,
+            chunking_enabled=chunking_enabled,
+            chunking_strategy=chunking_strategy,
+            dispatch_sink_mode=dispatch_sink_mode,
+            ocr_languages=ocr_languages,
+            include_html=include_html,
+        )
+        return document_service.get_run(response.job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (
+        UnsupportedParserError,
+        UnsupportedDocumentFormatError,
+        UnsupportedIngestionOptionError,
+        UnsupportedPipelineError,
+    ) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/runs", response_model=IngestionRunListResponse)
+def list_runs(
+    service: Annotated[DocumentRunQueryService, Depends(get_document_run_query_service)],
+    ids: Annotated[str | None, Query(description="Comma-separated run ids.")] = None,
+) -> IngestionRunListResponse:
+    run_ids = [run_id.strip() for run_id in (ids or "").split(",") if run_id.strip()]
+    if len(run_ids) > 100:
+        raise HTTPException(status_code=400, detail="At most 100 run ids can be requested.")
+    return IngestionRunListResponse(runs=service.list_runs(run_ids))
+
+
+@router.get("/runs/{run_id}", response_model=IngestionRunSummary)
+def get_run(
+    run_id: str,
+    service: Annotated[DocumentRunQueryService, Depends(get_document_run_query_service)],
+) -> IngestionRunSummary:
+    try:
+        return service.get_run(run_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/runs/{run_id}/outputs", response_model=OutputFiles)
+def list_run_outputs(
+    run_id: str,
+    service: Annotated[OutputRetrievalService, Depends(get_output_retrieval_service)],
+) -> OutputFiles:
+    return list_outputs(run_id, service)
 
 
 @router.get("/jobs", response_model=list[IngestionJob])

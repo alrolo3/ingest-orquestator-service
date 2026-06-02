@@ -6,7 +6,9 @@ import {
   getIngestorSettings,
   getJobs,
   getQueueMetrics,
+  getRuns,
   updateIngestorSettings,
+  uploadDocuments,
 } from "./api";
 import type { IngestionOptions } from "./types";
 
@@ -154,6 +156,55 @@ describe("getJobs", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "http://api.test/v1/ingest/jobs?ids=job-1%2Cjob-2",
+      undefined,
+    );
+  });
+});
+
+describe("document run API", () => {
+  it("uploads files through the document endpoint", async () => {
+    const fetch = vi.fn(async () => {
+      return new Response(JSON.stringify({ documents: [], failed: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    const file = new File(["# Example"], "example.md", { type: "text/markdown" });
+    const options: IngestionOptions = {
+      parser: "docling",
+      pipeline: "standard",
+      chunkingEnabled: false,
+      chunkingStrategy: "page",
+      dispatchSinkMode: "local",
+      ocrLanguages: [],
+      asyncMode: false,
+      includeDocument: true,
+      includeHtml: false,
+    };
+
+    await uploadDocuments([file], options, "http://api.test");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "http://api.test/v1/ingest/documents?parser=docling&pipeline=standard&chunking_enabled=false&dispatch_sink_mode=local&async_mode=false&include_document=true&include_html=false",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("polls active runs in one batch", async () => {
+    const fetch = vi.fn(async () => {
+      return new Response(JSON.stringify({ runs: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await getRuns(["run-1", "run-2"], "http://api.test");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "http://api.test/v1/ingest/runs?ids=run-1%2Crun-2",
       undefined,
     );
   });

@@ -287,6 +287,28 @@ describe("App", () => {
     const fallbackFetch = globalThis.fetch;
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.includes("/runs?ids=")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              runs: [
+                {
+                  ...job,
+                  run_id: "job-1",
+                  document_id: "doc-1",
+                  attempt_number: 1,
+                  status_url: "/v1/ingest/runs/job-1",
+                  outputs_url: "/v1/ingest/runs/job-1/outputs",
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
       if (url.includes("/jobs?ids=")) {
         return Promise.resolve(
           new Response(JSON.stringify([job]), {
@@ -325,6 +347,95 @@ describe("App", () => {
       ),
     );
     expect(screen.queryByText("example.pdf")).not.toBeInTheDocument();
+  });
+
+  it("groups repeated uploads of the same document and shows run history", async () => {
+    const fallbackFetch = globalThis.fetch;
+    let uploadCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/documents") && init?.method === "POST") {
+          uploadCount += 1;
+          const failedRun = {
+            run_id: "run-2",
+            job_id: "run-2",
+            document_id: "doc-1",
+            attempt_number: 2,
+            status: "failed",
+            parser: "docling",
+            pipeline: "vlm",
+            source_file_name: "example.md",
+            status_url: "/v1/ingest/runs/run-2",
+            outputs_url: "/v1/ingest/runs/run-2/outputs",
+            metadata: { requested_pipeline: "vlm" },
+            error: "Pipeline IngestProgressVlmPipeline failed",
+            created_at: "2026-01-01T00:01:00Z",
+            updated_at: "2026-01-01T00:01:00Z",
+          };
+          const completedRun = {
+            run_id: "run-1",
+            job_id: "run-1",
+            document_id: "doc-1",
+            attempt_number: 1,
+            status: "completed",
+            parser: "docling",
+            pipeline: "standard",
+            source_file_name: "example.md",
+            status_url: "/v1/ingest/runs/run-1",
+            outputs_url: "/v1/ingest/runs/run-1/outputs",
+            metadata: { pipeline: "standard" },
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          };
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                documents: [
+                  {
+                    document: {
+                      document_id: "doc-1",
+                      content_hash: "hash-1",
+                      source_file_name: "example.md",
+                      size_bytes: 9,
+                      mime_type: "text/markdown",
+                      created_at: "2026-01-01T00:00:00Z",
+                      updated_at: "2026-01-01T00:01:00Z",
+                    },
+                    latest_run: uploadCount === 1 ? completedRun : failedRun,
+                    runs: uploadCount === 1 ? [completedRun] : [failedRun, completedRun],
+                  },
+                ],
+                failed: [],
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+        return fallbackFetch(input, init);
+      }),
+    );
+
+    const { container } = render(<App />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["# Example"], "example.md", { type: "text/markdown" });
+
+    await screen.findByText(".pdf, .md up to 100 MB");
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /Ingest 1 file/ }));
+
+    expect(await screen.findByText("example.md")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Pipeline"), { target: { value: "vlm" } });
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /Ingest 1 file/ }));
+
+    await screen.findByText("Pipeline IngestProgressVlmPipeline failed");
+    expect(screen.getAllByText("example.md")).toHaveLength(1);
+    fireEvent.click(screen.getByText("Run history"));
+    expect(screen.getByText("#2 vlm")).toBeInTheDocument();
+    expect(screen.getByText("#1 standard")).toBeInTheDocument();
   });
 
   it("renders chunking toggle before parser-dependent strategy options", async () => {

@@ -40,6 +40,10 @@ curl "http://127.0.0.1:8000/v1/ingest/capabilities" | python -m json.tool
 
 ## Ingest File
 
+The preferred GUI contract is the document/run API below. The older
+`/v1/ingest/file`, `/v1/ingest/files`, and `/v1/ingest/jobs` endpoints remain
+supported compatibility endpoints for scripts and existing clients.
+
 ```http
 POST /v1/ingest/file
 ```
@@ -109,6 +113,82 @@ In v1.5, ingestion always uses the internal queue. The status starts as
 or `failed`. Transient queue or sink pressure can surface as
 `retryable_failure`. The queue is internal; callers do not call a queue
 endpoint. Use the job API to observe the current state.
+
+## Document and Run API
+
+Use documents for stable uploaded content and runs for individual parse
+attempts. Uploading the same file content with different pipelines returns the
+same `document_id` and a new run, which lets the GUI show standard and VLM
+attempts together.
+
+```http
+POST /v1/ingest/documents
+```
+
+Multipart form fields:
+
+- `files`: one or more uploaded documents.
+
+Query parameters match `/v1/ingest/files`: `parser`, `pipeline`,
+`chunking_enabled`, `chunking_strategy`, `dispatch_sink_mode`, `ocr_languages`,
+and `include_html`.
+
+Example:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/ingest/documents?pipeline=standard" \
+  -F "files=@/path/to/document.pdf"
+```
+
+The response contains document envelopes:
+
+- `document`: stable content identity with `document_id`, `content_hash`,
+  source file name, size, MIME type, and timestamps.
+- `latest_run`: the newest parse attempt for the document.
+- `runs`: compact run history ordered newest first.
+
+Create a new parse attempt for an existing document:
+
+```http
+POST /v1/ingest/documents/{document_id}/runs
+```
+
+Example:
+
+```bash
+curl -X POST \
+  "http://127.0.0.1:8000/v1/ingest/documents/{document_id}/runs?pipeline=vlm"
+```
+
+List documents with bounded pagination:
+
+```http
+GET /v1/ingest/documents?limit=20&cursor=0&status=completed&q=invoice
+```
+
+Fetch one document envelope:
+
+```http
+GET /v1/ingest/documents/{document_id}
+```
+
+Poll runs in one batch:
+
+```http
+GET /v1/ingest/runs?ids={run_id_1},{run_id_2}
+```
+
+Fetch one run:
+
+```http
+GET /v1/ingest/runs/{run_id}
+```
+
+List run outputs:
+
+```http
+GET /v1/ingest/runs/{run_id}/outputs
+```
 
 ## Get Job
 

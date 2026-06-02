@@ -1,9 +1,13 @@
 import type {
   IngestBatchResponse,
+  IngestDocumentsResponse,
   IngestResponse,
   IngestionCapabilities,
+  IngestionDocumentEnvelope,
   IngestionJob,
   IngestionOptions,
+  IngestionRunListResponse,
+  IngestionRunSummary,
   IngestorSettingsResponse,
   IngestorSettingsUpdate,
   JobRemovalResult,
@@ -88,6 +92,26 @@ export async function uploadFiles(
   return [...response.jobs, ...response.failed];
 }
 
+export async function uploadDocuments(
+  files: File[],
+  options: IngestionOptions,
+  apiBaseUrl = defaultApiBaseUrl,
+): Promise<IngestionDocumentEnvelope[]> {
+  const query = buildIngestQuery(options);
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file);
+  }
+  const response = await requestJson<IngestDocumentsResponse>(
+    `${apiBaseUrl}/v1/ingest/documents?${query}`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  return response.documents;
+}
+
 export async function getJob(
   jobId: string,
   apiBaseUrl = defaultApiBaseUrl,
@@ -114,6 +138,21 @@ export async function getJobs(
   const params = new URLSearchParams();
   params.set("ids", jobIds.join(","));
   return requestJson<IngestionJob[]>(`${apiBaseUrl}/v1/ingest/jobs?${params.toString()}`);
+}
+
+export async function getRuns(
+  runIds: string[],
+  apiBaseUrl = defaultApiBaseUrl,
+): Promise<IngestionRunSummary[]> {
+  if (runIds.length === 0) {
+    return [];
+  }
+  const params = new URLSearchParams();
+  params.set("ids", runIds.join(","));
+  const response = await requestJson<IngestionRunListResponse>(
+    `${apiBaseUrl}/v1/ingest/runs?${params.toString()}`,
+  );
+  return response.runs;
 }
 
 export async function getQueueMetrics(

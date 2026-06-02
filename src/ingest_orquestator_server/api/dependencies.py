@@ -10,6 +10,9 @@ from ingest_orquestator_server.application.ports.job_queue import JobQueuePublis
 from ingest_orquestator_server.application.services.document_parse_service import (
     DocumentParseService,
 )
+from ingest_orquestator_server.application.services.document_run_query_service import (
+    DocumentRunQueryService,
+)
 from ingest_orquestator_server.application.services.file_ingestion_service import (
     FileIngestionService,
 )
@@ -342,6 +345,12 @@ def get_job_query_service(
     job_repository: Annotated[SqliteIngestionJobRepository, Depends(get_job_repository)],
 ) -> JobQueryService:
     return JobQueryService(job_repository)
+
+
+def get_document_run_query_service(
+    job_repository: Annotated[SqliteIngestionJobRepository, Depends(get_job_repository)],
+) -> DocumentRunQueryService:
+    return DocumentRunQueryService(job_repository)
 
 
 def get_job_removal_service(
