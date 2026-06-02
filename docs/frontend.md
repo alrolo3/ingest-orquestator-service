@@ -7,8 +7,9 @@ beside the FastAPI service and uses the public ingestion API only.
 
 - Node.js 20 or newer.
 - The FastAPI server running on the configured API URL.
-- Browser access to the API origin. The checked-in env files allow
-  `http://localhost:5173` and `http://127.0.0.1:5173` by default.
+- Browser access to the API origin. In Docker Compose, nginx proxies API
+  traffic through the frontend origin. In Vite development, the dev server
+  proxies `/v1` and `/health` to `http://127.0.0.1:8000`.
 
 ## Install
 
@@ -39,8 +40,8 @@ Open:
 http://127.0.0.1:5173
 ```
 
-The frontend API base URL defaults to `http://127.0.0.1:8000`. Override it when
-the API runs elsewhere:
+The frontend API base URL defaults to same-origin requests. Override it when
+you intentionally want the browser to call another API origin directly:
 
 ```bash
 cd src/frontend
@@ -115,3 +116,22 @@ INGEST_CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://GPU
 
 Do not put Elasticsearch credentials or RemoteLLM keys in frontend env files.
 The frontend only needs the ingestion API base URL.
+
+## Docker Compose
+
+The full platform compose files build and serve the production frontend through
+nginx:
+
+```bash
+docker compose -f docker-compose.cpu.yml up --build
+docker compose -f docker-compose.nvidia-gpu.yml up --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+See [docker-compose-platform.md](docker-compose-platform.md) for deployment
+ports and smoke-test commands.

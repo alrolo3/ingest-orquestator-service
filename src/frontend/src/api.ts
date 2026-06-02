@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 export const defaultApiBaseUrl =
-  import.meta.env.VITE_INGEST_API_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:8000";
+  import.meta.env.VITE_INGEST_API_BASE_URL?.replace(/\/$/, "") || "";
 
 export function buildIngestQuery(options: IngestionOptions): string {
   const params = new URLSearchParams();

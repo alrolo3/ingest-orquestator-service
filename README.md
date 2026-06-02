@@ -182,21 +182,26 @@ For the A100 80GB CUDA 13 performance environment, use
 
 ## Docker
 
+Run the complete platform on CPU:
+
 ```bash
-docker compose up --build
+docker compose -f docker-compose.cpu.yml up --build
 ```
 
-The API will listen on:
+Run the complete platform on an NVIDIA GPU host:
+
+```bash
+docker compose -f docker-compose.nvidia-gpu.yml up --build
+```
+
+The frontend will listen on:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:5173
 ```
 
-For NVIDIA GPU hosts:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
-```
+See [docs/docker-compose-platform.md](docs/docker-compose-platform.md) for
+ports, GPU settings, model-cache mounts, and smoke-test commands.
 
 ## Next Milestones
 

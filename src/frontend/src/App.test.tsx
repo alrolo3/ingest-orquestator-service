@@ -221,7 +221,7 @@ describe("App", () => {
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
-        "http://127.0.0.1:8000/v1/ingest/settings",
+        "/v1/ingest/settings",
         expect.objectContaining({
           method: "PATCH",
           body: expect.stringContaining("docling_accelerator_device"),
@@ -247,7 +247,7 @@ describe("App", () => {
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
-        "http://127.0.0.1:8000/v1/ingest/settings",
+        "/v1/ingest/settings",
         expect.objectContaining({ method: "PATCH" }),
       ),
     );
@@ -342,7 +342,7 @@ describe("App", () => {
 
     await waitFor(() =>
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        "http://127.0.0.1:8000/v1/ingest/jobs/job-1",
+        "/v1/ingest/jobs/job-1",
         { method: "DELETE" },
       ),
     );

@@ -1,0 +1,156 @@
+name: ingest-orquestator-nvidia-gpu
+
+x-backend-build: &backend-build
+  context: .
+  dockerfile: Dockerfile.gpu
+  args:
+    PYTORCH_CUDA_IMAGE: ${PYTORCH_CUDA_IMAGE:-pytorch/pytorch:2.12.0-cuda13.2-cudnn9-runtime}
+
+x-backend-environment: &backend-environment
+  INGEST_QUEUE_BACKEND: dramatiq
+  INGEST_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+  INGEST_STORAGE_DIR: /app/.data
+  INGEST_CORS_ALLOW_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+  INGEST_DOCLING_ACCELERATOR_DEVICE: cuda
+  INGEST_DOCLING_PDF_OCR_USE_GPU: "true"
+  DOCLING_CACHE_DIR: /datastore/models/docling
+  HF_HOME: /datastore/models/huggingface
+  SENTENCE_TRANSFORMERS_HOME: /datastore/models/sentence-transformers
+  NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+  NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+x-backend-volumes: &backend-volumes
+  - ./.data:/app/.data
+  - ${INGEST_HOST_MODELS_DIR:-/datastore/models}:/datastore/models
+
+x-backend-depends-on: &backend-depends-on
+  rabbitmq:
+    condition: service_healthy
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "${INGEST_RABBITMQ_BIND:-127.0.0.1}:${INGEST_RABBITMQ_PORT:-5672}:5672"
+      - "${INGEST_RABBITMQ_MANAGEMENT_BIND:-127.0.0.1}:${INGEST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  api:
+    build: *backend-build
+    image: ingest-orquestator-server:gpu-local
+    restart: unless-stopped
+    command:
+      - python
+      - -m
+      - uvicorn
+      - ingest_orquestator_server.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    env_file:
+      - env-cuda-gpu
+    environment: *backend-environment
+    ports:
+      - "${INGEST_API_BIND:-127.0.0.1}:${INGEST_API_PORT:-8000}:8000"
+    volumes: *backend-volumes
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: *backend-depends-on
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  parser-worker:
+    build: *backend-build
+    image: ingest-orquestator-server:gpu-local
+    restart: unless-stopped
+    command:
+      - python
+      - -m
+      - dramatiq
+      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
+      - --processes
+      - "${INGEST_PARSER_PROCESS_COUNT:-2}"
+      - --threads
+      - "${INGEST_PARSER_THREADS_PER_PROCESS:-1}"
+      - --queues
+      - ingest_parser_jobs
+    env_file:
+      - env-cuda-gpu
+    environment: *backend-environment
+    volumes: *backend-volumes
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: *backend-depends-on
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+
+  dispatch-worker:
+    build: *backend-build
+    image: ingest-orquestator-server:gpu-local
+    restart: unless-stopped
+    command:
+      - python
+      - -m
+      - dramatiq
+      - ingest_orquestator_server.infrastructure.queue.dramatiq_actors
+      - --processes
+      - "1"
+      - --threads
+      - "${INGEST_DISPATCH_WORKER_COUNT:-2}"
+      - --queues
+      - ingest_dispatch_jobs
+    env_file:
+      - env-cuda-gpu
+    environment:
+      <<: *backend-environment
+      CUDA_VISIBLE_DEVICES: ""
+      NVIDIA_VISIBLE_DEVICES: void
+    volumes: *backend-volumes
+    depends_on: *backend-depends-on
+
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+    image: ingest-orquestator-frontend:local
+    restart: unless-stopped
+    ports:
+      - "${INGEST_FRONTEND_BIND:-0.0.0.0}:${INGEST_FRONTEND_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  rabbitmq-data:

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildIngestQuery,
+  defaultApiBaseUrl,
   deleteJob,
   getIngestorSettings,
   getJobs,
@@ -14,6 +15,12 @@ import type { IngestionOptions } from "./types";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("defaultApiBaseUrl", () => {
+  it("uses same-origin API calls unless an explicit Vite env override is provided", () => {
+    expect(defaultApiBaseUrl).toBe("");
+  });
 });
 
 describe("buildIngestQuery", () => {

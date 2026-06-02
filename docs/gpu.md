@@ -77,10 +77,11 @@ CUDA_VISIBLE_DEVICES=1 INGEST_DOCLING_ACCELERATOR_DEVICE=cuda ...
 
 ## Docker Compose GPU Run
 
-The default Dockerfile remains CPU-portable. For NVIDIA GPU hosts, use the GPU override:
+For a full platform deployment with RabbitMQ, API, workers, and the frontend,
+use the NVIDIA GPU compose file:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+docker compose -f docker-compose.nvidia-gpu.yml up --build
 ```
 
 Requirements:
@@ -98,9 +99,14 @@ pytorch/pytorch:2.12.0-cuda13.2-cudnn9-runtime
 Override it at build time if your host requires another CUDA/PyTorch combination:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml build \
+docker compose -f docker-compose.nvidia-gpu.yml build \
   --build-arg PYTORCH_CUDA_IMAGE=pytorch/pytorch:2.12.0-cuda13.2-cudnn9-runtime
 ```
+
+The older `docker-compose.yml` plus `docker-compose.gpu.yml` path still works
+for backend-only testing. Prefer
+[`docs/docker-compose-platform.md`](docker-compose-platform.md) for normal
+platform deployment.
 
 ## Configuration Reference
 
