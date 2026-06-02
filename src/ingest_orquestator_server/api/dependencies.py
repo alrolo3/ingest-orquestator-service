@@ -106,9 +106,7 @@ SettingsDependency = Annotated[Settings, Depends(get_effective_settings)]
 _parsed_document_dispatch_queue_service: ParsedDocumentDispatchQueueService | None = None
 _parsed_document_dispatch_queue_key: tuple[int, int, int | None] | None = None
 _parsed_document_dispatch_service: ParsedDocumentDispatchService | None = None
-_parsed_document_dispatch_key: (
-    tuple[str, int, int, int | None, int, str, str, str, str] | None
-) = None
+_parsed_document_dispatch_key: tuple[object, ...] | None = None
 _parser_worker_service: ParserWorkerService | None = None
 _parser_worker_key: str | None = None
 _job_queue_publisher: JobQueuePublisher | None = None
@@ -239,17 +237,7 @@ def get_parsed_document_dispatch_service(
     ],
 ) -> ParsedDocumentDispatchService:
     global _parsed_document_dispatch_key, _parsed_document_dispatch_service
-    key = (
-        settings.dispatch_sink_mode,
-        settings.dispatch_max_bulk_size,
-        settings.dispatch_queue_max_size,
-        settings.dispatch_queue_max_payload_bytes,
-        settings.dispatch_worker_count,
-        settings.queue_backend,
-        settings.rabbitmq_url,
-        settings.dramatiq_parser_queue_name,
-        settings.dramatiq_dispatch_queue_name,
-    )
+    key = _dispatch_service_dependency_key(settings)
     if (
         _parsed_document_dispatch_service is None
         or _parsed_document_dispatch_key != key
@@ -412,6 +400,33 @@ def warmup_docling_engines(settings: Settings | None = None) -> None:
         return
     registry = get_docling_engine_registry(resolved_settings)
     registry.warmup()
+
+
+def _dispatch_service_dependency_key(settings: Settings) -> tuple[object, ...]:
+    return (
+        settings.dispatch_sink_mode,
+        settings.dispatch_max_bulk_size,
+        settings.dispatch_queue_max_size,
+        settings.dispatch_queue_max_payload_bytes,
+        settings.dispatch_worker_count,
+        settings.dispatch_idle_interval_seconds,
+        settings.dispatch_max_retries,
+        settings.queue_backend,
+        settings.rabbitmq_url,
+        settings.dramatiq_parser_queue_name,
+        settings.dramatiq_dispatch_queue_name,
+        settings.dramatiq_parser_time_limit_ms,
+        settings.dramatiq_dispatch_time_limit_ms,
+        settings.embedding_elastic_url,
+        settings.embedding_elastic_username,
+        settings.embedding_elastic_password,
+        settings.embedding_elastic_index,
+        settings.embedding_elastic_mapping_version,
+        settings.embedding_elastic_pipeline,
+        settings.embedding_elastic_verify_certs,
+        settings.embedding_elastic_request_timeout_seconds,
+        settings.embedding_elastic_max_retries,
+    )
 
 
 def _settings_dependency_key(settings: Settings) -> str:

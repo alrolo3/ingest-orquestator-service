@@ -49,6 +49,8 @@ class DocumentParseService:
         parser_name: str,
         output_root: Path | None = None,
         document_id: str | None = None,
+        job_id: str | None = None,
+        source_file_name: str | None = None,
         pipeline: str | None = None,
         chunking_enabled: bool | None = None,
         chunking_strategy: str | None = None,
@@ -68,10 +70,16 @@ class DocumentParseService:
         if ocr_languages is not None:
             parse_kwargs["ocr_languages"] = ocr_languages
         parse_output = parser.parse(file_path, **parse_kwargs)
+        parse_output = self._apply_source_file_name_override(
+            parse_output,
+            source_file_name=source_file_name,
+            storage_file_path=file_path,
+        )
         return self._build_parse_result(
             parse_output,
             parser_name=parser_name,
             output_root=output_root,
+            job_id=job_id,
             pipeline=pipeline,
             chunking_enabled=chunking_enabled,
             chunking_strategy=chunking_strategy,
@@ -120,6 +128,7 @@ class DocumentParseService:
                 parse_output,
                 parser_name=parser_name,
                 output_root=output_root,
+                job_id=None,
                 pipeline=pipeline,
                 chunking_enabled=chunking_enabled,
                 chunking_strategy=chunking_strategy,
@@ -136,6 +145,7 @@ class DocumentParseService:
         *,
         parser_name: str,
         output_root: Path | None,
+        job_id: str | None,
         pipeline: str | None,
         chunking_enabled: bool | None,
         chunking_strategy: str | None,
@@ -155,10 +165,11 @@ class DocumentParseService:
         chunking_metadata = chunking_selection.metadata()
         pipeline_name = parse_output.metadata.get("pipeline")
         input_format = parse_output.metadata.get("input_format")
+        resolved_job_id = job_id or parse_output.document_id
         rag_records = self._rag_record_service.build_records(
             document=parse_output.normalized_document,
             chunks=chunks,
-            job_id=parse_output.document_id,
+            job_id=resolved_job_id,
             parser=parser_name,
             pipeline=str(pipeline_name) if pipeline_name is not None else pipeline,
             input_format=str(input_format) if input_format is not None else None,
@@ -193,7 +204,7 @@ class DocumentParseService:
             metadata={
                 **diagnostics.metadata,
                 "document_id": parse_output.document_id,
-                "job_id": parse_output.document_id,
+                "job_id": resolved_job_id,
                 "parser": parser_name,
                 "title": parse_output.title,
                 "source_file_name": parse_output.source_file_name,
@@ -217,6 +228,50 @@ class DocumentParseService:
             content=content,
             outputs=outputs,
             diagnostics=diagnostics,
+        )
+
+    def _apply_source_file_name_override(
+        self,
+        parse_output: ParseOutput,
+        *,
+        source_file_name: str | None,
+        storage_file_path: Path,
+    ) -> ParseOutput:
+        if source_file_name is None or not source_file_name.strip():
+            return parse_output
+
+        display_name = source_file_name.strip()
+        display_title = Path(display_name).stem
+        storage_title = storage_file_path.stem
+        storage_title_values = {None, "", storage_title, storage_file_path.name}
+        title = display_title if parse_output.title in storage_title_values else parse_output.title
+        metadata = dict(parse_output.metadata)
+        metadata["source_file_name"] = display_name
+        normalized_document = parse_output.normalized_document
+        if normalized_document is not None:
+            normalized_metadata = dict(normalized_document.metadata)
+            origin = normalized_metadata.get("origin")
+            if isinstance(origin, dict):
+                normalized_metadata["origin"] = origin | {"filename": display_name}
+            normalized_title = (
+                title
+                if normalized_document.title in storage_title_values
+                else normalized_document.title
+            )
+            normalized_document = normalized_document.model_copy(
+                update={
+                    "source_file_name": display_name,
+                    "title": normalized_title,
+                    "metadata": normalized_metadata,
+                }
+            )
+        return parse_output.model_copy(
+            update={
+                "source_file_name": display_name,
+                "title": title,
+                "metadata": metadata,
+                "normalized_document": normalized_document,
+            }
         )
 
     def write_parse_result(

@@ -145,6 +145,44 @@ def test_parser_worker_passes_requested_html_output(tmp_path: Path) -> None:
     assert parse_service.calls[0]["include_html"] is True
 
 
+def test_parser_worker_passes_job_id_and_original_source_file_name(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(storage_dir=tmp_path, allowed_upload_extensions=[".html"])
+    repository = SqliteIngestionJobRepository(settings.jobs_db_path)
+    job_id = "b84c3bec-1170-4d01-9df6-f4a9600aa80f"
+    document_id = "5590a00e-1333-4ff3-a1d6-91e30c4b4abc"
+    input_path = tmp_path / f"{job_id}-document-3-.html"
+    input_path.write_text("<h1>Example</h1>", encoding="utf-8")
+    repository.save(
+        IngestionJob(
+            job_id=job_id,
+            status=IngestionStatus.PARSER_QUEUED,
+            parser="docling",
+            source_file_name="document-3-.html",
+            input_path=input_path,
+            document_id=document_id,
+            metadata={"requested_pipeline": "standard"},
+        )
+    )
+    parse_service = RecordingDocumentParseService(tmp_path)
+    worker = ParserWorkerService(
+        settings=settings,
+        document_parse_service=parse_service,
+        job_repository=repository,
+        dispatch_service=_build_dispatch_service(settings, repository),
+    )
+
+    try:
+        worker.process_job(job_id)
+    finally:
+        worker.shutdown()
+
+    assert parse_service.calls[0]["document_id"] == document_id
+    assert parse_service.calls[0]["job_id"] == job_id
+    assert parse_service.calls[0]["source_file_name"] == "document-3-.html"
+
+
 def test_parser_worker_marks_missing_input_path_as_failed(tmp_path: Path) -> None:
     settings = Settings(storage_dir=tmp_path)
     repository = SqliteIngestionJobRepository(settings.jobs_db_path)

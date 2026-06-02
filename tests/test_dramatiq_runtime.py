@@ -1,8 +1,10 @@
 import pytest
 
+from ingest_orquestator_server.api import dependencies
 from ingest_orquestator_server.application.services.job_parse_coordinator import (
     ParseJobResult,
 )
+from ingest_orquestator_server.config import settings as settings_module
 from ingest_orquestator_server.config.settings import Settings
 from ingest_orquestator_server.infrastructure.queue import dramatiq_runtime
 
@@ -111,6 +113,135 @@ def test_run_parser_job_in_subprocess_surfaces_child_failures(monkeypatch) -> No
             "job-1",
             Settings().model_dump(mode="python"),
         )
+
+
+def test_build_dispatch_service_uses_effective_runtime_settings(monkeypatch) -> None:
+    env_settings = Settings(
+        dispatch_sink_mode="elastic",
+        embedding_elastic_url="https://elastic.example:9200",
+    )
+    effective_settings = Settings(
+        dispatch_sink_mode="elastic",
+        embedding_elastic_url="https://elastic.real:9200",
+    )
+    seen_settings: dict[str, Settings] = {}
+    repository = object()
+    queue_service = object()
+    dispatch_service = object()
+
+    def get_job_repository(settings: Settings):
+        seen_settings["repository"] = settings
+        return repository
+
+    def get_parsed_document_dispatch_queue_service(settings: Settings):
+        seen_settings["queue"] = settings
+        return queue_service
+
+    def get_parsed_document_dispatch_service(
+        settings: Settings,
+        queue,
+        job_repository,
+        job_queue_publisher,
+    ):
+        seen_settings["dispatch"] = settings
+        assert queue is queue_service
+        assert job_repository is repository
+        assert job_queue_publisher is None
+        return dispatch_service
+
+    monkeypatch.setattr(settings_module, "get_settings", lambda: env_settings)
+    monkeypatch.setattr(
+        dramatiq_runtime,
+        "effective_runtime_settings",
+        lambda: effective_settings,
+    )
+    monkeypatch.setattr(dependencies, "get_job_repository", get_job_repository)
+    monkeypatch.setattr(
+        dependencies,
+        "get_parsed_document_dispatch_queue_service",
+        get_parsed_document_dispatch_queue_service,
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "get_parsed_document_dispatch_service",
+        get_parsed_document_dispatch_service,
+    )
+
+    assert dramatiq_runtime.build_dispatch_service() is dispatch_service
+    assert seen_settings == {
+        "repository": effective_settings,
+        "queue": effective_settings,
+        "dispatch": effective_settings,
+    }
+
+
+def test_dispatch_service_cache_includes_elastic_connection_settings(
+    monkeypatch,
+) -> None:
+    first_settings = Settings(
+        queue_backend="dramatiq",
+        dispatch_sink_mode="elastic",
+        embedding_elastic_url="https://elastic.example:9200",
+    )
+    second_settings = Settings(
+        queue_backend="dramatiq",
+        dispatch_sink_mode="elastic",
+        embedding_elastic_url="https://elastic.real:9200",
+    )
+    built_urls: list[str | None] = []
+    stopped_urls: list[str | None] = []
+
+    class RecordingElasticSink:
+        def __init__(self, settings: Settings) -> None:
+            built_urls.append(settings.embedding_elastic_url)
+
+    class RecordingDispatchService:
+        def __init__(
+            self,
+            *,
+            settings: Settings,
+            queue_service: object,
+            dispatcher: object,
+            job_repository: object,
+            output_writer: object,
+            dispatch_job_queue: object | None,
+        ) -> None:
+            self.settings = settings
+
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            stopped_urls.append(self.settings.embedding_elastic_url)
+
+    monkeypatch.setattr(dependencies, "_parsed_document_dispatch_service", None)
+    monkeypatch.setattr(dependencies, "_parsed_document_dispatch_key", None)
+    monkeypatch.setattr(dependencies, "ElasticChunkIndexDispatchSink", RecordingElasticSink)
+    monkeypatch.setattr(
+        dependencies,
+        "ParsedDocumentDispatchService",
+        RecordingDispatchService,
+    )
+
+    first_service = dependencies.get_parsed_document_dispatch_service(
+        first_settings,
+        object(),
+        object(),
+        None,
+    )
+    second_service = dependencies.get_parsed_document_dispatch_service(
+        second_settings,
+        object(),
+        object(),
+        None,
+    )
+
+    assert first_service is not second_service
+    assert built_urls == [
+        "https://elastic.example:9200",
+        "https://elastic.real:9200",
+    ]
+    assert stopped_urls == ["https://elastic.example:9200"]
 
 
 class FakeProcessContext:

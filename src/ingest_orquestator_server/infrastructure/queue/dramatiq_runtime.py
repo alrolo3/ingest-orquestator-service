@@ -228,9 +228,8 @@ def build_dispatch_service() -> Any:
         get_parsed_document_dispatch_queue_service,
         get_parsed_document_dispatch_service,
     )
-    from ingest_orquestator_server.config.settings import get_settings
 
-    settings = get_settings()
+    settings = effective_runtime_settings()
     job_repository = get_job_repository(settings)
     return get_parsed_document_dispatch_service(
         settings,

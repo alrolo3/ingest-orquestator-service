@@ -136,6 +136,45 @@ def test_parse_file_adds_selected_chunking_strategy_to_rag_metadata(tmp_path: Pa
     assert result.content.rag_records[0].metadata["chunking_strategy"] == "page"
 
 
+def test_parse_file_uses_original_source_name_and_job_id_for_stored_uploads(
+    tmp_path: Path,
+) -> None:
+    job_id = "b84c3bec-1170-4d01-9df6-f4a9600aa80f"
+    document_id = "5590a00e-1333-4ff3-a1d6-91e30c4b4abc"
+    input_path = tmp_path / f"{job_id}-document-3-.html"
+    input_path.write_text("<h1>Example</h1>", encoding="utf-8")
+    service = DocumentParseService(
+        parser_registry=ParserRegistry({"docling": lambda: StoredUploadNameParser()}),
+        output_writer=LocalParseOutputWriter(),
+        chunking_service=ParserChunkingService(
+            {},
+            default_enabled=False,
+            default_strategy=None,
+        ),
+    )
+
+    result = service.parse_file(
+        file_path=input_path,
+        parser_name="docling",
+        document_id=document_id,
+        job_id=job_id,
+        source_file_name="document-3-.html",
+        chunking_enabled=False,
+    )
+
+    record = result.content.rag_records[0]
+    assert result.content.document_id == document_id
+    assert result.content.metadata["document_id"] == document_id
+    assert result.content.metadata["job_id"] == job_id
+    assert result.content.metadata["source_file_name"] == "document-3-.html"
+    assert result.diagnostics.metadata["source_file_name"] == "document-3-.html"
+    assert record.document_id == document_id
+    assert record.job_id == job_id
+    assert record.source_file_name == "document-3-.html"
+    assert job_id not in record.source_file_name
+    assert record.title == "document-3-"
+
+
 def _build_service(settings: Settings) -> DocumentParseService:
     return DocumentParseService(
         parser_registry=ParserRegistry(
@@ -196,4 +235,42 @@ class NativeDoclingOutputParser:
             metadata={"input_format": "md", "pipeline": pipeline or "standard"},
             normalized_document=normalized_document,
             chunking_document=docling_document,
+        )
+
+
+class StoredUploadNameParser:
+    name = "docling"
+
+    def parse(
+        self,
+        file_path: Path,
+        *,
+        document_id: str | None = None,
+        **_kwargs: Any,
+    ) -> ParseOutput:
+        resolved_document_id = document_id or "doc-1"
+        normalized_document = ParsedDocument(
+            document_id=resolved_document_id,
+            source_file_name=file_path.name,
+            source_path=str(file_path),
+            title=file_path.stem,
+            markdown="<h1>Example</h1>",
+            text="Example",
+            metadata={
+                "origin": {
+                    "filename": file_path.name,
+                }
+            },
+        )
+        return ParseOutput(
+            document_id=resolved_document_id,
+            source_file_name=file_path.name,
+            title=file_path.stem,
+            markdown="<h1>Example</h1>",
+            metadata={
+                "input_format": "html",
+                "pipeline": "standard",
+                "source_file_name": file_path.name,
+            },
+            normalized_document=normalized_document,
         )
