@@ -80,8 +80,8 @@ def test_env_example_loads() -> None:
     assert settings.dispatch_queue_max_payload_bytes is None
     assert settings.dispatch_max_bulk_size == 5
     assert settings.dispatch_sink_mode == "local"
-    assert settings.embedding_elastic_mapping_version == "v2"
-    assert settings.embedding_elastic_index == "open-rag-embeddings-v2"
+    assert settings.embedding_elastic_mapping_version == "v3"
+    assert settings.embedding_elastic_index == "open-rag-embeddings-v3"
     assert settings.embedding_elastic_pipeline is None
 
 
@@ -321,15 +321,19 @@ def test_settings_grouped_config_views() -> None:
 
 def test_settings_normalize_elastic_mapping_version_aliases() -> None:
     semantic_settings = Settings(embedding_elastic_mapping_version="semantic-text-v2")
+    multilingual_settings = Settings(
+        embedding_elastic_mapping_version="semantic-text-v3"
+    )
     dense_vector_settings = Settings(embedding_elastic_mapping_version="dense_vector_v1")
 
     assert semantic_settings.embedding_elastic_mapping_version == "v2"
+    assert multilingual_settings.embedding_elastic_mapping_version == "v3"
     assert dense_vector_settings.embedding_elastic_mapping_version == "v1"
 
 
 def test_settings_reject_unknown_elastic_mapping_version() -> None:
     with pytest.raises(ValidationError):
-        Settings(embedding_elastic_mapping_version="v3")
+        Settings(embedding_elastic_mapping_version="v4")
 
 
 def test_settings_reject_unknown_queue_backend() -> None:

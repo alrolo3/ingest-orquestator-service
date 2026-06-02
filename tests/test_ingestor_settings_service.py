@@ -112,3 +112,17 @@ def test_ingestor_settings_service_validates_settings_values(tmp_path) -> None:
 
     with pytest.raises(ValidationError):
         service.update(IngestorSettingsUpdate(values={"docling_accelerator_device": "gpu"}))
+
+
+def test_ingestor_settings_service_exposes_elastic_mapping_v3_option(tmp_path) -> None:
+    service = IngestorSettingsService(
+        base_settings=Settings(storage_dir=tmp_path),
+        repository=SqliteIngestorSettingsRepository(tmp_path / "jobs.sqlite3"),
+    )
+
+    response = service.settings_response()
+    mapping_field = next(
+        field for field in response.fields if field.key == "embedding_elastic_mapping_version"
+    )
+
+    assert [option.value for option in mapping_field.options] == ["v1", "v2", "v3"]

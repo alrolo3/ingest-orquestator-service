@@ -111,6 +111,49 @@ def test_elastic_dispatcher_uses_semantic_text_v2_without_bulk_action_pipeline(
     }
 
 
+def test_elastic_dispatcher_indexes_v3_contract_without_deprecated_semantic_fields(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        embedding_elastic_url="https://elastic.example:9200",
+        embedding_elastic_index="open-rag-embeddings-v3",
+        embedding_elastic_mapping_version="semantic_text_v3",
+        embedding_elastic_pipeline="open_rag_embeddings_v3_multilingual_semantic_pipeline",
+    )
+    client = FakeElasticsearchClient()
+    captured: dict[str, object] = {}
+
+    def fake_bulk(client_arg, actions, **kwargs):
+        captured["client"] = client_arg
+        captured["actions"] = list(actions)
+        captured["kwargs"] = kwargs
+        return 1, []
+
+    dispatcher = ElasticChunkIndexDispatchSink(
+        settings, client=client, bulk_helper=fake_bulk
+    )
+
+    result = dispatcher.submit_batch([_item(tmp_path)])
+
+    action = captured["actions"][0]
+    source = action["_source"]
+    assert result.raw_response["mapping_version"] == "v3"
+    assert action["_index"] == "open-rag-embeddings-v3"
+    assert "pipeline" not in action
+    assert source["content"] == "one"
+    assert source["clean_title"] == "Quarterly Revenue"
+    assert source["chunking_strategy"] == "token"
+    assert source["content_length"] == 3
+    assert source["token_count"] == 1
+    assert source["chunk_quality"] == 0.9
+    assert source["searchable"] is True
+    assert source["boilerplate"] is False
+    assert source["content_kind"] == "paragraph"
+    assert "content_semantic" not in source
+    assert "title_semantic" not in source
+    assert "chunker_strategy" not in source
+
+
 class FakeElasticsearchClient:
     def __init__(self) -> None:
         self.requests: list[tuple[str, str, dict | None]] = []
@@ -133,6 +176,13 @@ def _item(tmp_path: Path) -> ParsedDocumentDispatchItem:
         page_start=1,
         page_end=1,
         chunk_id="c1",
+        clean_title="Quarterly Revenue",
+        content_length=3,
+        token_count=1,
+        chunk_quality=0.9,
+        searchable=True,
+        boilerplate=False,
+        content_kind="paragraph",
         metadata={
             "source_path": str(tmp_path / "private.pdf"),
             "raw_text": "private raw content",

@@ -68,8 +68,8 @@ export INGEST_DISPATCH_MAX_RETRIES=3
 export INGEST_EMBEDDING_ELASTIC_URL="https://your-elastic-endpoint:9200"
 export INGEST_EMBEDDING_ELASTIC_USERNAME="your-user"
 export INGEST_EMBEDDING_ELASTIC_PASSWORD="your-password"
-export INGEST_EMBEDDING_ELASTIC_INDEX="open-rag-embeddings-v2"
-export INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION="v2"
+export INGEST_EMBEDDING_ELASTIC_INDEX="open-rag-embeddings-v3"
+export INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION="v3"
 export INGEST_EMBEDDING_ELASTIC_PIPELINE=
 ```
 
@@ -98,12 +98,12 @@ spool in a future version.
 
 The dispatcher sends a lean chunk document to Elasticsearch. Each indexed chunk
 contains the stable fields needed for RAG retrieval and filtering:
-`record_id`, `document_id`, `chunk_id`, `content`, `title`,
+`record_id`, `document_id`, `chunk_id`, `content`, `title`, `clean_title`,
 `source_file_name`, `input_format`, `parser`, `pipeline`, `chunking_strategy`,
-page span, element types, and confidence scores. Full Docling metadata,
-runtime diagnostics, provenance boxes, local paths, and raw duplicate text stay
-in the local document artifacts instead of being repeated in every indexed
-chunk.
+page span, headings, element types, chunk quality controls, and confidence
+scores. Full Docling metadata, runtime diagnostics, provenance boxes, local
+paths, and raw duplicate text stay in the local document artifacts instead of
+being repeated in every indexed chunk.
 
 For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v1`, the configured ingest
 pipeline embeds `content` and `title` into `content_embedding` and
@@ -117,7 +117,15 @@ into `title_semantic`; those `semantic_text` fields run inference through their
 field mapping. The index keeps `content_semantic` and `title_semantic` in
 `_source` so search and debug responses can show the text sent to inference.
 
-The v2 asset at `elastic/open-rag-embeddings-v2.json` contains the index
+For `INGEST_EMBEDDING_ELASTIC_MAPPING_VERSION=v3`, the v3 index stores the
+canonical chunk text once in `content` as `semantic_text`. The index default
+pipeline detects language, copies `content` into exactly one
+`content_lex.<language>` BM25 field, excludes those derived lexical fields from
+`_source`, and removes deprecated `content_semantic` and `title_semantic`
+fields. Create a new v3 index and re-ingest or reindex into it; changing the
+existing v2 `content` mapping in place is not supported.
+
+The v3 asset at `elastic/open-rag-embeddings-v3.json` contains the index
 mapping, the index default-pipeline setting, and the ingest pipeline. Create the
 pipeline before the index:
 
@@ -126,22 +134,22 @@ python - <<'PY'
 import json
 from pathlib import Path
 
-asset = json.loads(Path("elastic/open-rag-embeddings-v2.json").read_text())
-Path("/tmp/open-rag-embeddings-v2-index.json").write_text(json.dumps(asset["index"]))
-Path("/tmp/open-rag-embeddings-v2-pipeline.json").write_text(json.dumps(asset["pipeline"]))
+asset = json.loads(Path("elastic/open-rag-embeddings-v3.json").read_text())
+Path("/tmp/open-rag-embeddings-v3-index.json").write_text(json.dumps(asset["index"]))
+Path("/tmp/open-rag-embeddings-v3-pipeline.json").write_text(json.dumps(asset["pipeline"]))
 print(asset["index_name"])
 print(asset["pipeline_name"])
 PY
 
 curl -k -u "$ELASTIC_USER:$ELASTIC_PASS" \
   -H "Content-Type: application/json" \
-  -X PUT "$ELASTIC_URL/_ingest/pipeline/open_rag_embeddings_v2_semantic_pipeline" \
-  --data-binary @/tmp/open-rag-embeddings-v2-pipeline.json
+  -X PUT "$ELASTIC_URL/_ingest/pipeline/open_rag_embeddings_v3_multilingual_semantic_pipeline" \
+  --data-binary @/tmp/open-rag-embeddings-v3-pipeline.json
 
 curl -k -u "$ELASTIC_USER:$ELASTIC_PASS" \
   -H "Content-Type: application/json" \
-  -X PUT "$ELASTIC_URL/open-rag-embeddings-v2" \
-  --data-binary @/tmp/open-rag-embeddings-v2-index.json
+  -X PUT "$ELASTIC_URL/open-rag-embeddings-v3" \
+  --data-binary @/tmp/open-rag-embeddings-v3-index.json
 ```
 
 The Elastic payload does not include local filesystem paths. Local paths remain

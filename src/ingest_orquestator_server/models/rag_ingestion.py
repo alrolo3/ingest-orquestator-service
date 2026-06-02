@@ -18,12 +18,24 @@ class RagIngestionRecord(BaseModel):
     job_id: str
     content: str
     title: str | None = None
+    clean_title: str | None = None
     source_file_name: str | None = None
     input_format: str | None = None
     parser: str | None = None
     pipeline: str | None = None
     page_start: int | None = None
     page_end: int | None = None
+    page_count: int | None = None
     chunk_id: str | None = None
     record_type: RagRecordType = RagRecordType.CHUNK
+    headings: list[str] | None = None
+    element_types: list[str] | None = None
+    chunking_strategy: str | None = None
+    searchable: bool | None = None
+    boilerplate: bool | None = None
+    content_kind: str | None = None
+    content_length: int | None = None
+    token_count: int | None = None
+    chunk_quality: float | None = None
+    confidence: dict[str, Any] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

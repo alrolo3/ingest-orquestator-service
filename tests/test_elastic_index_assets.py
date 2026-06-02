@@ -117,3 +117,82 @@ def test_open_rag_embedding_v2_index_asset_uses_semantic_text_without_auto_chunk
             }
         },
     ]
+
+
+def test_open_rag_embedding_v3_index_asset_uses_canonical_semantic_content() -> None:
+    asset_path = Path("elastic/open-rag-embeddings-v3.json")
+
+    asset = json.loads(asset_path.read_text(encoding="utf-8"))
+    mappings = asset["index"]["mappings"]
+    settings = asset["index"]["settings"]
+    properties = mappings["properties"]
+    processors = asset["pipeline"]["processors"]
+
+    assert asset["index_name"] == "open-rag-embeddings-v3"
+    assert (
+        asset["pipeline_name"]
+        == "open_rag_embeddings_v3_multilingual_semantic_pipeline"
+    )
+    assert (
+        settings["index.default_pipeline"]
+        == "open_rag_embeddings_v3_multilingual_semantic_pipeline"
+    )
+    assert mappings["_source"]["excludes"] == [
+        "content_lex.*",
+        "content_semantic",
+        "title_semantic",
+        "language_detection",
+    ]
+    assert mappings["_meta"]["inference_id"] == "qwen3-embedding-8b"
+    assert mappings["_meta"]["language_detection_model"] == "lang_ident_model_1"
+    assert "content_semantic" not in properties
+    assert "title_semantic" not in properties
+    assert "title_semantic" in mappings["_source"]["excludes"]
+
+    content = properties["content"]
+    assert content["type"] == "semantic_text"
+    assert content["inference_id"] == "qwen3-embedding-8b"
+    assert content["index_options"]["dense_vector"] == {
+        "element_type": "float",
+        "type": "int8_hnsw",
+        "m": 16,
+        "ef_construction": 100,
+    }
+    assert content["chunking_settings"] == {"strategy": "none"}
+
+    content_lex = properties["content_lex"]["properties"]
+    assert content_lex["es"]["analyzer"] == "spanish"
+    assert content_lex["en"]["analyzer"] == "english"
+    assert content_lex["fr"]["analyzer"] == "french"
+    assert content_lex["de"]["analyzer"] == "german"
+    assert content_lex["it"]["analyzer"] == "italian"
+    assert content_lex["pt"]["analyzer"] == "portuguese"
+    assert content_lex["ca"]["analyzer"] == "catalan"
+    assert content_lex["gl"]["analyzer"] == "galician"
+    assert content_lex["default"]["analyzer"] == "standard"
+
+    assert properties["language"]["type"] == "keyword"
+    assert properties["language_probability"]["type"] == "float"
+    assert properties["clean_title"]["fields"]["keyword"]["type"] == "keyword"
+    assert properties["chunking_strategy"]["type"] == "keyword"
+    assert "chunker_strategy" not in properties
+    assert properties["searchable"]["type"] == "boolean"
+    assert properties["boilerplate"]["type"] == "boolean"
+    assert properties["content_kind"]["type"] == "keyword"
+    assert properties["content_length"]["type"] == "integer"
+    assert properties["token_count"]["type"] == "integer"
+    assert properties["chunk_quality"]["type"] == "float"
+    assert properties["metadata"] == {"type": "object", "enabled": False}
+
+    assert processors[0]["set"]["field"] == "ingested_at"
+    assert processors[0]["set"]["override"] is False
+    assert processors[1]["script"]["description"].startswith("Normalize metadata")
+    assert processors[2]["inference"]["model_id"] == "lang_ident_model_1"
+    assert processors[2]["inference"]["target_field"] == "language_detection"
+    assert processors[3]["script"]["description"].startswith("Choose a supported")
+    assert processors[4]["remove"]["field"] == [
+        "content_semantic",
+        "title_semantic",
+        "language_detection",
+        "chunker_strategy",
+    ]

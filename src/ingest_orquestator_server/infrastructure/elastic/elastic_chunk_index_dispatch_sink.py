@@ -74,7 +74,9 @@ class ElasticChunkIndexDispatchSink:
     ) -> dict[str, Any]:
         metadata = dict(record.metadata)
         confidence = self._indexable_confidence(
-            metadata.get("confidence_summary") or item.content.metadata.get("confidence_summary")
+            record.confidence
+            or metadata.get("confidence_summary")
+            or item.content.metadata.get("confidence_summary")
         )
         document = {
             "record_id": record.record_id,
@@ -88,14 +90,43 @@ class ElasticChunkIndexDispatchSink:
             "input_format": record.input_format or item.metadata.get("input_format"),
             "parser": record.parser or item.metadata.get("parser"),
             "pipeline": record.pipeline or item.metadata.get("pipeline"),
-            "chunking_strategy": metadata.get("chunking_strategy")
+            "chunking_strategy": record.chunking_strategy
+            or metadata.get("chunking_strategy")
             or metadata.get("chunker_strategy"),
             "page_start": record.page_start,
             "page_end": record.page_end,
-            "element_types": metadata.get("element_types", []),
+            "element_types": record.element_types or metadata.get("element_types", []),
             "confidence": confidence,
             "metadata": self._safe_record_metadata(metadata),
         }
+        if self._uses_multilingual_semantic_mapping:
+            document.update(
+                {
+                    "clean_title": record.clean_title
+                    or metadata.get("clean_title")
+                    or record.title,
+                    "page_count": record.page_count
+                    if record.page_count is not None
+                    else metadata.get("page_count"),
+                    "headings": record.headings or metadata.get("headings"),
+                    "searchable": record.searchable
+                    if record.searchable is not None
+                    else metadata.get("searchable"),
+                    "boilerplate": record.boilerplate
+                    if record.boilerplate is not None
+                    else metadata.get("boilerplate"),
+                    "content_kind": record.content_kind or metadata.get("content_kind"),
+                    "content_length": record.content_length
+                    if record.content_length is not None
+                    else len(record.content),
+                    "token_count": record.token_count
+                    if record.token_count is not None
+                    else metadata.get("token_count"),
+                    "chunk_quality": record.chunk_quality
+                    if record.chunk_quality is not None
+                    else metadata.get("chunk_quality"),
+                }
+            )
         return self._drop_empty_optional_fields(document)
 
     def _safe_record_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
@@ -178,7 +209,11 @@ class ElasticChunkIndexDispatchSink:
 
     @property
     def _uses_semantic_text_mapping(self) -> bool:
-        return self._settings.embedding_elastic_mapping_version == "v2"
+        return self._settings.embedding_elastic_mapping_version in {"v2", "v3"}
+
+    @property
+    def _uses_multilingual_semantic_mapping(self) -> bool:
+        return self._settings.embedding_elastic_mapping_version == "v3"
 
     @property
     def _uses_ingest_pipeline(self) -> bool:

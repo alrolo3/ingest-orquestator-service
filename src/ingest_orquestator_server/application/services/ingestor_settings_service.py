@@ -36,7 +36,7 @@ SETTING_OPTIONS = {
     "docling_pipeline": ["standard", "vlm", "auto"],
     "chunking_strategy": ["page", "token", "line"],
     "dispatch_sink_mode": ["local", "elastic", "local_and_elastic"],
-    "embedding_elastic_mapping_version": ["v1", "v2"],
+    "embedding_elastic_mapping_version": ["v1", "v2", "v3"],
     "docling_vlm_response_format": [
         "markdown",
         "doctags",

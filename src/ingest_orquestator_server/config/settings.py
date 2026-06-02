@@ -366,7 +366,12 @@ class Settings(BaseSettings):
             return "v1"
         if normalized in {"v2", "semantic_text", "semantic_text_v2"}:
             return "v2"
-        raise ValueError("must be one of v1, dense_vector_v1, v2, or semantic_text_v2")
+        if normalized in {"v3", "semantic_text_v3", "multilingual_semantic_v3"}:
+            return "v3"
+        raise ValueError(
+            "must be one of v1, dense_vector_v1, v2, semantic_text_v2, v3, "
+            "or semantic_text_v3"
+        )
 
     @field_validator("dispatch_sink_mode")
     @classmethod
