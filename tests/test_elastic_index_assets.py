@@ -143,7 +143,14 @@ def test_open_rag_embedding_v3_index_asset_uses_canonical_semantic_content() -> 
         "title_semantic",
         "language_detection",
     ]
-    assert mappings["_meta"]["inference_id"] == "qwen3-embedding-8b"
+    assert mappings["_meta"]["inference_id"] == "qwen3-embedding-4b"
+    assert mappings["_meta"]["expected_model_settings"] == {
+        "service": "custom",
+        "task_type": "text_embedding",
+        "dimensions": 2560,
+        "similarity": "dot_product",
+        "element_type": "float",
+    }
     assert mappings["_meta"]["language_detection_model"] == "lang_ident_model_1"
     assert "content_semantic" not in properties
     assert "title_semantic" not in properties
@@ -151,7 +158,8 @@ def test_open_rag_embedding_v3_index_asset_uses_canonical_semantic_content() -> 
 
     content = properties["content"]
     assert content["type"] == "semantic_text"
-    assert content["inference_id"] == "qwen3-embedding-8b"
+    assert content["inference_id"] == "qwen3-embedding-4b"
+    assert content["model_settings"] == mappings["_meta"]["expected_model_settings"]
     assert content["index_options"]["dense_vector"] == {
         "element_type": "float",
         "type": "int8_hnsw",

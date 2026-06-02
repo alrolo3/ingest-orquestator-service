@@ -98,7 +98,7 @@ which strategies are valid for each parser.
 INGEST_CHUNKING_ENABLED=false
 INGEST_CHUNKING_STRATEGY=page
 INGEST_CHUNK_MAX_TOKENS=768
-INGEST_CHUNK_TOKENIZER_PATH=/datastore/models/tokenizers/qwen3-embedding-8b
+INGEST_CHUNK_TOKENIZER_PATH=/datastore/models/tokenizers/qwen3-embedding-4b
 ```
 
 Docling strategies in this version:

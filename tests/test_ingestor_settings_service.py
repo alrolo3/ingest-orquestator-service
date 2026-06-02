@@ -76,18 +76,18 @@ def test_ingestor_settings_service_loads_env_then_sqlite_overrides(tmp_path) -> 
     repository = SqliteIngestorSettingsRepository(tmp_path / "jobs.sqlite3")
     base_settings = Settings(
         storage_dir=tmp_path,
-        chunk_tokenizer_path="/datastore/tokenizers/qwen3-embedding-8b",
+        chunk_tokenizer_path="/datastore/tokenizers/qwen3-embedding-4b",
     )
     repository.set(
         "chunk_tokenizer_path",
-        "/datastore/models/tokenizers/qwen3-embedding-8b",
+        "/datastore/models/tokenizers/qwen3-embedding-4b",
     )
 
     service = IngestorSettingsService(base_settings=base_settings, repository=repository)
 
     assert (
         str(service.effective_settings().chunk_tokenizer_path)
-        == "/datastore/models/tokenizers/qwen3-embedding-8b"
+        == "/datastore/models/tokenizers/qwen3-embedding-4b"
     )
 
 

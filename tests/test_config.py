@@ -48,7 +48,7 @@ def test_env_example_loads() -> None:
     assert settings.chunking_strategy == "page"
     assert (
         str(settings.chunk_tokenizer_path)
-        == "/datastore/models/tokenizers/qwen3-embedding-8b"
+        == "/datastore/models/tokenizers/qwen3-embedding-4b"
     )
     assert settings.confidence_output_enabled is True
     assert settings.docling_accelerator_device == "cuda"
@@ -130,7 +130,7 @@ def test_cpu_env_loads() -> None:
     assert settings.chunking_strategy == "page"
     assert (
         str(settings.chunk_tokenizer_path)
-        == "/datastore/models/tokenizers/qwen3-embedding-8b"
+        == "/datastore/models/tokenizers/qwen3-embedding-4b"
     )
 
 

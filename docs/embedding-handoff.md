@@ -129,6 +129,13 @@ The v3 asset at `elastic/open-rag-embeddings-v3.json` contains the index
 mapping, the index default-pipeline setting, and the ingest pipeline. Create the
 pipeline before the index:
 
+The current v3 asset is configured for the `qwen3-embedding-4b` inference
+endpoint, whose embedding dimension is 2560. If an existing
+`open-rag-embeddings-v3` index was created for a different endpoint such as
+`qwen3-embedding-8b`, recreate the index or create a replacement index and move
+the alias. Elasticsearch cannot update `semantic_text` `model_settings` in
+place.
+
 ```bash
 python - <<'PY'
 import json
