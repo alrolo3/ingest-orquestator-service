@@ -154,6 +154,37 @@ def test_elastic_dispatcher_indexes_v3_contract_without_deprecated_semantic_fiel
     assert "chunker_strategy" not in source
 
 
+def test_elastic_dispatcher_escapes_v3_semantic_content_template_placeholders(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        embedding_elastic_url="https://elastic.example:9200",
+        embedding_elastic_index="open-rag-embeddings-v3",
+        embedding_elastic_mapping_version="semantic_text_v3",
+        embedding_elastic_pipeline="open_rag_embeddings_v3_multilingual_semantic_pipeline",
+    )
+    client = FakeElasticsearchClient()
+    captured: dict[str, object] = {}
+
+    def fake_bulk(client_arg, actions, **kwargs):
+        captured["client"] = client_arg
+        captured["actions"] = list(actions)
+        captured["kwargs"] = kwargs
+        return 1, []
+
+    dispatcher = ElasticChunkIndexDispatchSink(
+        settings, client=client, bulk_helper=fake_bulk
+    )
+
+    dispatcher.submit_batch(
+        [_item(tmp_path, content="echo ${RED}warning${NC}")]
+    )
+
+    source = captured["actions"][0]["_source"]
+    assert source["content"] == "echo $ {RED}warning$ {NC}"
+    assert source["content_length"] == len("echo $ {RED}warning$ {NC}")
+
+
 class FakeElasticsearchClient:
     def __init__(self) -> None:
         self.requests: list[tuple[str, str, dict | None]] = []
@@ -162,12 +193,12 @@ class FakeElasticsearchClient:
         return self
 
 
-def _item(tmp_path: Path) -> ParsedDocumentDispatchItem:
+def _item(tmp_path: Path, *, content: str = "one") -> ParsedDocumentDispatchItem:
     record = RagIngestionRecord(
         record_id="1",
         document_id="doc",
         job_id="job-1",
-        content="one",
+        content=content,
         title="Quarterly Revenue",
         source_file_name="sample.pdf",
         input_format="pdf",
@@ -177,7 +208,7 @@ def _item(tmp_path: Path) -> ParsedDocumentDispatchItem:
         page_end=1,
         chunk_id="c1",
         clean_title="Quarterly Revenue",
-        content_length=3,
+        content_length=len(content),
         token_count=1,
         chunk_quality=0.9,
         searchable=True,
@@ -198,7 +229,7 @@ def _item(tmp_path: Path) -> ParsedDocumentDispatchItem:
         source_file_name="sample.pdf",
         content=ParsedDocumentContent(
             document_id="doc",
-            markdown="one",
+            markdown=content,
             metadata={
                 "input_format": "pdf",
                 "parser": "docling",

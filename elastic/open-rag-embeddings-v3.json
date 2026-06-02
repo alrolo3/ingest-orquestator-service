@@ -243,13 +243,20 @@
     }
   },
   "pipeline": {
-    "description": "Detect chunk language, route canonical content into one language-specific lexical field, normalize RAG metadata, and remove deprecated duplicated semantic fields.",
+    "description": "Escape inference-template placeholders, detect chunk language, route canonical content into one language-specific lexical field, normalize RAG metadata, and remove deprecated duplicated semantic fields.",
     "processors": [
       {
         "set": {
           "field": "ingested_at",
           "value": "{{{_ingest.timestamp}}}",
           "override": false
+        }
+      },
+      {
+        "script": {
+          "description": "Escape Elasticsearch custom inference template placeholders in semantic source text.",
+          "lang": "painless",
+          "source": "if (ctx.content != null) { ctx.content = ctx.content.replace('${', '$ {'); }"
         }
       },
       {

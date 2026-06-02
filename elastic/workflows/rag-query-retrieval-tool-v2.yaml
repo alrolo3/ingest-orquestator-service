@@ -1,0 +1,254 @@
+version: "1"
+name: RAG query retrieval tool v2
+enabled: true
+description: Multilingual RAG retrieval workflow for open-rag-embeddings-v3. Rewrites an English or Spanish question into retrieval variants, searches lexical and semantic branches with RRF without hard-filtering document language, expands same-page and neighboring context, and returns retrieved chunks for grounded agent responses.
+triggers:
+  - type: manual
+inputs:
+  - name: question
+    type: string
+    description: User question in English or Spanish. The workflow rewrites it into multilingual retrieval variants and retrieves relevant chunks across indexed document languages.
+    default: "What information is available in the knowledge base?"
+consts:
+  indexName: open-rag-embeddings-v3
+  resultSize: 10
+  expansionSize: 30
+steps:
+  - name: query_rewrite_for_retrieval
+    type: ai.prompt
+    with:
+      temperature: 0
+      prompt: |-
+        Generate multilingual retrieval variants for the following user question.
+
+        User question:
+        {{ inputs.question }}
+
+        Requirements:
+        - Do not answer the question.
+        - Preserve domain-specific names, proper nouns, rules terms, spell names, product names, model names, commands, file names, and abbreviations.
+        - query_original must be the original user question exactly.
+        - query_en must be an English lexical/search version optimized for BM25 retrieval.
+        - query_es must be a Spanish lexical/search version optimized for BM25 retrieval.
+        - Use keywords, named entities, and likely table/header terms. Do not make query_en or query_es a fluent sentence if keyword style is stronger.
+        - answer_language must be the detected language for the final answer, using "en" or "es".
+        - Translation is only for retrieval recall. Do not use language to filter documents.
+      schema:
+        type: object
+        additionalProperties: false
+        properties:
+          query_original:
+            type: string
+          query_en:
+            type: string
+          query_es:
+            type: string
+          answer_language:
+            type: string
+            enum:
+              - en
+              - es
+        required:
+          - query_original
+          - query_en
+          - query_es
+          - answer_language
+
+  - name: rrf_multilingual_retrieval
+    type: elasticsearch.request
+    with:
+      method: POST
+      path: /{{ consts.indexName }}/_search
+      body:
+        size: "${{ consts.resultSize }}"
+        track_total_hits: false
+        _source:
+          - record_id
+          - chunk_id
+          - document_id
+          - clean_title
+          - title
+          - content
+          - headings
+          - page_start
+          - page_end
+          - source_file_name
+          - language
+          - content_kind
+          - chunk_quality
+        retriever:
+          rrf:
+            rank_window_size: 100
+            rank_constant: 20
+            filter:
+              - term:
+                  record_type: chunk
+              - term:
+                  searchable: true
+              - term:
+                  boilerplate: false
+            retrievers:
+              - standard:
+                  query:
+                    multi_match:
+                      query: "{{ steps.query_rewrite_for_retrieval.output.content.query_original }}"
+                      fields:
+                        - content_lex.en^2
+                        - content_lex.default
+                        - content_lex.es^2
+                        - content_lex.fr^2
+                        - content_lex.de^2
+                        - content_lex.it^2
+                        - content_lex.pt^2
+                        - content_lex.ca^2
+                        - content_lex.gl^2
+                        - clean_title^2
+                        - title^1.5
+                        - headings^2
+                        - source_file_name.text^0.2
+                      type: best_fields
+                      operator: or
+                      minimum_should_match: "2<40%"
+              - standard:
+                  query:
+                    multi_match:
+                      query: "{{ steps.query_rewrite_for_retrieval.output.content.query_en }}"
+                      fields:
+                        - content_lex.en^3
+                        - clean_title^2
+                        - title^1.5
+                        - headings^2
+                        - source_file_name.text^0.2
+                      type: best_fields
+                      operator: or
+                      minimum_should_match: "2<40%"
+              - standard:
+                  query:
+                    multi_match:
+                      query: "{{ steps.query_rewrite_for_retrieval.output.content.query_es }}"
+                      fields:
+                        - content_lex.es^3
+                        - clean_title^2
+                        - title^1.5
+                        - headings^2
+                        - source_file_name.text^0.2
+                      type: best_fields
+                      operator: or
+                      minimum_should_match: "2<40%"
+              - standard:
+                  query:
+                    match:
+                      content:
+                        query: "{{ steps.query_rewrite_for_retrieval.output.content.query_original }}"
+
+  - name: map_rrf_hits
+    type: data.map
+    items: "${{ steps.rrf_multilingual_retrieval.output.hits.hits }}"
+    with:
+      fields:
+        elastic_id: "{{ item._id }}"
+        score: "{{ item._score }}"
+        record_id: "{{ item._source.record_id }}"
+        chunk_id: "{{ item._source.chunk_id }}"
+        document_id: "{{ item._source.document_id }}"
+        title: "{{ item._source.title }}"
+        clean_title: "{{ item._source.clean_title }}"
+        headings: "${{ item._source.headings }}"
+        content: "{{ item._source.content }}"
+        source_file_name: "{{ item._source.source_file_name }}"
+        language: "{{ item._source.language }}"
+        page_start: "{{ item._source.page_start }}"
+        page_end: "{{ item._source.page_end }}"
+        content_kind: "{{ item._source.content_kind }}"
+        chunk_quality: "{{ item._source.chunk_quality }}"
+
+  - name: same_page_neighbor_expansion
+    type: elasticsearch.request
+    with:
+      method: POST
+      path: /{{ consts.indexName }}/_search
+      headers:
+        Content-Type: application/json
+      body: |-
+        {
+          "size": {{ consts.expansionSize }},
+          "track_total_hits": false,
+          "_source": [
+            "record_id",
+            "chunk_id",
+            "document_id",
+            "clean_title",
+            "title",
+            "content",
+            "headings",
+            "page_start",
+            "page_end",
+            "source_file_name",
+            "language",
+            "content_kind",
+            "chunk_quality"
+          ],
+          "query": {
+            "bool": {
+              "filter": [
+                { "term": { "record_type": "chunk" } },
+                { "term": { "searchable": true } },
+                { "term": { "boilerplate": false } }
+              ],
+              "should": [
+                {% for hit in steps.rrf_multilingual_retrieval.output.hits.hits %}
+                {% assign page_start = hit._source.page_start | default: hit._source.page_end | default: 0 %}
+                {% assign page_end = hit._source.page_end | default: hit._source.page_start | default: page_start %}
+                {
+                  "constant_score": {
+                    "filter": {
+                      "bool": {
+                        "filter": [
+                          { "term": { "document_id": "{{ hit._source.document_id }}" } },
+                          { "range": { "page_start": { "lte": {{ page_end | plus: 1 }} } } },
+                          { "range": { "page_end": { "gte": {{ page_start | minus: 1 }} } } }
+                        ]
+                      }
+                    }
+                  }
+                }{% unless forloop.last %},{% endunless %}
+                {% endfor %}
+              ],
+              "minimum_should_match": 1
+            }
+          }
+        }
+
+  - name: map_expanded_context_hits
+    type: data.map
+    items: "${{ steps.same_page_neighbor_expansion.output.hits.hits }}"
+    with:
+      fields:
+        elastic_id: "{{ item._id }}"
+        score: "{{ item._score }}"
+        record_id: "{{ item._source.record_id }}"
+        chunk_id: "{{ item._source.chunk_id }}"
+        document_id: "{{ item._source.document_id }}"
+        title: "{{ item._source.title }}"
+        clean_title: "{{ item._source.clean_title }}"
+        headings: "${{ item._source.headings }}"
+        content: "{{ item._source.content }}"
+        source_file_name: "{{ item._source.source_file_name }}"
+        language: "{{ item._source.language }}"
+        page_start: "{{ item._source.page_start }}"
+        page_end: "{{ item._source.page_end }}"
+        content_kind: "{{ item._source.content_kind }}"
+        chunk_quality: "{{ item._source.chunk_quality }}"
+
+  - name: rag_retrieval_response
+    type: data.set
+    with:
+      question: "{{ inputs.question }}"
+      query_original: "{{ steps.query_rewrite_for_retrieval.output.content.query_original }}"
+      query_en: "{{ steps.query_rewrite_for_retrieval.output.content.query_en }}"
+      query_es: "{{ steps.query_rewrite_for_retrieval.output.content.query_es }}"
+      answer_language: "{{ steps.query_rewrite_for_retrieval.output.content.answer_language }}"
+      retrieval_strategy: RRF over lexical original, English lexical, Spanish lexical, and semantic original branches; followed by same-page and neighboring-page expansion. Language is used for recall variants, not filtering.
+      documents: "${{ steps.map_expanded_context_hits.output }}"
+      initial_rrf_documents: "${{ steps.map_rrf_hits.output }}"
+      instruction: Use documents as grounding context. Answer in answer_language and cite/reference document titles, clean titles, source file names, and pages when available.

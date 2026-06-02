@@ -194,11 +194,18 @@ def test_open_rag_embedding_v3_index_asset_uses_canonical_semantic_content() -> 
 
     assert processors[0]["set"]["field"] == "ingested_at"
     assert processors[0]["set"]["override"] is False
-    assert processors[1]["script"]["description"].startswith("Normalize metadata")
-    assert processors[2]["inference"]["model_id"] == "lang_ident_model_1"
-    assert processors[2]["inference"]["target_field"] == "language_detection"
-    assert processors[3]["script"]["description"].startswith("Choose a supported")
-    assert processors[4]["remove"]["field"] == [
+    assert processors[1]["script"]["description"].startswith(
+        "Escape Elasticsearch custom inference template placeholders"
+    )
+    assert processors[1]["script"]["source"] == (
+        "if (ctx.content != null) { ctx.content = "
+        "ctx.content.replace('${', '$ {'); }"
+    )
+    assert processors[2]["script"]["description"].startswith("Normalize metadata")
+    assert processors[3]["inference"]["model_id"] == "lang_ident_model_1"
+    assert processors[3]["inference"]["target_field"] == "language_detection"
+    assert processors[4]["script"]["description"].startswith("Choose a supported")
+    assert processors[5]["remove"]["field"] == [
         "content_semantic",
         "title_semantic",
         "language_detection",

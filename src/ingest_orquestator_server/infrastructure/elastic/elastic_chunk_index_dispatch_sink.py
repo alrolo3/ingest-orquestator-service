@@ -73,6 +73,11 @@ class ElasticChunkIndexDispatchSink:
         record: RagIngestionRecord,
     ) -> dict[str, Any]:
         metadata = dict(record.metadata)
+        content = (
+            self._safe_inference_template_text(record.content)
+            if self._uses_multilingual_semantic_mapping
+            else record.content
+        )
         confidence = self._indexable_confidence(
             record.confidence
             or metadata.get("confidence_summary")
@@ -84,7 +89,7 @@ class ElasticChunkIndexDispatchSink:
             "job_id": record.job_id,
             "chunk_id": record.chunk_id,
             "record_type": record.record_type.value,
-            "content": record.content,
+            "content": content,
             "source_file_name": record.source_file_name or item.source_file_name,
             "title": record.title or item.source_file_name or record.document_id,
             "input_format": record.input_format or item.metadata.get("input_format"),
@@ -117,8 +122,8 @@ class ElasticChunkIndexDispatchSink:
                     else metadata.get("boilerplate"),
                     "content_kind": record.content_kind or metadata.get("content_kind"),
                     "content_length": record.content_length
-                    if record.content_length is not None
-                    else len(record.content),
+                    if record.content_length is not None and content == record.content
+                    else len(content),
                     "token_count": record.token_count
                     if record.token_count is not None
                     else metadata.get("token_count"),
@@ -128,6 +133,9 @@ class ElasticChunkIndexDispatchSink:
                 }
             )
         return self._drop_empty_optional_fields(document)
+
+    def _safe_inference_template_text(self, value: str) -> str:
+        return value.replace("${", "$ {")
 
     def _safe_record_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
         return {
